@@ -3106,32 +3106,29 @@ const LS_UI = (() => {
       LS_API.getCatalogo(),
     ]);
 
+    // Guardar catálogo en cache para búsqueda
+    window._catalogoCache = catalogo;
+    window._provCache = proveedores;
+
     const provOpts = proveedores.length > 0
       ? proveedores.map(p => `<option value="${p.nombre}">${p.nombre}</option>`).join('')
       : '';
 
-    const artOpts = catalogo.length > 0
-      ? catalogo.map(a => `<option value="${a.articulo}" data-unidad="${a.unidad}" data-costo="${a.costoBase}">${a.articulo}</option>`).join('')
-      : '';
-
-    // Guardar en cache para las líneas
-    _artOptsCache = artOpts;
-
     openModal(`
     <div class="modal-overlay" id="modal-factura" onclick="if(event.target===this)_cerrarModal()">
-      <div class="modal" style="max-width:680px">
+      <div class="modal" style="max-width:700px">
         <div class="modal-header">
           <div>
-            <div class="modal-title">Nueva factura</div>
-            <div class="modal-sub">Registra el comprobante y todos sus artículos</div>
+            <div class="modal-title">Nueva factura de proveedor</div>
+            <div class="modal-sub">Registra el comprobante con su desglose de artículos</div>
           </div>
           <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
         </div>
 
-        <div class="modal-body">
+        <div class="modal-body" style="padding-bottom:0">
 
-          <!-- CABECERA -->
-          <div class="fg" style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--line)">
+          <!-- CABECERA FACTURA -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
             <div class="ff">
               <label>Fecha</label>
               <input type="date" id="fact-fecha" value="${new Date().toISOString().split('T')[0]}">
@@ -3139,14 +3136,6 @@ const LS_UI = (() => {
             <div class="ff">
               <label>Folio / Ticket</label>
               <input type="text" id="fact-folio" placeholder="Ej: 040626-1">
-            </div>
-            <div class="ff">
-              <label>Proveedor</label>
-              <select id="fact-proveedor" onchange="LS_UI.onProveedorChange(this)">
-                <option value="">Seleccionar...</option>
-                ${provOpts}
-                <option value="__nuevo__">+ Nuevo proveedor</option>
-              </select>
             </div>
             <div class="ff">
               <label>Unidad de negocio</label>
@@ -3158,45 +3147,55 @@ const LS_UI = (() => {
                 <option value="Sueño de Luna Eventos">Sueño de Luna Eventos</option>
               </select>
             </div>
-            <div class="ff fg-full" id="fact-nuevo-prov-wrap" style="display:none">
+            <div class="ff" style="grid-column:1/-1">
+              <label>Proveedor</label>
+              <select id="fact-proveedor" onchange="LS_UI.onProveedorChange(this)">
+                <option value="">Seleccionar proveedor...</option>
+                ${provOpts}
+                <option value="__nuevo__">+ Agregar nuevo proveedor</option>
+              </select>
+            </div>
+            <div class="ff" id="fact-nuevo-prov-wrap" style="display:none;grid-column:1/-1">
               <label>Nombre del nuevo proveedor</label>
-              <input type="text" id="fact-nuevo-prov-nombre" placeholder="Ej: HEB Piedras Negras">
+              <input type="text" id="fact-nuevo-prov-nombre" placeholder="Ej: Walmart Eagle Pass">
             </div>
           </div>
 
-          <!-- ARTÍCULOS -->
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-            <div style="font-size:13px;font-weight:600;color:var(--tx)">
-              Artículos comprados
+          <!-- TABLA DE ARTÍCULOS -->
+          <div style="border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;margin:0 -22px">
+
+            <!-- Encabezados -->
+            <div style="display:grid;grid-template-columns:2.8fr 0.8fr 80px 1fr 36px;gap:0;background:var(--cafe-card-hi);border-bottom:1px solid var(--line);padding:8px 16px">
+              <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Artículo</div>
+              <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Cantidad</div>
+              <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Unidad</div>
+              <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Precio unit.</div>
+              <div></div>
             </div>
-            <button onclick="LS_UI.agregarLineaFactura()"
-              style="display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:var(--r);border:1px solid var(--terra);background:transparent;color:var(--terra-claro);cursor:pointer;font-size:12px;font-family:inherit;transition:all .15s"
-              onmouseover="this.style.background='rgba(177,70,24,0.1)'"
-              onmouseout="this.style.background='transparent'">
-              <i class="ti ti-plus"></i> Agregar artículo
-            </button>
-          </div>
 
-          <!-- Encabezados tabla -->
-          <div style="display:grid;grid-template-columns:2.5fr 1fr 80px 1fr 36px;gap:8px;margin-bottom:4px;padding:0 2px">
-            <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em">Artículo del catálogo</div>
-            <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em">Cantidad</div>
-            <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em">Unidad</div>
-            <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em">Precio unit.</div>
-            <div></div>
-          </div>
+            <!-- Filas de artículos -->
+            <div id="fact-lineas" style="max-height:320px;overflow-y:auto"></div>
 
-          <div id="fact-lineas" style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto"></div>
+            <!-- Botón agregar -->
+            <div style="padding:10px 16px;border-top:1px solid var(--line);background:var(--cafe-card)">
+              <button onclick="LS_UI.agregarLineaFactura()"
+                style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r);border:1px dashed var(--terra);background:transparent;color:var(--terra-claro);cursor:pointer;font-size:12px;font-family:inherit;transition:all .15s;width:100%;justify-content:center"
+                onmouseover="this.style.background='rgba(177,70,24,0.06)'"
+                onmouseout="this.style.background='transparent'">
+                <i class="ti ti-plus"></i> Agregar artículo
+              </button>
+            </div>
 
-          <!-- Total -->
-          <div style="margin-top:14px;padding:12px 14px;background:var(--cafe-card-hi);border-radius:var(--r);border:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
-            <div style="font-size:12px;color:var(--tx-3)">Total de la factura</div>
-            <div id="fact-total-calc" style="font-size:24px;font-weight:700;color:var(--terra-claro);font-family:'DM Mono',monospace">$0.00</div>
+            <!-- Total -->
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--cafe-card-hi);border-top:1px solid var(--line-2)">
+              <div style="font-size:12px;font-weight:600;color:var(--tx-2)">TOTAL DE LA FACTURA</div>
+              <div id="fact-total-calc" style="font-size:26px;font-weight:700;color:var(--terra-claro);font-family:'DM Mono',monospace">$0.00</div>
+            </div>
           </div>
 
         </div>
 
-        <div class="modal-footer">
+        <div class="modal-footer" style="margin-top:0;padding-top:14px">
           <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
           <button id="fact-btn-guardar" class="btn-save" onclick="LS_UI.guardarFactura()">
             <i class="ti ti-device-floppy"></i> Guardar factura
@@ -3205,8 +3204,8 @@ const LS_UI = (() => {
       </div>
     </div>`);
 
-    // Agregar primera línea al abrir
-    setTimeout(() => LS_UI.agregarLineaFactura(), 50);
+    // Primera línea vacía al abrir
+    setTimeout(() => LS_UI.agregarLineaFactura(), 60);
   }
 
     function onProveedorChange(sel) {
@@ -3237,54 +3236,71 @@ const LS_UI = (() => {
   // Artículos disponibles para las líneas (se llenan al construir el form)
   let _artOptsCache = '';
 
-  function agregarLineaFactura(artOpts) {
-    if (artOpts) _artOptsCache = artOpts;
+  function agregarLineaFactura() {
     const container = document.getElementById('fact-lineas');
     if (!container) return;
     const idx = container.children.length;
+
+    // Construir opciones del catálogo
+    const cat = window._catalogoCache || [];
+    const artOpts = cat.map(a =>
+      `<option value="${a.articulo}" data-unidad="${a.unidad}" data-costo="${a.costoBase}">${a.articulo}</option>`
+    ).join('');
+
     const div = document.createElement('div');
     div.className = 'fact-linea';
-    div.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:8px;align-items:end';
+    div.style.cssText = 'display:grid;grid-template-columns:2.8fr 0.8fr 80px 1fr 36px;gap:0;border-bottom:1px solid var(--line);align-items:stretch';
     div.innerHTML = `
-      <div class="ff">
-        ${idx === 0 ? '<label>Artículo</label>' : ''}
-        <select class="fl-art" onchange="LS_UI.onArticuloChange(this,${idx})">
-          <option value="">Seleccionar...</option>
-          ${_artOptsCache}
-        </select>
+      <div style="padding:8px 16px;border-right:1px solid var(--line);position:relative">
+        <input list="fact-art-list-${idx}" class="fl-art-input"
+          placeholder="Buscar artículo del catálogo..."
+          oninput="LS_UI.onArticuloInput(this,${idx})"
+          style="width:100%;background:transparent;border:none;outline:none;font-size:13px;color:var(--tx);font-family:inherit;padding:2px 0">
+        <datalist id="fact-art-list-${idx}">${artOpts}</datalist>
+        <div class="fl-art-val" style="display:none"></div>
       </div>
-      <div class="ff">
-        ${idx === 0 ? '<label>Cantidad</label>' : ''}
-        <input type="number" class="fl-qty" placeholder="0" step="0.001" min="0" oninput="LS_UI.calcTotalFactura()">
+      <div style="padding:8px 10px;border-right:1px solid var(--line)">
+        <input type="number" class="fl-qty" placeholder="0"
+          step="0.001" min="0" oninput="LS_UI.calcTotalFactura()"
+          style="width:100%;background:transparent;border:none;outline:none;font-size:13px;color:var(--tx);font-family:inherit;text-align:right">
       </div>
-      <div class="ff">
-        ${idx === 0 ? '<label>Unidad</label>' : ''}
-        <input type="text" class="fl-uni" placeholder="kg/pzas/ml" style="background:var(--cafe-750)">
+      <div style="padding:8px 8px;border-right:1px solid var(--line)">
+        <input type="text" class="fl-uni" placeholder="kg"
+          style="width:100%;background:transparent;border:none;outline:none;font-size:12px;color:var(--tx-3);font-family:inherit;text-align:center">
       </div>
-      <div class="ff">
-        ${idx === 0 ? '<label>Precio unit.</label>' : ''}
-        <input type="number" class="fl-precio" placeholder="0.00" step="0.01" min="0" oninput="LS_UI.calcTotalFactura()">
+      <div style="padding:8px 10px;border-right:1px solid var(--line)">
+        <input type="number" class="fl-precio" placeholder="0.00"
+          step="0.01" min="0" oninput="LS_UI.calcTotalFactura()"
+          style="width:100%;background:transparent;border:none;outline:none;font-size:13px;color:var(--tx);font-family:'DM Mono',monospace;text-align:right">
       </div>
-      <div style="${idx === 0 ? 'margin-top:22px' : ''}">
-        <button onclick="this.closest('.fact-linea').remove();LS_UI.calcTotalFactura()" 
-          style="width:32px;height:32px;border-radius:var(--r-sm);border:1px solid var(--line);background:transparent;cursor:pointer;color:var(--tx-3);display:flex;align-items:center;justify-content:center;font-size:15px">
-          <i class="ti ti-trash"></i>
+      <div style="display:flex;align-items:center;justify-content:center;padding:4px">
+        <button onclick="this.closest('.fact-linea').remove();LS_UI.calcTotalFactura()"
+          style="width:28px;height:28px;border-radius:var(--r-sm);border:none;background:transparent;cursor:pointer;color:var(--tx-4);font-size:15px;display:flex;align-items:center;justify-content:center;transition:color .15s"
+          onmouseover="this.style.color='var(--rojo)'" onmouseout="this.style.color='var(--tx-4)'">
+          <i class="ti ti-x"></i>
         </button>
       </div>`;
     container.appendChild(div);
+    // Focus al campo de artículo
+    setTimeout(() => div.querySelector('.fl-art-input')?.focus(), 30);
   }
 
-  function onArticuloChange(sel, idx) {
-    const opt = sel.selectedOptions[0];
-    if (!opt) return;
-    const linea = sel.closest('.fact-linea');
+
+  function onArticuloInput(input, idx) {
+    const cat = window._catalogoCache || [];
+    const val = input.value.trim().toLowerCase();
+    const found = cat.find(a => a.articulo.toLowerCase() === val);
+    const linea = input.closest('.fact-linea');
     if (!linea) return;
-    const uniInput    = linea.querySelector('.fl-uni');
-    const precioInput = linea.querySelector('.fl-precio');
-    if (uniInput    && opt.dataset.unidad) uniInput.value    = opt.dataset.unidad;
-    if (precioInput && opt.dataset.costo)  precioInput.value = parseFloat(opt.dataset.costo).toFixed(2);
-    calcTotalFactura();
+    if (found) {
+      const uniInput    = linea.querySelector('.fl-uni');
+      const precioInput = linea.querySelector('.fl-precio');
+      if (uniInput    && found.unidad)    uniInput.value    = found.unidad;
+      if (precioInput && found.costoBase) precioInput.value = parseFloat(found.costoBase).toFixed(2);
+      calcTotalFactura();
+    }
   }
+
 
   function calcTotalFactura() {
     let total = 0;
@@ -3430,9 +3446,8 @@ const LS_UI = (() => {
     async abrirNuevoIngreso() { openModal(buildFormIngreso()); },
     async abrirNuevaFactura() { openModal(await buildFormFactura()); },
     onProveedorChange,
-    factPaso2,
     agregarLineaFactura,
-    onArticuloChange,
+    onArticuloInput,
     calcTotalFactura,
     guardarFactura,
   };
