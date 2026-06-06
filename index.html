@@ -1884,14 +1884,14 @@ const LS_API = (() => {
   // ── CONFIGURACIÓN ──────────────────────────────────────────
   const CONFIG = {
     // ID del Google Sheet (de la URL entre /d/ y /edit)
-    SHEET_ID: 'TU_SPREADSHEET_ID_AQUI',
+    SHEET_ID: '1Dm5fcTs_URmtv8cwUDV6z_LxuGvdpJmf0ZkxszXzuCk',
 
     // API Key de Google Cloud (solo lectura pública)
     API_KEY: 'TU_GOOGLE_API_KEY_AQUI',
 
     // URL del Apps Script desplegado como Web App (para escritura)
     // Este es el script que ya tienes en el Sheet
-    APPS_SCRIPT_URL: 'TU_APPS_SCRIPT_WEB_APP_URL_AQUI',
+    APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycby3ndEcQz4zKXzBWqaZqwtt-BAG3MPxuvmaac_3fKchshwMs_31NZ2-tbE5WFaHz9zB/exec',
 
     // Base URL de la Sheets API
     BASE: 'https://sheets.googleapis.com/v4/spreadsheets',
@@ -2454,6 +2454,24 @@ const LS_API = (() => {
     return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`;
   }
 
+  // Registrar artículo detalle de factura → ARTICULOS DETALLES
+  async function registrarArticuloDetalle(datos) {
+    return escribirViaScript('registrarArticuloDetalle', {
+      hoja: 'ARTICULOS DETALLES',
+      datos: {
+        idFactura:  datos.idFactura  || '',
+        fecha:      datos.fecha      || '',
+        proveedor:  datos.proveedor  || '',
+        unidad:     datos.unidad     || '',
+        articulo:   datos.articulo   || '',
+        cantidad:   datos.cantidad   || 0,
+        unidadMed:  datos.unidadMed  || '',
+        precioUnit: datos.precioUnit || 0,
+        subtotal:   datos.subtotal   || 0,
+      }
+    });
+  }
+
   // API pública
   return {
     // Lectura
@@ -2463,6 +2481,7 @@ const LS_API = (() => {
     // Escritura
     registrarIngreso, registrarFactura,
     registrarProveedor, registrarCliente,
+    registrarArticuloDetalle,
     // Agregaciones
     getKPIsDashboard, getTopArticulos, getTopProveedores,
     getGastoPorCategoria, getResumenMensual, getAlertasInventario,
@@ -3082,39 +3101,54 @@ const LS_UI = (() => {
   // FORMULARIO — NUEVA FACTURA
   // ══════════════════════════════════════════════════════════
   async function buildFormFactura() {
+    // Cargar proveedores del Sheet real
     const proveedores = await LS_API.getProveedores();
+    // Cargar artículos del Catálogo Maestro para el desglose
+    const catalogo = await LS_API.getCatalogo();
+
+    const provOpts = proveedores.length > 0
+      ? proveedores.map(p => `<option value="${p.nombre}">${p.nombre}</option>`).join('')
+      : '<option value="">Sin proveedores — agrega uno primero</option>';
+
+    const artOpts = catalogo.length > 0
+      ? catalogo.map(a => `<option value="${a.articulo}" data-unidad="${a.unidad}" data-costo="${a.costoBase}" data-cat="${a.categoria}" data-subcat="${a.subcategoria}">${a.articulo}</option>`).join('')
+      : '<option value="">Sin artículos en catálogo</option>';
 
     return `
-    <div class="modal-overlay" id="modal-factura" onclick="if(event.target===this)LS_UI.closeModal('modal-factura')">
-      <div class="modal" style="max-width:520px">
+    <div class="modal-overlay" id="modal-factura" onclick="if(event.target===this)_cerrarModal()">
+      <div class="modal" style="max-width:620px">
         <div class="modal-header">
           <div>
             <div class="modal-title">Nueva factura</div>
-            <div class="modal-sub">Registra un comprobante de egreso</div>
+            <div class="modal-sub">Paso 1 de 2 — Datos del proveedor</div>
           </div>
-          <button class="modal-close" onclick="LS_UI.closeModal('modal-factura')">
-            <i class="ti ti-x"></i>
-          </button>
+          <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
         </div>
-        <div class="modal-body">
-          <div class="form-grid">
-            <div class="form-field">
+
+        <!-- PASO 1: Cabecera -->
+        <div id="fact-paso1" class="modal-body">
+          <div class="fg">
+            <div class="ff">
               <label>Fecha</label>
               <input type="date" id="fact-fecha" value="${new Date().toISOString().split('T')[0]}">
             </div>
-            <div class="form-field">
-              <label>Total</label>
-              <input type="number" id="fact-total" placeholder="0.00" step="0.01" min="0">
+            <div class="ff">
+              <label>Folio / Ticket</label>
+              <input type="text" id="fact-folio" placeholder="Ej: 040626-1">
             </div>
-            <div class="form-field form-full">
+            <div class="ff fg-full">
               <label>Proveedor</label>
-              <select id="fact-proveedor">
-                <option value="">Seleccionar...</option>
-                ${proveedores.map(p => `<option value="${p.nombre}">${p.nombre}</option>`).join('')}
+              <select id="fact-proveedor" onchange="LS_UI.onProveedorChange(this)">
+                <option value="">Seleccionar proveedor...</option>
+                ${provOpts}
                 <option value="__nuevo__">+ Agregar nuevo proveedor</option>
               </select>
             </div>
-            <div class="form-field form-full">
+            <div class="ff fg-full" id="fact-nuevo-prov-wrap" style="display:none">
+              <label>Nombre del nuevo proveedor</label>
+              <input type="text" id="fact-nuevo-prov-nombre" placeholder="Ej: HEB Piedras Negras">
+            </div>
+            <div class="ff fg-full">
               <label>Unidad de negocio</label>
               <select id="fact-unidad">
                 <option value="Sueño de Luna Coffee">Sueño de Luna Coffee & Roasters</option>
@@ -3124,25 +3158,35 @@ const LS_UI = (() => {
                 <option value="Sueño de Luna Eventos">Sueño de Luna Eventos</option>
               </select>
             </div>
-            <div class="form-field">
-              <label>Folio / Ticket</label>
-              <input type="text" id="fact-folio" placeholder="Ej: 040626-1">
+          </div>
+        </div>
+
+        <!-- PASO 2: Artículos -->
+        <div id="fact-paso2" style="display:none">
+          <div class="modal-body">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+              <div style="font-size:13px;font-weight:600;color:var(--tx)">Artículos de la factura</div>
+              <button onclick="LS_UI.agregarLineaFactura('${artOpts.replace(/'/g,"\'")}','${artOpts.replace(/'/g,"\'")}');" 
+                style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:var(--r);border:1px solid var(--terra);background:transparent;color:var(--terra-claro);cursor:pointer;font-size:12px;font-family:inherit">
+                <i class="ti ti-plus"></i> Agregar artículo
+              </button>
             </div>
-            <div class="form-field">
-              <label>Tipo de gasto</label>
-              <select id="fact-tipo">
-                <option value="Costo de venta">Costo de venta</option>
-                <option value="Mano de obra">Mano de obra</option>
-                <option value="Gasto operativo">Gasto operativo</option>
-                <option value="Gasto administrativo">Gasto administrativo</option>
-                <option value="Activo / Equipo">Activo / Equipo</option>
-              </select>
+            <div id="fact-lineas" style="display:flex;flex-direction:column;gap:8px">
+              <!-- Las líneas se agregan dinámicamente -->
+            </div>
+            <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
+              <div style="font-size:12px;color:var(--tx-3)">Total de la factura</div>
+              <div id="fact-total-calc" style="font-size:22px;font-weight:700;color:var(--terra-claro);font-family:'DM Mono',monospace">$0.00</div>
             </div>
           </div>
         </div>
+
         <div class="modal-footer">
-          <button class="btn-modal-cancel" onclick="LS_UI.closeModal('modal-factura')">Cancelar</button>
-          <button class="btn-modal-ok" onclick="LS_UI.guardarFactura()">
+          <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
+          <button id="fact-btn-siguiente" class="btn-save" onclick="LS_UI.factPaso2()">
+            Siguiente — Agregar artículos <i class="ti ti-arrow-right"></i>
+          </button>
+          <button id="fact-btn-guardar" class="btn-save" style="display:none" onclick="LS_UI.guardarFactura()">
             <i class="ti ti-device-floppy"></i> Guardar factura
           </button>
         </div>
@@ -3150,36 +3194,175 @@ const LS_UI = (() => {
     </div>`;
   }
 
-  async function guardarFactura() {
-    const s = id => document.getElementById(id)?.value || '';
-    const n = id => parseFloat(document.getElementById(id)?.value || 0) || 0;
+  // Mostrar/ocultar campo de nuevo proveedor
+  function onProveedorChange(sel) {
+    const wrap = document.getElementById('fact-nuevo-prov-wrap');
+    if (wrap) wrap.style.display = sel.value === '__nuevo__' ? '' : 'none';
+  }
 
-    const datos = {
-      fecha:     s('fact-fecha').split('-').reverse().join('/'),
-      proveedor: s('fact-proveedor'),
-      unidad:    s('fact-unidad'),
-      folio:     s('fact-folio'),
-      tipo:      s('fact-tipo'),
-      total:     n('fact-total'),
-    };
-
-    if (!datos.proveedor || datos.total === 0) {
-      typeof toast !== 'undefined' && toast('Datos incompletos', 'Selecciona proveedor e ingresa el total', 'err', 'ti-alert-circle');
+  // Pasar al paso 2
+  function factPaso2() {
+    const proveedor = document.getElementById('fact-proveedor')?.value;
+    if (!proveedor || proveedor === '') {
+      typeof toast !== 'undefined' && toast('Falta proveedor', 'Selecciona o agrega un proveedor', 'err', 'ti-alert-circle');
       return;
     }
-
-    const result = await LS_API.registrarFactura(datos);
-
-    if (result?.status === 'ok') {
-      closeModal('modal-factura');
-      typeof toast !== 'undefined' && toast('Factura registrada', 'El egreso fue guardado correctamente', 'ok', 'ti-check');
-      await renderFacturas();
-    } else {
-      typeof toast !== 'undefined' && toast('Error al guardar', result?.msg || 'Verifica la conexión', 'err', 'ti-alert-circle');
+    document.getElementById('fact-paso1').style.display = 'none';
+    document.getElementById('fact-paso2').style.display = '';
+    document.getElementById('fact-btn-siguiente').style.display = 'none';
+    document.getElementById('fact-btn-guardar').style.display = '';
+    // Cambiar subtítulo
+    const sub = document.querySelector('#modal-factura .modal-sub');
+    if (sub) sub.textContent = 'Paso 2 de 2 — Desglose de artículos';
+    // Agregar primera línea vacía
+    if (!document.querySelector('.fact-linea')) {
+      agregarLineaFactura();
     }
   }
 
-  // ══════════════════════════════════════════════════════════
+  // Artículos disponibles para las líneas (se llenan al construir el form)
+  let _artOptsCache = '';
+
+  function agregarLineaFactura(artOpts) {
+    if (artOpts) _artOptsCache = artOpts;
+    const container = document.getElementById('fact-lineas');
+    if (!container) return;
+    const idx = container.children.length;
+    const div = document.createElement('div');
+    div.className = 'fact-linea';
+    div.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:8px;align-items:end';
+    div.innerHTML = `
+      <div class="ff">
+        ${idx === 0 ? '<label>Artículo</label>' : ''}
+        <select class="fl-art" onchange="LS_UI.onArticuloChange(this,${idx})">
+          <option value="">Seleccionar...</option>
+          ${_artOptsCache}
+        </select>
+      </div>
+      <div class="ff">
+        ${idx === 0 ? '<label>Cantidad</label>' : ''}
+        <input type="number" class="fl-qty" placeholder="0" step="0.001" min="0" oninput="LS_UI.calcTotalFactura()">
+      </div>
+      <div class="ff">
+        ${idx === 0 ? '<label>Unidad</label>' : ''}
+        <input type="text" class="fl-uni" placeholder="kg/pzas/ml" style="background:var(--cafe-750)">
+      </div>
+      <div class="ff">
+        ${idx === 0 ? '<label>Precio unit.</label>' : ''}
+        <input type="number" class="fl-precio" placeholder="0.00" step="0.01" min="0" oninput="LS_UI.calcTotalFactura()">
+      </div>
+      <div style="${idx === 0 ? 'margin-top:22px' : ''}">
+        <button onclick="this.closest('.fact-linea').remove();LS_UI.calcTotalFactura()" 
+          style="width:32px;height:32px;border-radius:var(--r-sm);border:1px solid var(--line);background:transparent;cursor:pointer;color:var(--tx-3);display:flex;align-items:center;justify-content:center;font-size:15px">
+          <i class="ti ti-trash"></i>
+        </button>
+      </div>`;
+    container.appendChild(div);
+  }
+
+  function onArticuloChange(sel, idx) {
+    const opt = sel.selectedOptions[0];
+    if (!opt) return;
+    const linea = sel.closest('.fact-linea');
+    if (!linea) return;
+    const uniInput    = linea.querySelector('.fl-uni');
+    const precioInput = linea.querySelector('.fl-precio');
+    if (uniInput    && opt.dataset.unidad) uniInput.value    = opt.dataset.unidad;
+    if (precioInput && opt.dataset.costo)  precioInput.value = parseFloat(opt.dataset.costo).toFixed(2);
+    calcTotalFactura();
+  }
+
+  function calcTotalFactura() {
+    let total = 0;
+    document.querySelectorAll('.fact-linea').forEach(linea => {
+      const qty    = parseFloat(linea.querySelector('.fl-qty')?.value    || 0) || 0;
+      const precio = parseFloat(linea.querySelector('.fl-precio')?.value || 0) || 0;
+      total += qty * precio;
+    });
+    const el = document.getElementById('fact-total-calc');
+    if (el) el.textContent = LS_API.formatMXNDec(total);
+  }
+
+  async function guardarFactura() {
+    const s = id => document.getElementById(id)?.value || '';
+
+    // Proveedor — nuevo o existente
+    let proveedor = s('fact-proveedor');
+    if (proveedor === '__nuevo__') {
+      const nuevoNombre = s('fact-nuevo-prov-nombre').trim();
+      if (!nuevoNombre) {
+        typeof toast !== 'undefined' && toast('Falta nombre', 'Escribe el nombre del nuevo proveedor', 'err', 'ti-alert-circle');
+        return;
+      }
+      const resP = await LS_API.registrarProveedor({ nombre: nuevoNombre });
+      if (resP?.status !== 'ok' && resP?.msg !== 'El proveedor ya existe') {
+        typeof toast !== 'undefined' && toast('Error', 'No se pudo registrar el proveedor', 'err', 'ti-alert-circle');
+        return;
+      }
+      proveedor = nuevoNombre;
+    }
+
+    // Recopilar artículos
+    const lineas = [];
+    document.querySelectorAll('.fact-linea').forEach(linea => {
+      const art    = linea.querySelector('.fl-art')?.value    || '';
+      const qty    = parseFloat(linea.querySelector('.fl-qty')?.value    || 0) || 0;
+      const uni    = linea.querySelector('.fl-uni')?.value    || '';
+      const precio = parseFloat(linea.querySelector('.fl-precio')?.value || 0) || 0;
+      if (art && qty > 0 && precio > 0) {
+        lineas.push({ articulo: art, cantidad: qty, unidad: uni, precioUnit: precio, subtotal: qty * precio });
+      }
+    });
+
+    if (lineas.length === 0) {
+      typeof toast !== 'undefined' && toast('Sin artículos', 'Agrega al menos un artículo a la factura', 'err', 'ti-alert-circle');
+      return;
+    }
+
+    const totalFactura = lineas.reduce((s, l) => s + l.subtotal, 0);
+    const fecha        = s('fact-fecha').split('-').reverse().join('/');
+    const unidad       = s('fact-unidad');
+    const folio        = s('fact-folio');
+
+    const btn = document.getElementById('fact-btn-guardar');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 spin"></i> Guardando...'; }
+
+    // 1. Registrar cabecera de factura
+    const resFact = await LS_API.registrarFactura({
+      fecha, unidad, proveedor, folio, tipo: '', total: totalFactura
+    });
+
+    if (resFact?.status !== 'ok') {
+      typeof toast !== 'undefined' && toast('Error', resFact?.msg || 'No se pudo guardar la factura', 'err', 'ti-alert-circle');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy"></i> Guardar factura'; }
+      return;
+    }
+
+    // 2. Registrar cada artículo en ARTICULOS DETALLES
+    const idFactura = resFact.idFactura || folio || fecha;
+    for (const linea of lineas) {
+      await LS_API.registrarArticuloDetalle({
+        idFactura, fecha, proveedor, unidad,
+        articulo:  linea.articulo,
+        cantidad:  linea.cantidad,
+        unidadMed: linea.unidad,
+        precioUnit:linea.precioUnit,
+        subtotal:  linea.subtotal,
+      });
+    }
+
+    _cerrarModal();
+    LS_API.invalidarCache();
+    typeof toast !== 'undefined' && toast(
+      'Factura guardada',
+      proveedor + ' · ' + lineas.length + ' artículo(s) · ' + LS_API.formatMXN(totalFactura),
+      'ok', 'ti-check'
+    );
+    await renderFacturas();
+
+  }
+
+    // ══════════════════════════════════════════════════════════
   // MODALES (sistema genérico)
   // ══════════════════════════════════════════════════════════
   function openModal(html) { window._modal(html); }
@@ -3232,6 +3415,12 @@ const LS_UI = (() => {
     // Abrir modales
     async abrirNuevoIngreso() { openModal(buildFormIngreso()); },
     async abrirNuevaFactura() { openModal(await buildFormFactura()); },
+    onProveedorChange,
+    factPaso2,
+    agregarLineaFactura,
+    onArticuloChange,
+    calcTotalFactura,
+    guardarFactura,
   };
 })();
 
@@ -3243,9 +3432,9 @@ const LS_UI = (() => {
 ═══════════════════════════════════════════════════════════ */
 
 LS_API.setConfig({
-  SHEET_ID:        'TU_SPREADSHEET_ID_AQUI',
-  API_KEY:         'TU_GOOGLE_SHEETS_API_KEY_AQUI',
-  APPS_SCRIPT_URL: 'TU_APPS_SCRIPT_WEB_APP_URL_AQUI',
+  SHEET_ID:        '1Dm5fcTs_URmtv8cwUDV6z_LxuGvdpJmf0ZkxszXzuCk',
+  API_KEY:         'AIzaSyAOOj0Sv8aq5njr6ZoWL3Ex5_Kh3zyYUqU',
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycby3ndEcQz4zKXzBWqaZqwtt-BAG3MPxuvmaac_3fKchshwMs_31NZ2-tbE5WFaHz9zB/exec',
 });
 
 /* ── OVERRIDE: go() para carga lazy de datos ─────────────── */
