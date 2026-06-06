@@ -3101,33 +3101,37 @@ const LS_UI = (() => {
   // FORMULARIO — NUEVA FACTURA
   // ══════════════════════════════════════════════════════════
   async function buildFormFactura() {
-    // Cargar proveedores del Sheet real
-    const proveedores = await LS_API.getProveedores();
-    // Cargar artículos del Catálogo Maestro para el desglose
-    const catalogo = await LS_API.getCatalogo();
+    const [proveedores, catalogo] = await Promise.all([
+      LS_API.getProveedores(),
+      LS_API.getCatalogo(),
+    ]);
 
     const provOpts = proveedores.length > 0
       ? proveedores.map(p => `<option value="${p.nombre}">${p.nombre}</option>`).join('')
-      : '<option value="">Sin proveedores — agrega uno primero</option>';
+      : '';
 
     const artOpts = catalogo.length > 0
-      ? catalogo.map(a => `<option value="${a.articulo}" data-unidad="${a.unidad}" data-costo="${a.costoBase}" data-cat="${a.categoria}" data-subcat="${a.subcategoria}">${a.articulo}</option>`).join('')
-      : '<option value="">Sin artículos en catálogo</option>';
+      ? catalogo.map(a => `<option value="${a.articulo}" data-unidad="${a.unidad}" data-costo="${a.costoBase}">${a.articulo}</option>`).join('')
+      : '';
 
-    return `
+    // Guardar en cache para las líneas
+    _artOptsCache = artOpts;
+
+    openModal(`
     <div class="modal-overlay" id="modal-factura" onclick="if(event.target===this)_cerrarModal()">
-      <div class="modal" style="max-width:620px">
+      <div class="modal" style="max-width:680px">
         <div class="modal-header">
           <div>
             <div class="modal-title">Nueva factura</div>
-            <div class="modal-sub">Paso 1 de 2 — Datos del proveedor</div>
+            <div class="modal-sub">Registra el comprobante y todos sus artículos</div>
           </div>
           <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
         </div>
 
-        <!-- PASO 1: Cabecera -->
-        <div id="fact-paso1" class="modal-body">
-          <div class="fg">
+        <div class="modal-body">
+
+          <!-- CABECERA -->
+          <div class="fg" style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--line)">
             <div class="ff">
               <label>Fecha</label>
               <input type="date" id="fact-fecha" value="${new Date().toISOString().split('T')[0]}">
@@ -3136,66 +3140,76 @@ const LS_UI = (() => {
               <label>Folio / Ticket</label>
               <input type="text" id="fact-folio" placeholder="Ej: 040626-1">
             </div>
-            <div class="ff fg-full">
+            <div class="ff">
               <label>Proveedor</label>
               <select id="fact-proveedor" onchange="LS_UI.onProveedorChange(this)">
-                <option value="">Seleccionar proveedor...</option>
+                <option value="">Seleccionar...</option>
                 ${provOpts}
-                <option value="__nuevo__">+ Agregar nuevo proveedor</option>
+                <option value="__nuevo__">+ Nuevo proveedor</option>
+              </select>
+            </div>
+            <div class="ff">
+              <label>Unidad de negocio</label>
+              <select id="fact-unidad">
+                <option value="Sueño de Luna Coffee">Sueño de Luna Coffee & Roasters</option>
+                <option value="Casa de la Cultura">Casa de la Cultura</option>
+                <option value="Helfy Fü">Helfy Fü</option>
+                <option value="Barbacoa y Menudo">Barbacoa y Menudo</option>
+                <option value="Sueño de Luna Eventos">Sueño de Luna Eventos</option>
               </select>
             </div>
             <div class="ff fg-full" id="fact-nuevo-prov-wrap" style="display:none">
               <label>Nombre del nuevo proveedor</label>
               <input type="text" id="fact-nuevo-prov-nombre" placeholder="Ej: HEB Piedras Negras">
             </div>
-            <div class="ff fg-full">
-              <label>Unidad de negocio</label>
-              <select id="fact-unidad">
-                <option value="Sueño de Luna Coffee">Sueño de Luna Coffee & Roasters</option>
-                <option value="Casa de la Cultura">Sueño de Luna Casa de la Cultura</option>
-                <option value="Helfy Fü">Helfy Fü</option>
-                <option value="Barbacoa y Menudo">Barbacoa y Menudo</option>
-                <option value="Sueño de Luna Eventos">Sueño de Luna Eventos</option>
-              </select>
-            </div>
           </div>
-        </div>
 
-        <!-- PASO 2: Artículos -->
-        <div id="fact-paso2" style="display:none">
-          <div class="modal-body">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-              <div style="font-size:13px;font-weight:600;color:var(--tx)">Artículos de la factura</div>
-              <button onclick="LS_UI.agregarLineaFactura('${artOpts.replace(/'/g,"\'")}','${artOpts.replace(/'/g,"\'")}');" 
-                style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:var(--r);border:1px solid var(--terra);background:transparent;color:var(--terra-claro);cursor:pointer;font-size:12px;font-family:inherit">
-                <i class="ti ti-plus"></i> Agregar artículo
-              </button>
+          <!-- ARTÍCULOS -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div style="font-size:13px;font-weight:600;color:var(--tx)">
+              Artículos comprados
             </div>
-            <div id="fact-lineas" style="display:flex;flex-direction:column;gap:8px">
-              <!-- Las líneas se agregan dinámicamente -->
-            </div>
-            <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
-              <div style="font-size:12px;color:var(--tx-3)">Total de la factura</div>
-              <div id="fact-total-calc" style="font-size:22px;font-weight:700;color:var(--terra-claro);font-family:'DM Mono',monospace">$0.00</div>
-            </div>
+            <button onclick="LS_UI.agregarLineaFactura()"
+              style="display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:var(--r);border:1px solid var(--terra);background:transparent;color:var(--terra-claro);cursor:pointer;font-size:12px;font-family:inherit;transition:all .15s"
+              onmouseover="this.style.background='rgba(177,70,24,0.1)'"
+              onmouseout="this.style.background='transparent'">
+              <i class="ti ti-plus"></i> Agregar artículo
+            </button>
           </div>
+
+          <!-- Encabezados tabla -->
+          <div style="display:grid;grid-template-columns:2.5fr 1fr 80px 1fr 36px;gap:8px;margin-bottom:4px;padding:0 2px">
+            <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em">Artículo del catálogo</div>
+            <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em">Cantidad</div>
+            <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em">Unidad</div>
+            <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em">Precio unit.</div>
+            <div></div>
+          </div>
+
+          <div id="fact-lineas" style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto"></div>
+
+          <!-- Total -->
+          <div style="margin-top:14px;padding:12px 14px;background:var(--cafe-card-hi);border-radius:var(--r);border:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:12px;color:var(--tx-3)">Total de la factura</div>
+            <div id="fact-total-calc" style="font-size:24px;font-weight:700;color:var(--terra-claro);font-family:'DM Mono',monospace">$0.00</div>
+          </div>
+
         </div>
 
         <div class="modal-footer">
           <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
-          <button id="fact-btn-siguiente" class="btn-save" onclick="LS_UI.factPaso2()">
-            Siguiente — Agregar artículos <i class="ti ti-arrow-right"></i>
-          </button>
-          <button id="fact-btn-guardar" class="btn-save" style="display:none" onclick="LS_UI.guardarFactura()">
+          <button id="fact-btn-guardar" class="btn-save" onclick="LS_UI.guardarFactura()">
             <i class="ti ti-device-floppy"></i> Guardar factura
           </button>
         </div>
       </div>
-    </div>`;
+    </div>`);
+
+    // Agregar primera línea al abrir
+    setTimeout(() => LS_UI.agregarLineaFactura(), 50);
   }
 
-  // Mostrar/ocultar campo de nuevo proveedor
-  function onProveedorChange(sel) {
+    function onProveedorChange(sel) {
     const wrap = document.getElementById('fact-nuevo-prov-wrap');
     if (wrap) wrap.style.display = sel.value === '__nuevo__' ? '' : 'none';
   }
