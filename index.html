@@ -1081,6 +1081,11 @@
           <div class="theme-menu" id="theme-menu"></div>
         </div>
         <button class="btn" onclick="toast('Exportación lista','Se descargó el reporte en CSV','ok','ti-download')"><i class="ti ti-download"></i>Exportar</button>
+        <button id="btn-sync-parrot" onclick="sincronizarParrotManual()"
+          style="display:flex;align-items:center;gap:6px;font-size:12px;padding:7px 13px;border-radius:8px;border:1px solid rgba(125,184,138,0.3);background:rgba(125,184,138,0.08);cursor:pointer;color:#7db88a;font-family:inherit;font-weight:500"
+          onmouseover="this.style.background='rgba(125,184,138,0.18)'" onmouseout="this.style.background='rgba(125,184,138,0.08)'">
+          <i class="ti ti-refresh"></i> Sincronizar Parrot
+        </button>
         <button class="btn btn-primary" onclick="openRegister()"><i class="ti ti-plus"></i>Registrar</button>
       </div>
 
@@ -1977,20 +1982,35 @@ const LS_API = (() => {
     const cached = _cacheGet(cacheKey);
     if (cached) return cached;
 
-    const r = rango ? `${nombreHoja}!${rango}` : nombreHoja;
-    const url = `${CONFIG.BASE}/${CONFIG.SHEET_ID}/values/${encodeURIComponent(r)}?key=${CONFIG.API_KEY}`;
-
+    // Intentar primero con Sheets API directa
     try {
+      const r = rango ? `${nombreHoja}!${rango}` : nombreHoja;
+      const url = `${CONFIG.BASE}/${CONFIG.SHEET_ID}/values/${encodeURIComponent(r)}?key=${CONFIG.API_KEY}`;
       const resp = await fetch(url);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-      const rows = data.values || [];
-      _cacheSet(cacheKey, rows);
-      return rows;
-    } catch (err) {
-      console.error(`Error leyendo ${nombreHoja}:`, err);
-      return null;
-    }
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.values) {
+          _cacheSet(cacheKey, data.values);
+          return data.values;
+        }
+      }
+    } catch(e) {}
+
+    // Fallback: leer vía Apps Script (evita restricciones CORS)
+    try {
+      const url = `${CONFIG.APPS_SCRIPT_URL}?accion=get${nombreHoja.replace(/\s/g,'')}&_=${Date.now()}`;
+      const resp = await fetch(url);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.data && data.data.length > 0) {
+          _cacheSet(cacheKey, data.data);
+          return data.data;
+        }
+      }
+    } catch(e) {}
+
+    console.error('No se pudo leer hoja:', nombreHoja);
+    return null;
   }
 
   // ── ESCRIBIR VIA APPS SCRIPT (proxy seguro) ────────────────
@@ -2970,25 +2990,35 @@ const LS_UI = (() => {
   // FORMULARIOS — NUEVO INGRESO
   // ══════════════════════════════════════════════════════════
   function buildFormIngreso() {
-    return `
-    <div class="modal-overlay" id="modal-ingreso" onclick="if(event.target===this)LS_UI.closeModal('modal-ingreso')">
-      <div class="modal" style="max-width:560px">
+    openModal(`
+    <div class="modal-overlay" id="modal-ingreso" onclick="if(event.target===this)_cerrarModal()">
+      <div class="modal" style="max-width:620px">
         <div class="modal-header">
           <div>
             <div class="modal-title">Nuevo corte de caja</div>
-            <div class="modal-sub">Registra el corte del turno</div>
+            <div class="modal-sub">Registra el cierre del turno con desglose de pagos</div>
           </div>
-          <button class="modal-close" onclick="LS_UI.closeModal('modal-ingreso')">
-            <i class="ti ti-x"></i>
-          </button>
+          <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
         </div>
         <div class="modal-body">
-          <div class="form-grid">
-            <div class="form-field">
+
+          <!-- Fila 1: Fecha, Sucursal, Turno -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px">
+            <div class="ff">
               <label>Fecha</label>
               <input type="date" id="ing-fecha" value="${new Date().toISOString().split('T')[0]}">
             </div>
-            <div class="form-field">
+            <div class="ff">
+              <label>Sucursal</label>
+              <select id="ing-sucursal">
+                <option value="SUEÑO DE LUNA">Sueño de Luna Coffee & Roasters</option>
+                <option value="CASA DE LA CULTURA">Casa de la Cultura</option>
+                <option value="HELFY FU">Helfy Fü</option>
+                <option value="BARBACOA Y MENUDO">Barbacoa y Menudo</option>
+                <option value="EVENTOS">Sueño de Luna Eventos</option>
+              </select>
+            </div>
+            <div class="ff">
               <label>Turno</label>
               <select id="ing-turno">
                 <option value="INGRESOS-00013">Turno Mañana</option>
@@ -2996,61 +3026,76 @@ const LS_UI = (() => {
                 <option value="INGRESOS-00014">Mañana & Tarde</option>
               </select>
             </div>
-            <div class="form-field form-full">
-              <label>Sucursal</label>
-              <select id="ing-sucursal">
-                <option value="SUEÑO DE LUNA">Sueño de Luna Coffee & Roasters</option>
-                <option value="CASA DE LA CULTURA">Sueño de Luna Casa de la Cultura</option>
-                <option value="HELFY FU">Helfy Fü</option>
-                <option value="BARBACOA Y MENUDO">Barbacoa y Menudo</option>
-                <option value="EVENTOS">Sueño de Luna Eventos</option>
-              </select>
-            </div>
-            <div class="form-field">
-              <label>Inicio de caja</label>
+          </div>
+
+          <!-- Fila 2: Inicio de caja y Retiros -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+            <div class="ff">
+              <label>Inicio de caja ($)</label>
               <input type="number" id="ing-inicio-caja" placeholder="0.00" step="0.01" min="0">
             </div>
-            <div class="form-field">
-              <label>Retiros</label>
+            <div class="ff">
+              <label>Retiros ($)</label>
               <input type="number" id="ing-retiros" placeholder="0.00" step="0.01" min="0">
             </div>
-            <div class="form-field">
-              <label>Pago efectivo</label>
-              <input type="number" id="ing-efectivo" placeholder="0.00" step="0.01" min="0" oninput="calcIngreso()">
+          </div>
+
+          <!-- Métodos de pago -->
+          <div style="border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;margin-bottom:14px">
+            <div style="background:var(--cafe-card-hi);padding:10px 16px;border-bottom:1px solid var(--line)">
+              <div style="font-size:11px;font-weight:600;color:var(--tx-2);text-transform:uppercase;letter-spacing:.06em">Desglose de métodos de pago</div>
             </div>
-            <div class="form-field">
-              <label>Pago tarjeta / MP</label>
-              <input type="number" id="ing-tarjeta" placeholder="0.00" step="0.01" min="0" oninput="calcIngreso()">
-            </div>
-            <div class="form-field">
-              <label>Transferencia</label>
-              <input type="number" id="ing-transferencia" placeholder="0.00" step="0.01" min="0" oninput="calcIngreso()">
-            </div>
-            <div class="form-field">
-              <label>Rappi / Uber Eats</label>
-              <input type="number" id="ing-rappi" placeholder="0.00" step="0.01" min="0" oninput="calcIngreso()">
-            </div>
-            <div class="form-field form-full" style="background:var(--cafe-card-hi);border-radius:var(--r);padding:14px;border:1px solid var(--line)">
-              <label>Total declarado (calculado)</label>
-              <div id="ing-total-calc" style="font-size:24px;font-weight:700;color:var(--terra-claro);font-family:var(--mono);margin-top:6px">$0.00</div>
-            </div>
-            <div class="form-field form-full">
-              <label>Observaciones</label>
-              <input type="text" id="ing-obs" placeholder="Ej: Turno sin incidentes">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
+              <div style="padding:12px 16px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)">
+                <div style="font-size:11px;color:var(--tx-3);margin-bottom:6px">💵 Efectivo</div>
+                <input type="number" id="ing-efectivo" placeholder="0.00" step="0.01" min="0" oninput="LS_UI.calcIngreso()"
+                  style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'DM Mono',monospace">
+              </div>
+              <div style="padding:12px 16px;border-bottom:1px solid var(--line)">
+                <div style="font-size:11px;color:var(--tx-3);margin-bottom:6px">💳 Tarjeta / Mercado Pago</div>
+                <input type="number" id="ing-tarjeta" placeholder="0.00" step="0.01" min="0" oninput="LS_UI.calcIngreso()"
+                  style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'DM Mono',monospace">
+              </div>
+              <div style="padding:12px 16px;border-right:1px solid var(--line)">
+                <div style="font-size:11px;color:var(--tx-3);margin-bottom:6px">🏦 Transferencia</div>
+                <input type="number" id="ing-transferencia" placeholder="0.00" step="0.01" min="0" oninput="LS_UI.calcIngreso()"
+                  style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'DM Mono',monospace">
+              </div>
+              <div style="padding:12px 16px">
+                <div style="font-size:11px;color:var(--tx-3);margin-bottom:6px">🛵 Rappi / Uber Eats</div>
+                <input type="number" id="ing-rappi" placeholder="0.00" step="0.01" min="0" oninput="LS_UI.calcIngreso()"
+                  style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'DM Mono',monospace">
+              </div>
             </div>
           </div>
+
+          <!-- Total declarado -->
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:var(--cafe-card-hi);border-radius:var(--r-lg);border:1px solid var(--line);margin-bottom:12px">
+            <div>
+              <div style="font-size:11px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Total declarado</div>
+              <div style="font-size:11px;color:var(--tx-4);margin-top:2px">Suma automática de todos los métodos</div>
+            </div>
+            <div id="ing-total-calc" style="font-size:28px;font-weight:700;color:var(--terra-claro);font-family:'DM Mono',monospace">$0.00</div>
+          </div>
+
+          <!-- Observaciones -->
+          <div class="ff">
+            <label>Observaciones (opcional)</label>
+            <input type="text" id="ing-obs" placeholder="Ej: Turno sin incidentes, faltante explicado...">
+          </div>
+
         </div>
         <div class="modal-footer">
-          <button class="btn-modal-cancel" onclick="LS_UI.closeModal('modal-ingreso')">Cancelar</button>
-          <button class="btn-modal-ok" onclick="LS_UI.guardarIngreso()">
+          <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
+          <button class="btn-save" onclick="LS_UI.guardarIngreso()">
             <i class="ti ti-device-floppy"></i> Guardar corte
           </button>
         </div>
       </div>
-    </div>`;
+    </div>`);
   }
 
-  function calcIngreso() {
+    function calcIngreso() {
     const n = id => parseFloat(document.getElementById(id)?.value || 0) || 0;
     const total = n('ing-efectivo') + n('ing-tarjeta') + n('ing-transferencia') + n('ing-rappi');
     const el = document.getElementById('ing-total-calc');
@@ -3105,30 +3150,44 @@ const LS_UI = (() => {
       LS_API.getProveedores(),
       LS_API.getCatalogo(),
     ]);
-
-    // Guardar catálogo en cache para búsqueda
     window._catalogoCache = catalogo;
-    window._provCache = proveedores;
 
     const provOpts = proveedores.length > 0
       ? proveedores.map(p => `<option value="${p.nombre}">${p.nombre}</option>`).join('')
-      : '';
+      : '<option value="">Sin proveedores registrados</option>';
 
     openModal(`
     <div class="modal-overlay" id="modal-factura" onclick="if(event.target===this)_cerrarModal()">
-      <div class="modal" style="max-width:700px">
+      <div class="modal" style="max-width:780px">
         <div class="modal-header">
           <div>
             <div class="modal-title">Nueva factura de proveedor</div>
-            <div class="modal-sub">Registra el comprobante con su desglose de artículos</div>
+            <div class="modal-sub">Registra el comprobante con desglose de artículos</div>
           </div>
           <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
         </div>
 
-        <div class="modal-body" style="padding-bottom:0">
+        <div class="modal-body">
 
-          <!-- CABECERA FACTURA -->
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
+          <!-- CABECERA: grid 3 columnas -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--line)">
+
+            <div class="ff" style="grid-column:1/-1">
+              <label>Proveedor</label>
+              <div style="display:flex;gap:8px">
+                <select id="fact-proveedor" style="flex:1" onchange="LS_UI.onProveedorChange(this)">
+                  <option value="">Seleccionar proveedor...</option>
+                  ${provOpts}
+                  <option value="__nuevo__">+ Agregar nuevo proveedor</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="ff" id="fact-nuevo-prov-wrap" style="display:none;grid-column:1/-1">
+              <label>Nombre del nuevo proveedor</label>
+              <input type="text" id="fact-nuevo-prov-nombre" placeholder="Ej: Walmart Eagle Pass">
+            </div>
+
             <div class="ff">
               <label>Fecha</label>
               <input type="date" id="fact-fecha" value="${new Date().toISOString().split('T')[0]}">
@@ -3147,55 +3206,50 @@ const LS_UI = (() => {
                 <option value="Sueño de Luna Eventos">Sueño de Luna Eventos</option>
               </select>
             </div>
-            <div class="ff" style="grid-column:1/-1">
-              <label>Proveedor</label>
-              <select id="fact-proveedor" onchange="LS_UI.onProveedorChange(this)">
-                <option value="">Seleccionar proveedor...</option>
-                ${provOpts}
-                <option value="__nuevo__">+ Agregar nuevo proveedor</option>
-              </select>
-            </div>
-            <div class="ff" id="fact-nuevo-prov-wrap" style="display:none;grid-column:1/-1">
-              <label>Nombre del nuevo proveedor</label>
-              <input type="text" id="fact-nuevo-prov-nombre" placeholder="Ej: Walmart Eagle Pass">
-            </div>
           </div>
 
           <!-- TABLA DE ARTÍCULOS -->
-          <div style="border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;margin:0 -22px">
+          <div style="border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden">
 
-            <!-- Encabezados -->
-            <div style="display:grid;grid-template-columns:2.8fr 0.8fr 80px 1fr 36px;gap:0;background:var(--cafe-card-hi);border-bottom:1px solid var(--line);padding:8px 16px">
-              <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Artículo</div>
-              <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Cantidad</div>
-              <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Unidad</div>
-              <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Precio unit.</div>
+            <!-- Header tabla -->
+            <div style="display:grid;grid-template-columns:2.6fr 0.7fr 80px 1fr 90px 36px;background:var(--cafe-card-hi);border-bottom:1px solid var(--line);padding:8px 14px;gap:8px">
+              <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Artículo / Descripción</div>
+              <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600;text-align:right">Cantidad</div>
+              <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600;text-align:center">Unidad</div>
+              <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600;text-align:right">Precio unit.</div>
+              <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600;text-align:right">Importe</div>
               <div></div>
             </div>
 
             <!-- Filas de artículos -->
-            <div id="fact-lineas" style="max-height:320px;overflow-y:auto"></div>
+            <div id="fact-lineas" style="max-height:300px;overflow-y:auto"></div>
 
-            <!-- Botón agregar -->
-            <div style="padding:10px 16px;border-top:1px solid var(--line);background:var(--cafe-card)">
+            <!-- Agregar artículo -->
+            <div style="padding:8px 14px;border-top:1px solid var(--line)">
               <button onclick="LS_UI.agregarLineaFactura()"
-                style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r);border:1px dashed var(--terra);background:transparent;color:var(--terra-claro);cursor:pointer;font-size:12px;font-family:inherit;transition:all .15s;width:100%;justify-content:center"
+                style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r);border:1px dashed rgba(177,70,24,0.4);background:transparent;color:var(--terra-claro);cursor:pointer;font-size:12px;font-family:inherit;transition:all .15s"
                 onmouseover="this.style.background='rgba(177,70,24,0.06)'"
                 onmouseout="this.style.background='transparent'">
-                <i class="ti ti-plus"></i> Agregar artículo
+                <i class="ti ti-plus"></i> Añadir nueva fila
               </button>
             </div>
 
-            <!-- Total -->
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--cafe-card-hi);border-top:1px solid var(--line-2)">
-              <div style="font-size:12px;font-weight:600;color:var(--tx-2)">TOTAL DE LA FACTURA</div>
-              <div id="fact-total-calc" style="font-size:26px;font-weight:700;color:var(--terra-claro);font-family:'DM Mono',monospace">$0.00</div>
+            <!-- Subtotal / Total -->
+            <div style="border-top:1px solid var(--line-2);padding:10px 14px;display:flex;flex-direction:column;gap:6px;background:var(--cafe-card-hi)">
+              <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--tx-3)">
+                <span>Subtotal</span>
+                <span id="fact-subtotal" style="font-family:'DM Mono',monospace">$0.00</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px solid var(--line)">
+                <span style="font-size:13px;font-weight:700;color:var(--tx)">TOTAL</span>
+                <span id="fact-total-calc" style="font-size:24px;font-weight:700;color:var(--terra-claro);font-family:'DM Mono',monospace">$0.00</span>
+              </div>
             </div>
           </div>
 
         </div>
 
-        <div class="modal-footer" style="margin-top:0;padding-top:14px">
+        <div class="modal-footer">
           <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
           <button id="fact-btn-guardar" class="btn-save" onclick="LS_UI.guardarFactura()">
             <i class="ti ti-device-floppy"></i> Guardar factura
@@ -3204,8 +3258,8 @@ const LS_UI = (() => {
       </div>
     </div>`);
 
-    // Primera línea vacía al abrir
-    setTimeout(() => LS_UI.agregarLineaFactura(), 60);
+    // Primera línea al abrir
+    setTimeout(() => { LS_UI.agregarLineaFactura(); LS_UI.agregarLineaFactura(); }, 80);
   }
 
     function onProveedorChange(sel) {
@@ -3239,33 +3293,29 @@ const LS_UI = (() => {
   function agregarLineaFactura() {
     const container = document.getElementById('fact-lineas');
     if (!container) return;
-    const idx = container.children.length;
-
-    // Construir opciones del catálogo
     const cat = window._catalogoCache || [];
     const artOpts = cat.map(a =>
-      `<option value="${a.articulo}" data-unidad="${a.unidad}" data-costo="${a.costoBase}">${a.articulo}</option>`
+      `<option value="${a.articulo}" data-unidad="${a.unidad || ''}" data-costo="${a.costoBase || 0}">`
     ).join('');
 
     const div = document.createElement('div');
     div.className = 'fact-linea';
-    div.style.cssText = 'display:grid;grid-template-columns:2.8fr 0.8fr 80px 1fr 36px;gap:0;border-bottom:1px solid var(--line);align-items:stretch';
+    div.style.cssText = 'display:grid;grid-template-columns:2.6fr 0.7fr 80px 1fr 90px 36px;gap:0;border-bottom:1px solid var(--line);align-items:center';
     div.innerHTML = `
-      <div style="padding:8px 16px;border-right:1px solid var(--line);position:relative">
-        <input list="fact-art-list-${idx}" class="fl-art-input"
-          placeholder="Buscar artículo del catálogo..."
-          oninput="LS_UI.onArticuloInput(this,${idx})"
-          style="width:100%;background:transparent;border:none;outline:none;font-size:13px;color:var(--tx);font-family:inherit;padding:2px 0">
-        <datalist id="fact-art-list-${idx}">${artOpts}</datalist>
-        <div class="fl-art-val" style="display:none"></div>
+      <div style="padding:8px 14px;border-right:1px solid var(--line)">
+        <input list="dal-${Date.now()}" class="fl-art-input"
+          placeholder="Escribir o buscar artículo..."
+          oninput="LS_UI.onArticuloInput(this)"
+          style="width:100%;background:transparent;border:none;outline:none;font-size:13px;color:var(--tx);font-family:inherit">
+        <datalist>${artOpts}</datalist>
       </div>
       <div style="padding:8px 10px;border-right:1px solid var(--line)">
-        <input type="number" class="fl-qty" placeholder="0"
-          step="0.001" min="0" oninput="LS_UI.calcTotalFactura()"
-          style="width:100%;background:transparent;border:none;outline:none;font-size:13px;color:var(--tx);font-family:inherit;text-align:right">
+        <input type="number" class="fl-qty" placeholder="1"
+          step="0.001" min="0" value="" oninput="LS_UI.calcTotalFactura()"
+          style="width:100%;background:transparent;border:none;outline:none;font-size:13px;color:var(--tx);font-family:'DM Mono',monospace;text-align:right">
       </div>
-      <div style="padding:8px 8px;border-right:1px solid var(--line)">
-        <input type="text" class="fl-uni" placeholder="kg"
+      <div style="padding:8px 6px;border-right:1px solid var(--line)">
+        <input type="text" class="fl-uni" placeholder="pzas"
           style="width:100%;background:transparent;border:none;outline:none;font-size:12px;color:var(--tx-3);font-family:inherit;text-align:center">
       </div>
       <div style="padding:8px 10px;border-right:1px solid var(--line)">
@@ -3273,19 +3323,21 @@ const LS_UI = (() => {
           step="0.01" min="0" oninput="LS_UI.calcTotalFactura()"
           style="width:100%;background:transparent;border:none;outline:none;font-size:13px;color:var(--tx);font-family:'DM Mono',monospace;text-align:right">
       </div>
-      <div style="display:flex;align-items:center;justify-content:center;padding:4px">
+      <div style="padding:8px 10px;border-right:1px solid var(--line);text-align:right">
+        <span class="fl-importe" style="font-size:13px;font-weight:600;color:var(--tx);font-family:'DM Mono',monospace">$0.00</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:center">
         <button onclick="this.closest('.fact-linea').remove();LS_UI.calcTotalFactura()"
-          style="width:28px;height:28px;border-radius:var(--r-sm);border:none;background:transparent;cursor:pointer;color:var(--tx-4);font-size:15px;display:flex;align-items:center;justify-content:center;transition:color .15s"
+          style="width:28px;height:28px;border:none;background:transparent;cursor:pointer;color:var(--tx-4);font-size:14px;display:flex;align-items:center;justify-content:center"
           onmouseover="this.style.color='var(--rojo)'" onmouseout="this.style.color='var(--tx-4)'">
           <i class="ti ti-x"></i>
         </button>
       </div>`;
     container.appendChild(div);
-    // Focus al campo de artículo
     setTimeout(() => div.querySelector('.fl-art-input')?.focus(), 30);
   }
 
-
+  
   function onArticuloInput(input, idx) {
     const cat = window._catalogoCache || [];
     const val = input.value.trim().toLowerCase();
@@ -3305,12 +3357,17 @@ const LS_UI = (() => {
   function calcTotalFactura() {
     let total = 0;
     document.querySelectorAll('.fact-linea').forEach(linea => {
-      const qty    = parseFloat(linea.querySelector('.fl-qty')?.value    || 0) || 0;
-      const precio = parseFloat(linea.querySelector('.fl-precio')?.value || 0) || 0;
-      total += qty * precio;
+      const qty     = parseFloat(linea.querySelector('.fl-qty')?.value    || 0) || 0;
+      const precio  = parseFloat(linea.querySelector('.fl-precio')?.value || 0) || 0;
+      const importe = qty * precio;
+      total += importe;
+      const imp = linea.querySelector('.fl-importe');
+      if (imp) imp.textContent = LS_API.formatMXNDec(importe);
     });
-    const el = document.getElementById('fact-total-calc');
-    if (el) el.textContent = LS_API.formatMXNDec(total);
+    const elT = document.getElementById('fact-total-calc');
+    const elS = document.getElementById('fact-subtotal');
+    if (elT) elT.textContent = LS_API.formatMXNDec(total);
+    if (elS) elS.textContent = LS_API.formatMXNDec(total);
   }
 
   async function guardarFactura() {
@@ -3446,8 +3503,9 @@ const LS_UI = (() => {
     async abrirNuevoIngreso() { openModal(buildFormIngreso()); },
     async abrirNuevaFactura() { openModal(await buildFormFactura()); },
     onProveedorChange,
+    factPaso2,
     agregarLineaFactura,
-    onArticuloInput,
+    onArticuloChange,
     calcTotalFactura,
     guardarFactura,
   };
@@ -3560,6 +3618,28 @@ window.addEventListener('load', () => {
   }
 });
 
+
+// ── SINCRONIZACIÓN MANUAL PARROT ──────────────────────────────
+async function sincronizarParrotManual() {
+  const btn = document.getElementById('btn-sync-parrot');
+  const orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.9s linear infinite"></i> Sincronizando...'; }
+  try {
+    const resp = await fetch(
+      'https://script.google.com/macros/s/AKfycby3ndEcQz4zKXzBWqaZqwtt-BAG3MPxuvmaac_3fKchshwMs_31NZ2-tbE5WFaHz9zB/exec',
+      { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ accion: 'sincronizarParrot' }) }
+    );
+    typeof toast !== 'undefined' && toast('Parrot sincronizado', 'Datos del POS actualizados', 'ok', 'ti-check');
+    LS_API.invalidarCache();
+    LS_UI.reloadPage('dashboard');
+    LS_UI.reloadPage('conciliacion');
+  } catch(err) {
+    typeof toast !== 'undefined' && toast('Error', 'No se pudo conectar con Parrot', 'err', 'ti-alert-circle');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+  }
+}
 </script>
 </body>
 </html>
