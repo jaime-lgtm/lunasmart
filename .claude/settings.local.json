@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp \"/Users/benjaminjaimesaenzescareno/Downloads/LunaSmart_v4_FINAL.html\" \"/Users/benjaminjaimesaenzescareno/suenodluna/Sitio Web Admin SL/index.html\")",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(curl -sL \"https://script.google.com/macros/s/AKfycbwlT5PeS-79E3EpjzJv0U4Z4TZLx9dMKFHyswpS3eMdaKOahwgU7yTovifkrUUYdZ7a/exec\")",
+      "Bash(python3 -c \"import sys,re; html=sys.stdin.read\\(\\); print\\(re.sub\\('<[^>]+>','',html\\)[:500]\\)\")",
+      "Bash(curl -sL \"https://script.google.com/macros/s/AKfycbwWsUIXoYDN_XayVBNDk6pshHL81WtxA_whT_tjy8tOQGhqxpVsKFqk2a-kDZyZmCCk/exec\")",
+      "Bash(curl -sL \"https://script.google.com/macros/s/AKfycbwWsUIXoYDN_XayVBNDk6pshHL81WtxA_whT_tjy8tOQGhqxpVsKFqk2a-kDZyZmCCk/exec?accion=getINGRESOS\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('status:', d.get\\('status'\\), '| filas:', len\\(d.get\\('data',[]\\)\\), '| primera fila:', d.get\\('data',[[]]\\)[0][:3] if d.get\\('data'\\) else 'vacío'\\)\")",
+      "Bash(curl -sL \"https://script.google.com/macros/s/AKfycbwWsUIXoYDN_XayVBNDk6pshHL81WtxA_whT_tjy8tOQGhqxpVsKFqk2a-kDZyZmCCk/exec?accion=getDATOSPROVEEDORES\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('status:', d.get\\('status'\\), '| proveedores:', len\\(d.get\\('data',[]\\)\\)-1\\)\")",
+      "Bash(curl -s -X POST https://script.google.com/macros/s/AKfycbwWsUIXoYDN_XayVBNDk6pshHL81WtxA_whT_tjy8tOQGhqxpVsKFqk2a-kDZyZmCCk/exec -H 'Content-Type: text/plain' -d '{\"accion\":\"registrarIngreso\",\"fecha\":\"09/06/2026\",\"sucursal\":\"PRUEBA-DELETE\",\"cliente\":\"INGRESOS-00013\",\"efectivo\":100,\"tarjeta\":0,\"transferencia\":0,\"rappi\":0,\"observaciones\":\"TEST-CONEXION-BORRAR\"}' -L)",
+      "Bash(ls \"/Users/benjaminjaimesaenzescareno/suenodluna/Sitio Web Admin SL/.git\" 2>/dev/null && echo \"tiene git\" || echo \"sin git\" *)",
+      "Bash(gh repo *)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(dig +short lunasmart.suenodeluna.com.mx)",
+      "Bash(nslookup lunasmart.suenodeluna.com.mx)",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' https://github.com/jaime-lgtm/__TRACKED_VAR__)",
+      "Bash(curl -sL \"https://raw.githubusercontent.com/jaime-lgtm/lunasmart/main/CNAME\")",
+      "Bash(curl -sL \"https://raw.githubusercontent.com/jaime-lgtm/lunasmart/gh-pages/CNAME\")",
+      "Bash(curl -s \"https://api.github.com/repos/jaime-lgtm/lunasmart/branches\")",
+      "Bash(python3 -c \"import sys,json; [print\\(b['name']\\) for b in json.load\\(sys.stdin\\)]\")",
+      "Bash(git remote *)",
+      "Bash(git fetch *)",
+      "Bash(git reset *)",
+      "Bash(git checkout *)",
+      "Bash(git stash *)",
+      "Bash(git commit *)",
+      "Bash(git pull *)"
+    ]
+  }
+}
