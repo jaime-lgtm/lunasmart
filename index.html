@@ -1892,11 +1892,11 @@ const LS_API = (() => {
     SHEET_ID: '1Dm5fcTs_URmtv8cwUDV6z_LxuGvdpJmf0ZkxszXzuCk',
 
     // API Key de Google Cloud (solo lectura pública)
-    API_KEY: 'TU_GOOGLE_API_KEY_AQUI',
+    API_KEY: 'AIzaSyAOOj0Sv8aq5njr6ZoWL3Ex5_Kh3zyYUqU',
 
     // URL del Apps Script desplegado como Web App (para escritura)
     // Este es el script que ya tienes en el Sheet
-    APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycby3ndEcQz4zKXzBWqaZqwtt-BAG3MPxuvmaac_3fKchshwMs_31NZ2-tbE5WFaHz9zB/exec',
+    APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwWsUIXoYDN_XayVBNDk6pshHL81WtxA_whT_tjy8tOQGhqxpVsKFqk2a-kDZyZmCCk/exec',
 
     // Base URL de la Sheets API
     BASE: 'https://sheets.googleapis.com/v4/spreadsheets',
@@ -1998,7 +1998,23 @@ const LS_API = (() => {
 
     // Fallback: leer vía Apps Script (evita restricciones CORS)
     try {
-      const url = `${CONFIG.APPS_SCRIPT_URL}?accion=get${nombreHoja.replace(/\s/g,'')}&_=${Date.now()}`;
+      // Mapeo explícito de nombre de hoja → nombre de acción (sin tildes ni espacios)
+      const _accionMap = {
+        'INGRESOS':                    'getINGRESOS',
+        'INGRESOS DETALLES':           'getINGRESOSDETALLES',
+        'FACTURAS':                    'getFACTURAS',
+        'ARTICULOS DETALLES':          'getARTICULOSDETALLES',
+        'Catálogo Maestro':            'getCatalogoMaestro',
+        'Costo de Producto':           'getCostodeProducto',
+        'DATOS_CLIENTES':              'getDATOSCLIENTES',
+        'DATOS_PROVEEDORES':           'getDATOSPROVEEDORES',
+        'DATOS_CATEGORIASSUBCATEGORIAS': 'getDATASCATEGORIASSUBCATEGORIAS',
+        'BD_INVENTARIO_GENERAL':       'getBDINVENTARIOGENERAL',
+        'CONCILIACION':                'getCONCILIACION',
+        'DATA_INGRESOS':               'getDATAINGRESOS',
+      };
+      const accion = _accionMap[nombreHoja] || ('get' + nombreHoja.replace(/\s/g,'').replace(/[áéíóúÁÉÍÓÚ]/g, c => ({á:'a',é:'e',í:'i',ó:'o',ú:'u',Á:'A',É:'E',Í:'I',Ó:'O',Ú:'U'})[c]));
+      const url = `${CONFIG.APPS_SCRIPT_URL}?accion=${accion}&_=${Date.now()}`;
       const resp = await fetch(url);
       if (resp.ok) {
         const data = await resp.json();
@@ -3392,7 +3408,7 @@ const LS_UI = (() => {
     // Recopilar artículos
     const lineas = [];
     document.querySelectorAll('.fact-linea').forEach(linea => {
-      const art    = linea.querySelector('.fl-art')?.value    || '';
+      const art    = linea.querySelector('.fl-art-input')?.value    || '';
       const qty    = parseFloat(linea.querySelector('.fl-qty')?.value    || 0) || 0;
       const uni    = linea.querySelector('.fl-uni')?.value    || '';
       const precio = parseFloat(linea.querySelector('.fl-precio')?.value || 0) || 0;
@@ -3500,12 +3516,12 @@ const LS_UI = (() => {
     calcIngreso, guardarIngreso, guardarFactura,
     closeModal,
     // Abrir modales
-    async abrirNuevoIngreso() { openModal(buildFormIngreso()); },
-    async abrirNuevaFactura() { openModal(await buildFormFactura()); },
+    async abrirNuevoIngreso() { buildFormIngreso(); },
+    async abrirNuevaFactura() { await buildFormFactura(); },
     onProveedorChange,
     factPaso2,
     agregarLineaFactura,
-    onArticuloChange,
+    onArticuloInput,
     calcTotalFactura,
     guardarFactura,
   };
@@ -3521,7 +3537,7 @@ const LS_UI = (() => {
 LS_API.setConfig({
   SHEET_ID:        '1Dm5fcTs_URmtv8cwUDV6z_LxuGvdpJmf0ZkxszXzuCk',
   API_KEY:         'AIzaSyAOOj0Sv8aq5njr6ZoWL3Ex5_Kh3zyYUqU',
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycby3ndEcQz4zKXzBWqaZqwtt-BAG3MPxuvmaac_3fKchshwMs_31NZ2-tbE5WFaHz9zB/exec',
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwWsUIXoYDN_XayVBNDk6pshHL81WtxA_whT_tjy8tOQGhqxpVsKFqk2a-kDZyZmCCk/exec',
 });
 
 /* ── OVERRIDE: go() para carga lazy de datos ─────────────── */
@@ -3626,7 +3642,7 @@ async function sincronizarParrotManual() {
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.9s linear infinite"></i> Sincronizando...'; }
   try {
     const resp = await fetch(
-      'https://script.google.com/macros/s/AKfycby3ndEcQz4zKXzBWqaZqwtt-BAG3MPxuvmaac_3fKchshwMs_31NZ2-tbE5WFaHz9zB/exec',
+      'https://script.google.com/macros/s/AKfycbwWsUIXoYDN_XayVBNDk6pshHL81WtxA_whT_tjy8tOQGhqxpVsKFqk2a-kDZyZmCCk/exec',
       { method: 'POST', headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ accion: 'sincronizarParrot' }) }
     );
