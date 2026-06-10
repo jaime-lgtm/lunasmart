@@ -263,10 +263,11 @@ function _registrarArticuloDetalle(b) {
     const sh = _getSheet(HOJAS.ART_DETALLES);
     const qty   = parseFloat(b.cantidad   || 0);
     const precio= parseFloat(b.precioUnit || 0);
-    const sub   = qty * precio;
+    const _r2 = function(n){ return Math.round(n * 100) / 100; };
+    const sub   = _r2(qty * precio);
     const aplica= !!(b.aplicaIva);
-    const iva   = aplica ? sub * 0.16 : 0;
-    const total = sub + iva;
+    const iva   = _r2(aplica ? sub * 0.16 : 0);
+    const total = _r2(sub + iva);
 
     // Escribir después del último registro con dato en col B (ID_FACTURA)
     var fila = _siguienteFilaLibre(sh, 2);
