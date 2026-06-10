@@ -2034,10 +2034,14 @@ const LS_API = (() => {
   // ── ESCRIBIR VIA APPS SCRIPT (proxy seguro) ────────────────
   async function escribirViaScript(accion, payload) {
     try {
+      // IMPORTANTE: Content-Type debe ser 'text/plain' para evitar el preflight
+      // CORS de OPCIONES que Apps Script no maneja. El cuerpo sigue siendo JSON
+      // válido que doPost() parsea con JSON.parse(e.postData.contents).
       const resp = await fetch(CONFIG.APPS_SCRIPT_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ accion, ...payload }),
+        redirect: 'follow',
       });
       const data = await resp.json();
       // Limpiar caché para que el siguiente read sea fresco
@@ -3646,7 +3650,8 @@ async function sincronizarParrotManual() {
     const resp = await fetch(
       'https://script.google.com/macros/s/AKfycbwWsUIXoYDN_XayVBNDk6pshHL81WtxA_whT_tjy8tOQGhqxpVsKFqk2a-kDZyZmCCk/exec',
       { method: 'POST', headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ accion: 'sincronizarParrot' }) }
+        body: JSON.stringify({ accion: 'sincronizarParrot' }),
+        redirect: 'follow' }
     );
     typeof toast !== 'undefined' && toast('Parrot sincronizado', 'Datos del POS actualizados', 'ok', 'ti-check');
     LS_API.invalidarCache();
