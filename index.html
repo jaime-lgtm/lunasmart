@@ -831,10 +831,52 @@
       box-shadow: var(--sh-pop);
       animation: modalup 0.28s var(--ease);
     }
-    /* El modal de factura necesita overflow visible para el dropdown de artículos */
-    #modal-factura.modal { overflow: visible; max-height: none; }
-    #modal-factura.modal .modal-body { overflow-y: auto; max-height: 68vh; overflow-x: visible; }
-    .art-dd { min-width: 340px; }
+    /* Modal de factura: overflow visible para que el dropdown de artículos no quede cortado */
+    #modal-factura { overflow: visible !important; }
+    #modal-factura > .modal { overflow: visible !important; max-height: none; }
+    #modal-factura > .modal > .modal-body { overflow-y: auto; max-height: 70vh; overflow-x: visible; }
+    /* Dropdown de búsqueda de artículos — grande y legible.
+       position:fixed para que NO lo corte el overflow del contenedor de líneas. */
+    .art-dd {
+      position: fixed !important;
+      width: min(560px, 92vw);
+      max-height: 340px;
+      font-size: 14px;
+      border-radius: var(--r-lg) !important;
+      z-index: 1200 !important;
+    }
+    .art-dd::-webkit-scrollbar { width: 10px; }
+    .art-opt {
+      padding: 13px 16px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--line-soft);
+      transition: background .1s;
+    }
+    .art-opt:hover, .art-opt.kb-active { background: rgba(177,70,24,0.14); }
+    .art-opt-nom { font-size: 14px; color: var(--tx); font-weight: 500; }
+    .art-opt-det { font-size: 11.5px; color: var(--tx-3); margin-top: 3px; }
+
+    /* Modal de factura PANTALLA COMPLETA en celular/tablet */
+    @media (max-width: 860px) {
+      #modal-factura { padding: 0 !important; align-items: stretch !important; }
+      #modal-factura > .modal {
+        max-width: 100% !important; width: 100% !important;
+        height: 100dvh; border-radius: 0; display: flex; flex-direction: column;
+      }
+      #modal-factura > .modal > .modal-body { max-height: none; flex: 1; }
+      .art-dd { width: calc(100vw - 24px) !important; }
+      /* Cabecera (Fecha/Folio/Unidad) se apila en una columna */
+      #modal-factura [style*="grid-template-columns:1fr 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+      }
+      /* La tabla de artículos puede desplazarse horizontalmente si es necesario */
+      #modal-factura [style*="grid-template-columns:2.8fr"],
+      #fact-lineas .fact-linea {
+        grid-template-columns: 2.2fr 0.6fr 56px 0.85fr 74px 28px !important;
+        min-width: 460px;
+      }
+      #fact-lineas { overflow-x: auto; }
+    }
     @keyframes modalup { from { transform:translateY(18px);opacity:0 } to { transform:translateY(0);opacity:1 } }
 
     .modal-header {
@@ -2089,6 +2131,50 @@ const LS_API = (() => {
   // MÉTODOS DE LECTURA
   // ══════════════════════════════════════════════════════════
 
+  /**
+   * Extrae el mes (2 dígitos) de cualquier formato de fecha:
+   * - ISO: '2026-06-09T...' → '06'
+   * - DD/MM/YYYY o DD-MM-YYYY → '06'
+   * - MM/DD/YYYY → también intenta correctamente
+   */
+  function _mesDeDate(fechaStr) {
+    if (!fechaStr) return '';
+    const s = String(fechaStr).trim();
+    // ISO: 2026-06-09... → posición 5-6 es el mes
+    if (/^\d{4}-\d{2}/.test(s)) return s.substring(5, 7);
+    // Separado por / o -: detectar si es DD/MM/YYYY o MM/DD/YYYY
+    const partes = s.split(/[\/\-]/);
+    if (partes.length === 3 && partes[2].length === 4) {
+      const p0 = parseInt(partes[0], 10);
+      const p1 = parseInt(partes[1], 10);
+      // Si primer número > 12 → es día → formato DD/MM/YYYY (México)
+      if (p0 > 12) return String(p1).padStart(2, '0');
+      // Si segundo número > 12 → es día → formato MM/DD/YYYY
+      if (p1 > 12) return String(p0).padStart(2, '0');
+      // Ambiguo: asumimos DD/MM/YYYY (estándar México)
+      return String(p1).padStart(2, '0');
+    }
+    return '';
+  }
+
+  /**
+   * Extrae la fecha YYYY-MM-DD de cualquier formato.
+   */
+  function _fechaISO(fechaStr) {
+    if (!fechaStr) return '';
+    const s = String(fechaStr).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
+    const partes = s.split(/[\/\-]/);
+    if (partes.length === 3 && partes[2].length === 4) {
+      const p0 = parseInt(partes[0], 10);
+      const p1 = parseInt(partes[1], 10);
+      if (p0 > 12) return `${partes[2]}-${String(p1).padStart(2,'0')}-${String(p0).padStart(2,'0')}`;
+      if (p1 > 12) return `${partes[2]}-${String(p0).padStart(2,'0')}-${String(p1).padStart(2,'0')}`;
+      return `${partes[2]}-${String(p1).padStart(2,'0')}-${String(p0).padStart(2,'0')}`;
+    }
+    return '';
+  }
+
   // Obtener todos los ingresos
   async function getIngresos(filtros = {}) {
     const rows = await leerHoja(SHEETS.INGRESOS);
@@ -2117,18 +2203,15 @@ const LS_API = (() => {
         if (filtros.sucursal && filtros.sucursal !== 'all') {
           if (!r.sucursal.toLowerCase().includes(filtros.sucursal.toLowerCase())) return false;
         }
+        // Filtro por mes — usa _mesDeDate para manejar ISO, DD/MM, MM/DD
         if (filtros.mes) {
-          if (!r.fecha.includes(filtros.mes)) return false;
+          if (_mesDeDate(r.fecha) !== filtros.mes) return false;
         }
-        // Filtro por período global (state.desde)
+        // Filtro por período global (state.desde cuando aplica)
         const desde = typeof state !== 'undefined' && state.desde;
         if (desde && r.fecha) {
-          // Normalizar fecha DD/MM/YYYY → YYYY-MM-DD para comparar
-          const partes = String(r.fecha).split('/');
-          if (partes.length === 3) {
-            const fechaISO = `${partes[2]}-${partes[1].padStart(2,'0')}-${partes[0].padStart(2,'0')}`;
-            if (fechaISO < desde) return false;
-          }
+          const fISO = _fechaISO(r.fecha);
+          if (fISO && fISO < desde) return false;
         }
         return true;
       });
@@ -3370,7 +3453,7 @@ const LS_UI = (() => {
 
     openModal(`
     <div class="modal-overlay" id="modal-factura" onclick="if(event.target===this)_cerrarModal()">
-      <div class="modal" style="max-width:820px">
+      <div class="modal" style="max-width:920px">
         <div class="modal-header">
           <div>
             <div class="modal-title">Nueva factura / egreso</div>
@@ -3493,33 +3576,64 @@ const LS_UI = (() => {
 
     const q = _norm(val);
     const cat = window._catalogoCache || [];
-    const hits = cat.filter(a => _norm(a.articulo).includes(q)).slice(0, 20);
+    // Priorizar coincidencias que EMPIEZAN con la búsqueda, luego las que contienen
+    const empiezan = [], contienen = [];
+    cat.forEach(a => {
+      const n = _norm(a.articulo);
+      if (n.startsWith(q)) empiezan.push(a);
+      else if (n.includes(q)) contienen.push(a);
+    });
+    const hits = empiezan.concat(contienen).slice(0, 40);
 
     const row = (a) => {
       const nom = a.articulo.replace(/'/g,"&#39;");
       const uni = (a.unidad||'').replace(/'/g,"&#39;");
       const costo = parseFloat(a.costoBase) || 0;
-      const det = [a.categoria, a.unidad, costo ? '$'+costo.toFixed(2) : ''].filter(Boolean).join(' · ');
-      return `<div style="padding:9px 13px;cursor:pointer;border-bottom:1px solid var(--line-soft)"
-        onmouseover="this.style.background='rgba(177,70,24,0.1)'"
-        onmouseout="this.style.background=''"
+      const det = [a.categoria, a.unidad, costo ? '$'+costo.toFixed(2) : ''].filter(Boolean).join('  ·  ');
+      return `<div class="art-opt"
         onmousedown="event.preventDefault();LS_UI.seleccionarArticulo(this,'${nom}','${uni}',${costo})">
-        <div style="font-size:13px;color:var(--tx);font-weight:500">${a.articulo}</div>
-        <div style="font-size:10.5px;color:var(--tx-3);margin-top:2px">${det}</div>
+        <div class="art-opt-nom">${a.articulo}</div>
+        ${det ? `<div class="art-opt-det">${det}</div>` : ''}
       </div>`;
     };
 
     const valEsc = val.replace(/'/g,"&#39;");
-    const btnNuevo = `<div style="padding:9px 13px;cursor:pointer;display:flex;align-items:center;gap:8px;color:var(--terra-claro);border-top:1px solid var(--line-2)"
-      onmouseover="this.style.background='rgba(177,70,24,0.08)'"
-      onmouseout="this.style.background=''"
+    const btnNuevo = `<div class="art-opt" style="display:flex;align-items:center;gap:9px;color:var(--terra-claro);border-top:1px solid var(--line-2);background:rgba(177,70,24,0.05)"
       onmousedown="event.preventDefault();LS_UI.abrirNuevoArticulo('${valEsc}',this)">
-      <i class="ti ti-circle-plus" style="font-size:16px;flex-shrink:0"></i>
-      <span style="font-size:12.5px">Registrar <strong>"${val}"</strong> en Catálogo Maestro</span>
+      <i class="ti ti-circle-plus" style="font-size:18px;flex-shrink:0"></i>
+      <span style="font-size:13px">Registrar <strong>"${val}"</strong> como artículo nuevo</span>
     </div>`;
 
-    dd.innerHTML = hits.map(row).join('') + btnNuevo;
+    const encabezado = hits.length > 0
+      ? `<div style="padding:7px 16px;font-size:10px;color:var(--tx-4);text-transform:uppercase;letter-spacing:.08em;background:var(--cafe-card-hi);position:sticky;top:0;z-index:1">${hits.length} resultado${hits.length>1?'s':''} en Catálogo Maestro</div>`
+      : `<div style="padding:11px 16px;font-size:12.5px;color:var(--tx-3)">Sin coincidencias — puedes registrarlo:</div>`;
+
+    dd.innerHTML = encabezado + hits.map(row).join('') + btnNuevo;
     dd.style.display = 'block';
+    _posicionarDropdown(input, dd);
+  }
+
+  /** Posiciona el dropdown (position:fixed) justo debajo del input de artículo */
+  function _posicionarDropdown(input, dd) {
+    // Limpiar estilos inline que entran en conflicto con position:fixed
+    dd.style.right = 'auto';
+    dd.style.bottom = 'auto';
+    const ancho = Math.min(560, window.innerWidth - 20);
+    dd.style.width = ancho + 'px';
+    const r = input.getBoundingClientRect();
+    const ddH = Math.min(dd.scrollHeight, 340);
+    const espacioAbajo = window.innerHeight - r.bottom;
+    // Si no cabe abajo, abrir hacia arriba
+    if (espacioAbajo < ddH + 12 && r.top > ddH) {
+      dd.style.top = (r.top - ddH - 2) + 'px';
+    } else {
+      dd.style.top = (r.bottom + 2) + 'px';
+    }
+    // Alinear a la izquierda del input, sin salirse de la pantalla
+    let left = r.left;
+    if (left + ancho > window.innerWidth - 10) left = window.innerWidth - ancho - 10;
+    if (left < 8) left = 8;
+    dd.style.left = left + 'px';
   }
 
   function seleccionarArticulo(el, nombre, unidad, costo) {
@@ -4072,15 +4186,39 @@ function sincronizarParrotManual() {
             </div>
           </div>`).join('')}
 
-        <div style="margin-top:8px;padding:10px 13px;background:var(--ambar-bg);border-radius:var(--r-sm);font-size:11.5px;color:var(--ambar);display:flex;gap:8px">
+        <!-- Rango de fechas -->
+        <div style="margin-top:4px;padding:12px 14px;background:var(--cafe-card-hi);border-radius:var(--r-lg);border:1px solid var(--line)">
+          <div style="font-size:10px;font-weight:600;color:var(--tx-3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">
+            <i class="ti ti-calendar-event"></i> Rango de fechas a sincronizar
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="ff" style="margin:0">
+              <label style="font-size:10px">Desde</label>
+              <input type="date" id="parrot-desde" style="font-size:12px"
+                value="${new Date(Date.now() - 7*24*60*60*1000).toISOString().split('T')[0]}">
+            </div>
+            <div class="ff" style="margin:0">
+              <label style="font-size:10px">Hasta</label>
+              <input type="date" id="parrot-hasta" style="font-size:12px"
+                value="${new Date().toISOString().split('T')[0]}">
+            </div>
+          </div>
+          <div style="font-size:10.5px;color:var(--tx-4);margin-top:8px">
+            Por defecto: últimos 7 días. Puedes elegir cualquier rango para sincronizar días anteriores.
+          </div>
+        </div>
+
+        <div style="margin-top:4px;padding:10px 13px;background:var(--ambar-bg);border-radius:var(--r-sm);font-size:11.5px;color:var(--ambar);display:flex;gap:8px">
           <i class="ti ti-info-circle" style="flex-shrink:0;margin-top:1px"></i>
-          <span>Casa de la Cultura y Helfy Fü comparten el mismo UUID de Parrot. Cuando Helfy Fü reciba órdenes, sincroniza seleccionando esa sucursal.</span>
+          <span>Casa de la Cultura y Helfy Fü comparten el mismo UUID de Parrot.</span>
         </div>
       </div>
     </div>`);
 }
 
 async function _ejecutarSyncParrot(sucursal) {
+  const desde = document.getElementById('parrot-desde')?.value || '';
+  const hasta = document.getElementById('parrot-hasta')?.value || '';
   const btn = document.getElementById('btn-sync-parrot');
   const orig = btn ? btn.innerHTML : '';
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.9s linear infinite"></i> Sincronizando...'; }
@@ -4088,10 +4226,16 @@ async function _ejecutarSyncParrot(sucursal) {
     const resp = await fetch(
       'https://script.google.com/macros/s/AKfycbwWsUIXoYDN_XayVBNDk6pshHL81WtxA_whT_tjy8tOQGhqxpVsKFqk2a-kDZyZmCCk/exec',
       { method: 'POST', headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ accion: 'sincronizarParrot', sucursal }),
+        body: JSON.stringify({ accion: 'sincronizarParrot', sucursal, desde, hasta }),
         redirect: 'follow' }
     );
-    typeof toast !== 'undefined' && toast('Parrot sincronizado', sucursal + ' · Datos del POS actualizados', 'ok', 'ti-refresh');
+    const d = await resp.json().catch(() => ({}));
+    const regs = d.registros ?? '?';
+    typeof toast !== 'undefined' && toast(
+      'Parrot sincronizado',
+      `${sucursal} · ${regs} registro(s) nuevos · ${desde} → ${hasta}`,
+      'ok', 'ti-refresh'
+    );
     LS_API.invalidarCache();
     LS_UI.reloadPage('dashboard');
     LS_UI.reloadPage('conciliacion');
