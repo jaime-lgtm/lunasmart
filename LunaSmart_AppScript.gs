@@ -180,7 +180,7 @@ function doPost(e) {
     case 'registrarArticuloDetalle': return _registrarArticuloDetalle(body);
     case 'registrarProveedor':      return _registrarProveedor(body);
     case 'registrarCliente':        return _registrarCliente(body);
-    case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || 'SUEÑO DE LUNA');
+    case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || 'CASA DE LA CULTURA');
     case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(body.datos || body);
     default: return _err('Acción desconocida: ' + accion);
   }
@@ -360,8 +360,15 @@ function _registrarCliente(b) {
 }
 
 // ── SINCRONIZAR PARROT POS ─────────────────────────────────────────────────
+// Sucursales con Parrot POS (UUID compartido):
+//   CASA DE LA CULTURA → sucursal principal (punto de venta físico)
+//   HELFY FÜ          → multi-marca Parrot (Rappi/Uber)
+// Sucursales SIN Parrot (manuales):
+//   SUEÑO DE LUNA     → Coffee & Roasters (expos, mercados, redes sociales)
+//   BARBACOA Y MENUDO → solo domingos, desde casa
+//   EVENTOS           → bar móvil y eventos
 function _sincronizarParrot(sucursal) {
-  sucursal = sucursal || 'SUEÑO DE LUNA';
+  sucursal = sucursal || 'CASA DE LA CULTURA';
   try {
     const hoy = new Date();
     const hace7 = new Date(hoy - 7 * 24 * 60 * 60 * 1000);
