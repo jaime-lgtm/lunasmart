@@ -1128,15 +1128,11 @@
   <div class="grid-21">
     <div class="card">
       <div class="card-head">
-        <div><div class="card-title"><i class="ti ti-building-store"></i>Top sucursales</div><div class="card-sub">Venta acumulada — junio 2026</div></div>
+        <div><div class="card-title"><i class="ti ti-building-store"></i>Top sucursales</div><div id="dash-suc-sub" class="card-sub">Venta acumulada — cargando...</div></div>
         <button class="btn btn-sm btn-ghost" onclick="go('sucursales',document.querySelector('[data-page=sucursales]'))">Ver todas<i class="ti ti-chevron-right"></i></button>
       </div>
-      <div class="card-pad" style="padding-top:6px;padding-bottom:8px">
-        <div class="srow" data-branch="coffee"><div class="s-ico"><i class="ti ti-coffee"></i></div><div class="s-info"><div class="s-name">Sueño de Luna Coffee</div><div class="s-tags"><span class="chan ch-p"><i class="ti ti-device-desktop"></i>Parrot</span><span class="chan ch-r">Rappi</span></div></div><div class="s-bar"><div class="bar-wrap"><div class="bar" style="width:100%"></div></div></div><div class="s-val">$48,200</div></div>
-        <div class="srow" data-branch="cultura"><div class="s-ico"><i class="ti ti-building-community"></i></div><div class="s-info"><div class="s-name">Casa de la Cultura</div><div class="s-tags"><span class="chan ch-m">Manual</span></div></div><div class="s-bar"><div class="bar-wrap"><div class="bar" style="width:41%"></div></div></div><div class="s-val">$19,800</div></div>
-        <div class="srow" data-branch="helfy"><div class="s-ico"><i class="ti ti-salad"></i></div><div class="s-info"><div class="s-name">Helfy Fü</div><div class="s-tags"><span class="chan ch-r">Rappi</span><span class="chan ch-u">Uber</span></div></div><div class="s-bar"><div class="bar-wrap"><div class="bar" style="width:20%"></div></div></div><div class="s-val">$9,450</div></div>
-        <div class="srow" data-branch="barbacoa"><div class="s-ico"><i class="ti ti-meat"></i></div><div class="s-info"><div class="s-name">Barbacoa y Menudo</div><div class="s-tags"><span class="chan ch-m">Directa</span></div></div><div class="s-bar"><div class="bar-wrap"><div class="bar" style="width:11%"></div></div></div><div class="s-val">$5,380</div></div>
-        <div class="srow" data-branch="eventos"><div class="s-ico"><i class="ti ti-confetti"></i></div><div class="s-info"><div class="s-name">Sueño de Luna Eventos</div><div class="s-tags"><span class="chan ch-e">Cotización</span></div></div><div class="s-bar"><div class="bar-wrap"><div class="bar" style="width:4%"></div></div></div><div class="s-val">$1,751</div></div>
+      <div class="card-pad" style="padding-top:6px;padding-bottom:8px" id="dash-sucursales-list">
+        <div style="padding:20px;text-align:center;color:var(--tx-4);font-size:12px"><i class="ti ti-loader-2"></i> Cargando...</div>
       </div>
     </div>
     <div class="card">
@@ -2530,6 +2526,22 @@ const LS_API = (() => {
     });
   }
 
+  // Ventas agrupadas por sucursal (para Top sucursales real)
+  async function getVentasPorSucursal(mes) {
+    const ingresos = await getIngresos({ mes });
+    const agg = {};
+    ingresos.forEach(r => {
+      if (!r.sucursal || r.sucursal.trim() === '') return;
+      // Ignorar datos de prueba
+      if (['TEST', 'PRUEBA', 'VERIFICACION'].some(t => r.sucursal.toUpperCase().includes(t))) return;
+      const k = r.sucursal.trim().toUpperCase();
+      agg[k] = (agg[k] || 0) + (r.ventaTotal || r.totalDeclarado || 0);
+    });
+    return Object.entries(agg)
+      .map(([sucursal, total]) => ({ sucursal, total }))
+      .sort((a, b) => b.total - a.total);
+  }
+
   // Registrar nuevo artículo en Catálogo Maestro
   async function registrarCatalogoArticulo(datos) {
     return escribirViaScript('registrarCatalogoArticulo', { datos });
@@ -2541,6 +2553,7 @@ const LS_API = (() => {
     getIngresos, getConciliacion, getFacturas,
     getArticulosDetalle, getClientes, getProveedores,
     getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos,
+    getVentasPorSucursal,
     // Escritura
     registrarIngreso, registrarFactura,
     registrarProveedor, registrarCliente,
@@ -2664,6 +2677,38 @@ const LS_UI = (() => {
       setTxt('dash-transferencia', fmt(kpis.transferencia));
       setTxt('dash-rappi',         fmt(kpis.rappi));
 
+      // ── TOP SUCURSALES con datos reales ──────────────────────
+      try {
+        const sucursales = await LS_API.getVentasPorSucursal(mes);
+        const sucEl = document.getElementById('dash-sucursales-list');
+        const subEl = document.getElementById('dash-suc-sub');
+        const mesNom = {'01':'enero','02':'febrero','03':'marzo','04':'abril','05':'mayo','06':'junio','07':'julio','08':'agosto','09':'septiembre','10':'octubre','11':'noviembre','12':'diciembre'};
+        if (subEl) subEl.textContent = 'Venta acumulada — ' + (mesNom[mes] || 'mes actual') + ' 2026';
+        if (sucEl && sucursales.length > 0) {
+          const maxVal = sucursales[0].total;
+          const META = {
+            'SUEÑO DE LUNA':      { nom:'Sueño de Luna Coffee', ico:'ti-coffee' },
+            'CASA DE LA CULTURA': { nom:'Casa de la Cultura',   ico:'ti-building-community' },
+            'HELFY FÜ':           { nom:'Helfy Fü',             ico:'ti-salad' },
+            'HELFY FU':           { nom:'Helfy Fü',             ico:'ti-salad' },
+            'BARBACOA Y MENUDO':  { nom:'Barbacoa y Menudo',    ico:'ti-meat' },
+            'EVENTOS':            { nom:'Sueño de Luna Eventos', ico:'ti-confetti' },
+          };
+          sucEl.innerHTML = sucursales.map(s => {
+            const pct = maxVal > 0 ? Math.round(s.total / maxVal * 100) : 0;
+            const m = META[s.sucursal] || { nom: s.sucursal, ico: 'ti-building' };
+            return `<div class="srow">
+              <div class="s-ico"><i class="ti ${m.ico}"></i></div>
+              <div class="s-info"><div class="s-name">${m.nom}</div></div>
+              <div class="s-bar"><div class="bar-wrap"><div class="bar" style="width:${pct}%"></div></div></div>
+              <div class="s-val">${fmt(s.total)}</div>
+            </div>`;
+          }).join('');
+        } else if (sucEl) {
+          sucEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--tx-4);font-size:12px">Sin registros en el período</div>';
+        }
+      } catch(_) {}
+
       // Badge de faltantes en nav
       const badgeFaltantes = concilia.filter(c => c.estado === 'FALTANTE').length;
       document.querySelectorAll('.badge-faltantes').forEach(b => {
@@ -2738,7 +2783,7 @@ const LS_UI = (() => {
           <td style="font-family:var(--mono);font-size:11px;color:var(--tx-3)">#${c.sesion}</td>
           <td>${c.fecha}</td>
           <td>${turnoLabel(c.turno)}</td>
-          <td>Coffee & Roasters</td>
+          <td>${c.sucursal || 'Sueño de Luna'}</td>
           <td style="font-family:var(--mono)">${fmt(c.ventaParrot)}</td>
           <td style="font-family:var(--mono)">${fmt(c.declarado)}</td>
           <td style="font-family:var(--mono);color:${deltaColor(c.delta)};font-weight:600">
@@ -3855,7 +3900,43 @@ window.addEventListener('load', () => {
 
 
 // ── SINCRONIZACIÓN MANUAL PARROT ──────────────────────────────
-async function sincronizarParrotManual() {
+function sincronizarParrotManual() {
+  // Mostrar selector de sucursal antes de sincronizar
+  _modal(`
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title"><i class="ti ti-refresh" style="margin-right:6px;color:var(--terra-claro)"></i>Sincronizar Parrot POS</div>
+          <div class="modal-sub">¿A qué sucursal pertenece esta sincronización?</div>
+        </div>
+        <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:8px">
+        ${[
+          ['SUEÑO DE LUNA',      'ti-coffee',              'Sueño de Luna Coffee & Roasters', 'Parrot POS principal'],
+          ['CASA DE LA CULTURA', 'ti-building-community',  'Casa de la Cultura',              'Terminal secundaria'],
+          ['HELFY FÜ',           'ti-salad',               'Helfy Fü',                        ''],
+          ['BARBACOA Y MENUDO',  'ti-meat',                'Barbacoa y Menudo',                ''],
+          ['EVENTOS',            'ti-confetti',            'Sueño de Luna Eventos',            ''],
+        ].map(([val, ico, nom, sub]) => `
+          <div onclick="_cerrarModal();_ejecutarSyncParrot('${val}')"
+            style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--r-lg);border:1px solid var(--line);cursor:pointer;transition:all .15s"
+            onmouseover="this.style.background='rgba(177,70,24,0.08)';this.style.borderColor='var(--line-2)'"
+            onmouseout="this.style.background='';this.style.borderColor='var(--line)'">
+            <div style="width:36px;height:36px;border-radius:9px;background:rgba(177,70,24,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <i class="ti ${ico}" style="font-size:18px;color:var(--terra-claro)"></i>
+            </div>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--tx)">${nom}</div>
+              ${sub ? `<div style="font-size:11px;color:var(--tx-3)">${sub}</div>` : ''}
+            </div>
+            <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--tx-4)"></i>
+          </div>`).join('')}
+      </div>
+    </div>`);
+}
+
+async function _ejecutarSyncParrot(sucursal) {
   const btn = document.getElementById('btn-sync-parrot');
   const orig = btn ? btn.innerHTML : '';
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.9s linear infinite"></i> Sincronizando...'; }
@@ -3863,10 +3944,10 @@ async function sincronizarParrotManual() {
     const resp = await fetch(
       'https://script.google.com/macros/s/AKfycbwWsUIXoYDN_XayVBNDk6pshHL81WtxA_whT_tjy8tOQGhqxpVsKFqk2a-kDZyZmCCk/exec',
       { method: 'POST', headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ accion: 'sincronizarParrot' }),
+        body: JSON.stringify({ accion: 'sincronizarParrot', sucursal }),
         redirect: 'follow' }
     );
-    typeof toast !== 'undefined' && toast('Parrot sincronizado', 'Datos del POS actualizados', 'ok', 'ti-check');
+    typeof toast !== 'undefined' && toast('Parrot sincronizado', sucursal + ' · Datos del POS actualizados', 'ok', 'ti-refresh');
     LS_API.invalidarCache();
     LS_UI.reloadPage('dashboard');
     LS_UI.reloadPage('conciliacion');
