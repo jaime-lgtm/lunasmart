@@ -3415,7 +3415,7 @@ const LS_UI = (() => {
     // Terminal Pay se suma a Tarjeta en el Sheet (PAGO_TARJETA)
     // Se registra el desglose en Observaciones para trazabilidad
     const datos = {
-      fecha:          s('ing-fecha').split('-').reverse().join('/'),
+      fecha:          s('ing-fecha'),
       sucursal:       s('ing-sucursal'),
       cliente:        s('ing-turno'),
       inicioCaja:     n('ing-inicio-caja'),
@@ -3981,7 +3981,9 @@ const LS_UI = (() => {
       const uni    = linea.querySelector('.fl-uni')?.value    || '';
       const precio = parseFloat(linea.querySelector('.fl-precio')?.value || 0) || 0;
       if (art && qty > 0 && precio > 0) {
-        lineas.push({ articulo: art, cantidad: qty, unidad: uni, precioUnit: precio, subtotal: qty * precio });
+        // Redondear el importe a 2 decimales (centavos)
+        const subtotal = Math.round(qty * precio * 100) / 100;
+        lineas.push({ articulo: art, cantidad: qty, unidad: uni, precioUnit: precio, subtotal });
       }
     });
 
@@ -3990,8 +3992,10 @@ const LS_UI = (() => {
       return;
     }
 
-    const totalFactura = lineas.reduce((s, l) => s + l.subtotal, 0);
-    const fecha        = s('fact-fecha').split('-').reverse().join('/');
+    const totalFactura = Math.round(lineas.reduce((s, l) => s + l.subtotal, 0) * 100) / 100;
+    // Enviar la fecha en formato ISO (YYYY-MM-DD) para que Google Sheets NO la
+    // malinterprete como mes/día. El Sheet la guarda y muestra como dd/MM/yyyy.
+    const fecha        = s('fact-fecha');
     const unidad       = s('fact-unidad');
     const folio        = s('fact-folio');
 
