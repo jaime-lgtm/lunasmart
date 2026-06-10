@@ -2262,6 +2262,22 @@ const LS_API = (() => {
       }));
   }
 
+  // Obtener artículos del catálogo POS (DATA_INGRESOS)
+  async function getDataIngresos() {
+    const rows = await leerHoja(SHEETS.DATA_INGRESOS);
+    if (!rows) return [];
+    return rows.slice(1)
+      .filter(r => r.length > 1 && r[1])
+      .map(r => ({
+        id:        r[0] || '',
+        articulo:  r[1] || '',
+        categoria: r[2] || '',
+        precio:    parseNum(r[3]),
+        iva:       parseNum(r[4]),
+        estado:    r[6] || '',
+      }));
+  }
+
   // ══════════════════════════════════════════════════════════
   // MÉTODOS DE ESCRITURA (vía Apps Script proxy)
   // ══════════════════════════════════════════════════════════
@@ -2519,7 +2535,7 @@ const LS_API = (() => {
     // Lectura
     getIngresos, getConciliacion, getFacturas,
     getArticulosDetalle, getClientes, getProveedores,
-    getCatalogo, getCostoProducto, getInventario, getCategorias,
+    getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos,
     // Escritura
     registrarIngreso, registrarFactura,
     registrarProveedor, registrarCliente,
@@ -3186,14 +3202,11 @@ const LS_UI = (() => {
     const [proveedores, catalogo, dataIngresos] = await Promise.all([
       LS_API.getProveedores(),
       LS_API.getCatalogo(),
-      LS_API.leerHoja('DATA_INGRESOS'),
+      LS_API.getDataIngresos(),
     ]);
     window._catalogoCache = catalogo;
-
-    // Artículos de DATA_INGRESOS (catálogo de productos vendibles)
-    window._dataIngresosCache = (dataIngresos || []).slice(1)
-      .filter(r => r[1])
-      .map(r => ({ articulo: r[1], categoria: r[2] || '', precio: r[3] || 0 }));
+    // Artículos del POS (DATA_INGRESOS) para facturas tipo "ticket manual"
+    window._dataIngresosCache = dataIngresos || [];
 
     const provOpts = proveedores.length > 0
       ? proveedores.map(p => `<option value="${p.nombre}">${p.nombre}</option>`).join('')
