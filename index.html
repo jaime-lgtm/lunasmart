@@ -1251,10 +1251,10 @@
 <!-- ════════ CONCILIACIÓN ════════ -->
 <div id="p-conciliacion" class="page" data-screen-label="Conciliación">
   <div class="kpis">
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Turnos del mes</div><div class="kpi-ico"><i class="ti ti-clock-hour-4"></i></div></div><div class="kpi-val">41</div><div class="kpi-sub">Sincronizados de Parrot</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Cuadrados</div><div class="kpi-ico g"><i class="ti ti-circle-check"></i></div></div><div class="kpi-val up">38</div><div class="kpi-sub"><span class="delta up">93%</span> exactitud</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Total faltantes</div><div class="kpi-ico r"><i class="ti ti-arrow-down-right"></i></div></div><div class="kpi-val dn">$196</div><div class="kpi-sub">En 3 turnos</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Total sobrantes</div><div class="kpi-ico a"><i class="ti ti-arrow-up-right"></i></div></div><div class="kpi-val am">$41</div><div class="kpi-sub">En 1 turno</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Turnos del período</div><div class="kpi-ico"><i class="ti ti-clock-hour-4"></i></div></div><div class="kpi-val" id="conc-total-turnos">—</div><div class="kpi-sub">Conciliados</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Cuadrados</div><div class="kpi-ico g"><i class="ti ti-circle-check"></i></div></div><div class="kpi-val up" id="conc-cuadrados">—</div><div class="kpi-sub"><span class="delta up" id="conc-exactitud">—</span> exactitud</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Total faltantes</div><div class="kpi-ico r"><i class="ti ti-arrow-down-right"></i></div></div><div class="kpi-val dn" id="conc-total-faltantes">—</div><div class="kpi-sub">Diferencias negativas</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Total sobrantes</div><div class="kpi-ico a"><i class="ti ti-arrow-up-right"></i></div></div><div class="kpi-val am" id="conc-total-sobrantes">—</div><div class="kpi-sub">Diferencias positivas</div></div>
   </div>
   <div class="card">
     <div class="card-head">
@@ -1272,15 +1272,8 @@
           <th class="sortable num" data-type="num">Delta<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
           <th>Estado</th>
         </tr></thead>
-        <tbody>
-          <tr data-branch="coffee"><td class="t-mono">#247</td><td>04/06</td><td><span class="pill pill-m">Mañana</span></td><td>Coffee</td><td class="num" data-v="2100">$2,100</td><td class="num">$2,100</td><td class="num up" data-v="0">$0</td><td><span class="badge b-s"><span class="bdot"></span>Cuadra</span></td></tr>
-          <tr data-branch="coffee"><td class="t-mono">#246</td><td>04/06</td><td><span class="pill pill-t">Tarde</span></td><td>Coffee</td><td class="num" data-v="1890">$1,890</td><td class="num">$1,890</td><td class="num up" data-v="0">$0</td><td><span class="badge b-s"><span class="bdot"></span>Cuadra</span></td></tr>
-          <tr data-branch="coffee"><td class="t-mono">#244</td><td>03/06</td><td><span class="pill pill-t">Tarde</span></td><td>Coffee</td><td class="num" data-v="1671">$1,671</td><td class="num">$1,671</td><td class="num up" data-v="0">$0</td><td><span class="badge b-s"><span class="bdot"></span>Cuadra</span></td></tr>
-          <tr data-branch="coffee" class="hl-row"><td class="t-mono">#243</td><td>03/06</td><td><span class="pill pill-m">Mañana</span></td><td>Coffee</td><td class="num" data-v="2204">$2,204</td><td class="num">$2,039</td><td class="num dn" data-v="-165">−$165</td><td><span class="badge b-d"><span class="bdot"></span>Faltante</span></td></tr>
-          <tr data-branch="coffee"><td class="t-mono">#242</td><td>02/06</td><td><span class="pill pill-m">Mañana</span></td><td>Coffee</td><td class="num" data-v="1460">$1,460</td><td class="num">$1,460</td><td class="num up" data-v="0">$0</td><td><span class="badge b-s"><span class="bdot"></span>Cuadra</span></td></tr>
-          <tr data-branch="coffee"><td class="t-mono">#241</td><td>02/06</td><td><span class="pill pill-t">Tarde</span></td><td>Coffee</td><td class="num" data-v="685">$685</td><td class="num">$726</td><td class="num am" data-v="41">+$41</td><td><span class="badge b-w"><span class="bdot"></span>Sobrante</span></td></tr>
-          <tr data-branch="helfy"><td class="t-mono">#239</td><td>01/06</td><td><span class="pill pill-m">Mañana</span></td><td>Helfy Fü</td><td class="num" data-v="940">$940</td><td class="num">$910</td><td class="num dn" data-v="-30">−$30</td><td><span class="badge b-d"><span class="bdot"></span>Faltante</span></td></tr>
-          <tr data-branch="cultura"><td class="t-mono">#238</td><td>01/06</td><td><span class="pill pill-t">Tarde</span></td><td>Cultura</td><td class="num" data-v="1320">$1,320</td><td class="num">$1,320</td><td class="num up" data-v="0">$0</td><td><span class="badge b-s"><span class="bdot"></span>Cuadra</span></td></tr>
+        <tbody id="tabla-conciliacion">
+          <tr><td colspan="8" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -1323,34 +1316,25 @@
 <!-- ════════ ARTÍCULOS ESTRELLA ════════ -->
 <div id="p-articulos" class="page" data-screen-label="Artículos estrella">
   <div class="kpis">
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">SKUs activos</div><div class="kpi-ico"><i class="ti ti-barcode"></i></div></div><div class="kpi-val">284</div><div class="kpi-sub">En catálogo</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Más vendido</div><div class="kpi-ico d"><i class="ti ti-star"></i></div></div><div class="kpi-val" style="font-size:16px;line-height:1.5">Frappe Cajeta</div><div class="kpi-sub">147 uds · $12,201</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Unidades top 10</div><div class="kpi-ico g"><i class="ti ti-package"></i></div></div><div class="kpi-val">741</div><div class="kpi-sub">Vendidas en junio</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Venta top 10</div><div class="kpi-ico"><i class="ti ti-coin"></i></div></div><div class="kpi-val">$70,939</div><div class="kpi-sub"><span class="delta up">84%</span> del total</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Artículos en catálogo</div><div class="kpi-ico"><i class="ti ti-barcode"></i></div></div><div class="kpi-val" id="art-skus">—</div><div class="kpi-sub">Catálogo Maestro</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Más comprado</div><div class="kpi-ico d"><i class="ti ti-star"></i></div></div><div class="kpi-val" id="art-top" style="font-size:15px;line-height:1.45">—</div><div class="kpi-sub" id="art-top-sub">—</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Artículos distintos</div><div class="kpi-ico g"><i class="ti ti-package"></i></div></div><div class="kpi-val" id="art-distintos">—</div><div class="kpi-sub">comprados</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Gasto en artículos</div><div class="kpi-ico"><i class="ti ti-coin"></i></div></div><div class="kpi-val" id="art-gasto">—</div><div class="kpi-sub">en facturas</div></div>
   </div>
   <div class="card">
-    <div class="card-head"><div><div class="card-title"><i class="ti ti-star"></i>Top artículos más vendidos</div><div class="card-sub" id="art-sub">Todas las sucursales · junio 2026</div></div><div class="card-actions"><span class="filter-note" id="fn-articulos"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span></div></div>
+    <div class="card-head"><div><div class="card-title"><i class="ti ti-star"></i>Artículos más comprados</div><div class="card-sub" id="art-sub">De tus facturas de proveedores</div></div></div>
+    <div id="articulos-nota-origen" style="display:none;padding:9px 16px;background:var(--ambar-bg);border-radius:var(--r-sm);margin:0 16px 12px;font-size:11.5px;color:var(--ambar)"><i class="ti ti-info-circle"></i> Datos de <strong>compras</strong> (facturas). Las ventas por artículo requieren integración con Parrot a nivel de orden.</div>
     <div class="tbl-wrap">
-      <table class="tbl" data-sortable data-filterable="articulos">
+      <table class="tbl" data-sortable>
         <thead><tr>
           <th>#</th>
           <th class="sortable" data-type="text">Artículo<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
-          <th>Sucursal</th>
-          <th class="sortable num" data-type="num">Unidades<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
-          <th class="sortable num" data-type="num">Total<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th class="sortable num" data-type="num">Cantidad<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th class="sortable num" data-type="num">Total comprado<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
           <th class="num">Participación</th>
         </tr></thead>
-        <tbody>
-          <tr data-branch="coffee"><td class="t-rank top">01</td><td class="t-strong">Frappe Cajeta 12oz</td><td>Coffee</td><td class="num" data-v="147">147</td><td class="num" data-v="12201">$12,201</td><td><div class="bar-wrap" style="width:120px"><div class="bar d" style="width:100%"></div></div></td></tr>
-          <tr data-branch="coffee"><td class="t-rank top">02</td><td class="t-strong">Cappuccino Caramelo 20oz</td><td>Coffee</td><td class="num" data-v="98">98</td><td class="num" data-v="9800">$9,800</td><td><div class="bar-wrap" style="width:120px"><div class="bar" style="width:80%"></div></div></td></tr>
-          <tr data-branch="coffee"><td class="t-rank top">03</td><td class="t-strong">Chilaquiles Verdes Grande</td><td>Coffee</td><td class="num" data-v="76">76</td><td class="num" data-v="8360">$8,360</td><td><div class="bar-wrap" style="width:120px"><div class="bar" style="width:68%"></div></div></td></tr>
-          <tr data-branch="helfy"><td class="t-rank">04</td><td class="t-strong">Ensalada César Grande</td><td>Helfy Fü</td><td class="num" data-v="44">44</td><td class="num" data-v="6776">$6,776</td><td><div class="bar-wrap" style="width:120px"><div class="bar" style="width:55%"></div></div></td></tr>
-          <tr data-branch="coffee"><td class="t-rank">05</td><td class="t-strong">Espresso Americano 20oz</td><td>Coffee</td><td class="num" data-v="134">134</td><td class="num" data-v="6700">$6,700</td><td><div class="bar-wrap" style="width:120px"><div class="bar" style="width:55%"></div></div></td></tr>
-          <tr data-branch="barbacoa"><td class="t-rank">06</td><td class="t-strong">Barbacoa por kg</td><td>Barbacoa</td><td class="num" data-v="38">38</td><td class="num" data-v="5700">$5,700</td><td><div class="bar-wrap" style="width:120px"><div class="bar" style="width:47%"></div></div></td></tr>
-          <tr data-branch="coffee"><td class="t-rank">07</td><td class="t-strong">Baguette Clásico</td><td>Coffee</td><td class="num" data-v="52">52</td><td class="num" data-v="5980">$5,980</td><td><div class="bar-wrap" style="width:120px"><div class="bar" style="width:49%"></div></div></td></tr>
-          <tr data-branch="coffee"><td class="t-rank">08</td><td class="t-strong">Frappe Cappuccino 20oz</td><td>Coffee</td><td class="num" data-v="89">89</td><td class="num" data-v="5942">$5,942</td><td><div class="bar-wrap" style="width:120px"><div class="bar" style="width:49%"></div></div></td></tr>
-          <tr data-branch="eventos"><td class="t-rank">09</td><td class="t-strong">Café Molido 250g Oscuro</td><td>Eventos</td><td class="num" data-v="22">22</td><td class="num" data-v="4840">$4,840</td><td><div class="bar-wrap" style="width:120px"><div class="bar" style="width:40%"></div></div></td></tr>
-          <tr data-branch="coffee"><td class="t-rank">10</td><td class="t-strong">Frappe Brownie 20oz</td><td>Coffee</td><td class="num" data-v="40">40</td><td class="num" data-v="4400">$4,400</td><td><div class="bar-wrap" style="width:120px"><div class="bar" style="width:36%"></div></div></td></tr>
+        <tbody id="tabla-articulos">
+          <tr><td colspan="5" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -1361,27 +1345,23 @@
 <!-- ════════ CANALES ════════ -->
 <div id="p-canales" class="page" data-screen-label="Canales de venta">
   <div class="kpis">
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Parrot (sucursal)</div><div class="kpi-ico g"><i class="ti ti-device-desktop"></i></div></div><div class="kpi-val">$48,200</div><div class="kpi-sub"><span class="delta up">57%</span> del total</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Rappi / Uber Eats</div><div class="kpi-ico a"><i class="ti ti-moped"></i></div></div><div class="kpi-val">$15,230</div><div class="kpi-sub">18% del total</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Venta directa</div><div class="kpi-ico"><i class="ti ti-cash"></i></div></div><div class="kpi-val">$14,200</div><div class="kpi-sub">17% del total</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Eventos / Granos</div><div class="kpi-ico d"><i class="ti ti-confetti"></i></div></div><div class="kpi-val">$6,951</div><div class="kpi-sub">8% del total</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">💵 Efectivo</div><div class="kpi-ico g"><i class="ti ti-cash"></i></div></div><div class="kpi-val" id="can-efectivo">—</div><div class="kpi-sub" id="can-efectivo-sub">— del total</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">📱 Tarjeta / Terminal</div><div class="kpi-ico"><i class="ti ti-credit-card"></i></div></div><div class="kpi-val" id="can-tarjeta">—</div><div class="kpi-sub" id="can-tarjeta-sub">— del total</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">🏦 Transferencia</div><div class="kpi-ico a"><i class="ti ti-building-bank"></i></div></div><div class="kpi-val" id="can-transfer">—</div><div class="kpi-sub" id="can-transfer-sub">— del total</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">🛵 Rappi / Uber</div><div class="kpi-ico d"><i class="ti ti-moped"></i></div></div><div class="kpi-val" id="can-rappi">—</div><div class="kpi-sub" id="can-rappi-sub">— del total</div></div>
   </div>
   <div class="card">
-    <div class="card-head"><div><div class="card-title"><i class="ti ti-router"></i>Detalle por canal y sucursal</div><div class="card-sub">Origen de ventas — junio 2026</div></div></div>
+    <div class="card-head"><div><div class="card-title"><i class="ti ti-router"></i>Ventas por sucursal y método de pago</div><div class="card-sub" id="can-sub">Origen de ventas — período actual</div></div></div>
     <div class="tbl-wrap">
       <table class="tbl" data-sortable>
         <thead><tr>
-          <th>Canal</th><th>Empresa</th><th>Sucursal</th>
-          <th class="sortable num" data-type="num">Venta mes<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
-          <th class="num">Part.</th><th>Tendencia</th>
+          <th>Sucursal</th>
+          <th class="num">Efectivo</th><th class="num">Tarjeta</th><th class="num">Transfer.</th><th class="num">Rappi/Uber</th>
+          <th class="sortable num" data-type="num">Total<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th class="num">Part.</th>
         </tr></thead>
-        <tbody>
-          <tr><td><span class="chan ch-p"><i class="ti ti-device-desktop"></i>Parrot</span></td><td>Sueño de Luna</td><td>Coffee &amp; Roasters</td><td class="num" data-v="48200">$48,200</td><td class="num">57%</td><td><span class="delta up"><i class="ti ti-trending-up"></i>12%</span></td></tr>
-          <tr><td><span class="chan ch-m">Manual</span></td><td>Sueño de Luna</td><td>Casa de la Cultura</td><td class="num" data-v="19800">$19,800</td><td class="num">23%</td><td><span class="delta up"><i class="ti ti-trending-up"></i>8%</span></td></tr>
-          <tr><td><span class="chan ch-r">Rappi</span></td><td>Benjamín Sáenz</td><td>Helfy Fü</td><td class="num" data-v="8100">$8,100</td><td class="num">10%</td><td><span class="delta up"><i class="ti ti-trending-up"></i>5%</span></td></tr>
-          <tr><td><span class="chan ch-u">Uber Eats</span></td><td>Sueño de Luna</td><td>Coffee &amp; Roasters</td><td class="num" data-v="7130">$7,130</td><td class="num">8%</td><td><span class="delta am">→ 0%</span></td></tr>
-          <tr><td><span class="chan ch-m">Manual</span></td><td>Benjamín Sáenz</td><td>Barbacoa y Menudo</td><td class="num" data-v="5380">$5,380</td><td class="num">6%</td><td><span class="delta dn"><i class="ti ti-trending-down"></i>3%</span></td></tr>
-          <tr><td><span class="chan ch-e">Cotización</span></td><td>Sueño de Luna</td><td>Eventos</td><td class="num" data-v="1751">$1,751</td><td class="num">2%</td><td><span class="delta up">nuevo</span></td></tr>
+        <tbody id="tabla-canales">
+          <tr><td colspan="7" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -1423,22 +1403,18 @@
 <!-- ════════ GASTOS ════════ -->
 <div id="p-gastos" class="page" data-screen-label="Gastos">
   <div class="kpis">
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Gasto total · mes</div><div class="kpi-ico a"><i class="ti ti-receipt"></i></div></div><div class="kpi-val">$43,913</div><div class="kpi-sub">38 facturas</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Top proveedor</div><div class="kpi-ico"><i class="ti ti-truck-delivery"></i></div></div><div class="kpi-val" style="font-size:17px;line-height:1.4">City Club</div><div class="kpi-sub">$12,450 · 28%</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Costo de venta</div><div class="kpi-ico g"><i class="ti ti-shopping-cart"></i></div></div><div class="kpi-val">35%</div><div class="kpi-sub"><span class="delta up">Saludable</span></div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Mano de obra</div><div class="kpi-ico a"><i class="ti ti-users"></i></div></div><div class="kpi-val">28%</div><div class="kpi-sub"><span class="delta am">Revisar</span></div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label" id="gas-total-label">Gasto total · período</div><div class="kpi-ico a"><i class="ti ti-receipt"></i></div></div><div class="kpi-val" id="gas-total">—</div><div class="kpi-sub" id="gas-total-sub">facturas</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Top proveedor</div><div class="kpi-ico"><i class="ti ti-truck-delivery"></i></div></div><div class="kpi-val" id="gas-top-prov" style="font-size:16px;line-height:1.4">—</div><div class="kpi-sub" id="gas-top-prov-sub">—</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Proveedores activos</div><div class="kpi-ico g"><i class="ti ti-building-store"></i></div></div><div class="kpi-val" id="gas-num-prov">—</div><div class="kpi-sub">con compras</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Factura promedio</div><div class="kpi-ico a"><i class="ti ti-calculator"></i></div></div><div class="kpi-val" id="gas-promedio">—</div><div class="kpi-sub">por comprobante</div></div>
   </div>
   <div class="grid2">
     <div class="card">
       <div class="card-head"><div class="card-title"><i class="ti ti-truck-delivery"></i>Top proveedores</div></div>
       <div class="tbl-wrap"><table class="tbl" data-sortable>
         <thead><tr><th class="sortable" data-type="text">Proveedor<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th><th class="sortable num" data-type="num">Monto<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th><th class="num">Part.</th></tr></thead>
-        <tbody>
-          <tr><td class="t-strong">City Club Piedras Negras</td><td class="num" data-v="12450">$12,450</td><td><div class="bar-wrap" style="width:100px"><div class="bar" style="width:100%"></div></div></td></tr>
-          <tr><td class="t-strong">HEB</td><td class="num" data-v="8200">$8,200</td><td><div class="bar-wrap" style="width:100px"><div class="bar" style="width:66%"></div></div></td></tr>
-          <tr><td class="t-strong">Grupo Froster</td><td class="num" data-v="5800">$5,800</td><td><div class="bar-wrap" style="width:100px"><div class="bar" style="width:47%"></div></div></td></tr>
-          <tr><td class="t-strong">LALA</td><td class="num" data-v="4100">$4,100</td><td><div class="bar-wrap" style="width:100px"><div class="bar" style="width:33%"></div></div></td></tr>
-          <tr><td class="t-strong">Quick Services</td><td class="num" data-v="2400">$2,400</td><td><div class="bar-wrap" style="width:100px"><div class="bar" style="width:19%"></div></div></td></tr>
+        <tbody id="tabla-gastos-prov">
+          <tr><td colspan="3" style="text-align:center;padding:24px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr>
         </tbody>
       </table></div>
     </div>
@@ -1446,12 +1422,8 @@
       <div class="card-head"><div class="card-title"><i class="ti ti-chart-donut"></i>Gasto por categoría</div></div>
       <div class="tbl-wrap"><table class="tbl">
         <thead><tr><th>Categoría</th><th class="num">Monto</th><th class="num">%</th></tr></thead>
-        <tbody>
-          <tr><td><span class="chan ch-p" style="background:rgba(177,70,24,0.13);color:var(--terra-claro)">Costo de venta</span></td><td class="num">$15,369</td><td class="num">35%</td></tr>
-          <tr><td><span class="chan ch-m">Mano de obra</span></td><td class="num">$12,296</td><td class="num">28%</td></tr>
-          <tr><td><span class="chan ch-e">Gastos operativos</span></td><td class="num">$8,783</td><td class="num">20%</td></tr>
-          <tr><td><span class="chan ch-r">Gastos administrativos</span></td><td class="num">$4,391</td><td class="num">10%</td></tr>
-          <tr><td><span class="chan ch-u">Activos / Equipo</span></td><td class="num">$3,074</td><td class="num">7%</td></tr>
+        <tbody id="tabla-gastos-cat">
+          <tr><td colspan="3" style="text-align:center;padding:24px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr>
         </tbody>
       </table></div>
     </div>
@@ -1460,22 +1432,26 @@
 <!-- ════════ BALANCE ════════ -->
 <div id="p-balance" class="page" data-screen-label="Balance">
   <div class="kpis">
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Ingresos acum. 2026</div><div class="kpi-ico g"><i class="ti ti-trending-up"></i></div></div><div class="kpi-val">$498,093</div><div class="kpi-sub">Enero a junio</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Gastos acum. 2026</div><div class="kpi-ico a"><i class="ti ti-trending-down"></i></div></div><div class="kpi-val">$290,196</div><div class="kpi-sub">Enero a junio</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Utilidad acumulada</div><div class="kpi-ico g"><i class="ti ti-pig-money"></i></div></div><div class="kpi-val up">$207,894</div><div class="kpi-sub"><span class="delta up">41.7%</span> margen prom.</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Mejor mes</div><div class="kpi-ico d"><i class="ti ti-award"></i></div></div><div class="kpi-val" style="font-size:17px;line-height:1.4">Marzo</div><div class="kpi-sub">$65,084 utilidad</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Ingresos acum. 2026</div><div class="kpi-ico g"><i class="ti ti-trending-up"></i></div></div><div class="kpi-val" id="bal-ingresos">—</div><div class="kpi-sub">Año completo</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Gastos acum. 2026</div><div class="kpi-ico a"><i class="ti ti-trending-down"></i></div></div><div class="kpi-val" id="bal-gastos">—</div><div class="kpi-sub">Año completo</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Utilidad acumulada</div><div class="kpi-ico g"><i class="ti ti-pig-money"></i></div></div><div class="kpi-val up" id="bal-utilidad">—</div><div class="kpi-sub"><span class="delta up" id="bal-margen">—</span> margen prom.</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Mejor mes</div><div class="kpi-ico d"><i class="ti ti-award"></i></div></div><div class="kpi-val" id="bal-mejor-mes" style="font-size:16px;line-height:1.4">—</div><div class="kpi-sub" id="bal-mejor-mes-sub">—</div></div>
   </div>
   <div class="card">
-    <div class="card-head"><div><div class="card-title"><i class="ti ti-report-money"></i>Estado de resultados — 2026</div><div class="card-sub">Todas las sucursales y empresas</div></div><button class="btn btn-primary btn-sm" onclick="toast('Generando PDF','Estado de resultados 2026','ok','ti-file-type-pdf')"><i class="ti ti-download"></i>Exportar PDF</button></div>
+    <div class="card-head"><div><div class="card-title"><i class="ti ti-report-money"></i>Estado de resultados — 2026</div><div class="card-sub">Ingresos, gastos y utilidad por mes</div></div></div>
     <div class="tbl-wrap">
-      <table class="tbl">
-        <thead><tr><th>Concepto</th><th class="num">Enero</th><th class="num">Febrero</th><th class="num">Marzo</th><th class="num">Abril</th><th class="num">Mayo</th><th class="num">Junio</th></tr></thead>
-        <tbody>
-          <tr class="bal-row-h"><td>Ingresos totales</td><td class="num">$55,944</td><td class="num">$95,468</td><td class="num">$138,030</td><td class="num">$111,620</td><td class="num">$84,581</td><td class="num">$12,450</td></tr>
-          <tr><td class="bal-indent">(−) Gastos</td><td class="num dn">$16,288</td><td class="num dn">$74,162</td><td class="num dn">$72,946</td><td class="num dn">$76,067</td><td class="num dn">$43,913</td><td class="num dn">$6,820</td></tr>
-          <tr class="bal-row-t"><td>Utilidad del mes</td><td class="num up">$39,655</td><td class="num up">$21,305</td><td class="num up">$65,084</td><td class="num up">$35,553</td><td class="num up">$40,667</td><td class="num up">$5,630</td></tr>
-          <tr><td class="bal-indent">Margen %</td><td class="num">70.9%</td><td class="num">22.3%</td><td class="num">47.1%</td><td class="num">31.9%</td><td class="num">48.1%</td><td class="num">45.2%</td></tr>
-          <tr class="bal-row-h"><td>Utilidad acumulada</td><td class="num up">$39,655</td><td class="num up">$60,960</td><td class="num up">$126,044</td><td class="num up">$161,597</td><td class="num up">$202,264</td><td class="num up">$207,894</td></tr>
+      <table class="tbl" data-sortable>
+        <thead><tr>
+          <th>Mes</th>
+          <th class="num">Ingresos</th>
+          <th class="num">Gastos</th>
+          <th class="num">Utilidad</th>
+          <th class="num">Margen</th>
+          <th>Estado</th>
+          <th class="num">Acumulado</th>
+        </tr></thead>
+        <tbody id="tabla-balance">
+          <tr><td colspan="7" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -1485,10 +1461,10 @@
 <!-- ════════ INVENTARIO ════════ -->
 <div id="p-inventario" class="page" data-screen-label="Inventario">
   <div class="kpis">
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Artículos catálogo</div><div class="kpi-ico"><i class="ti ti-packages"></i></div></div><div class="kpi-val">284</div><div class="kpi-sub">Insumos y productos</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Stock crítico</div><div class="kpi-ico r"><i class="ti ti-alert-octagon"></i></div></div><div class="kpi-val dn">12</div><div class="kpi-sub">Bajo mínimo</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Por vencer</div><div class="kpi-ico a"><i class="ti ti-clock-exclamation"></i></div></div><div class="kpi-val am">3</div><div class="kpi-sub">Próximos 7 días</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Valor inventario</div><div class="kpi-ico d"><i class="ti ti-coin"></i></div></div><div class="kpi-val">$48,320</div><div class="kpi-sub">Costo de reposición</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Artículos catálogo</div><div class="kpi-ico"><i class="ti ti-packages"></i></div></div><div class="kpi-val" id="inv-total-articulos">—</div><div class="kpi-sub">Insumos y productos</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Stock crítico</div><div class="kpi-ico r"><i class="ti ti-alert-octagon"></i></div></div><div class="kpi-val dn" id="inv-criticos">—</div><div class="kpi-sub">Bajo mínimo</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Registros inventario</div><div class="kpi-ico a"><i class="ti ti-clipboard-list"></i></div></div><div class="kpi-val am" id="inv-registros">—</div><div class="kpi-sub">En BD_INVENTARIO</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Valor inventario</div><div class="kpi-ico d"><i class="ti ti-coin"></i></div></div><div class="kpi-val" id="inv-valor">—</div><div class="kpi-sub">Costo de reposición</div></div>
   </div>
   <div class="card">
     <div class="card-head"><div><div class="card-title"><i class="ti ti-alert-octagon"></i>Alertas de stock crítico</div><div class="card-sub">Insumos por debajo del mínimo</div></div><div class="card-actions"><span class="filter-note" id="fn-inventario"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><button class="btn btn-primary btn-sm" onclick="toast('Orden creada','Solicitud de reabastecimiento enviada','ok','ti-shopping-cart-plus')"><i class="ti ti-shopping-cart-plus"></i>Generar orden</button></div></div>
@@ -1500,12 +1476,8 @@
           <th class="sortable num" data-type="num">Stock actual<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
           <th class="num">Mínimo</th><th>Alerta</th>
         </tr></thead>
-        <tbody>
-          <tr data-branch="coffee"><td class="t-strong">Leche entera LALA</td><td>Lácteos</td><td>Coffee</td><td class="num dn" data-v="4">4 lts</td><td class="num">20 lts</td><td><span class="badge b-d"><span class="bdot"></span>Urgente</span></td></tr>
-          <tr data-branch="coffee"><td class="t-strong">Crema Chantilly</td><td>Lácteos</td><td>Coffee</td><td class="num dn" data-v="1">1 kg</td><td class="num">5 kg</td><td><span class="badge b-d"><span class="bdot"></span>Urgente</span></td></tr>
-          <tr data-branch="coffee"><td class="t-strong">Café Veracruz Barra</td><td>Café</td><td>Coffee</td><td class="num dn" data-v="0.28">280 g</td><td class="num">1 kg</td><td><span class="badge b-d"><span class="bdot"></span>Urgente</span></td></tr>
-          <tr data-branch="coffee"><td class="t-strong">Tortilla Harina Wrap</td><td>Abarrotes</td><td>Coffee</td><td class="num am" data-v="6">6 pzas</td><td class="num">24 pzas</td><td><span class="badge b-w"><span class="bdot"></span>Reponer</span></td></tr>
-          <tr data-branch="helfy"><td class="t-strong">Aguacate Primavera</td><td>Frutas</td><td>Helfy Fü</td><td class="num am" data-v="3">3 pzas</td><td class="num">10 pzas</td><td><span class="badge b-w"><span class="bdot"></span>Reponer</span></td></tr>
+        <tbody id="tabla-inventario">
+          <tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -1527,12 +1499,8 @@
           <th class="num">Declarado</th>
           <th class="sortable num" data-type="num">Dif.<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
         </tr></thead>
-        <tbody>
-          <tr data-branch="coffee"><td>04/06</td><td>Coffee</td><td><span class="pill pill-m">Mañana</span></td><td class="num">$900</td><td class="num">$760</td><td class="num">$440</td><td class="num">$0</td><td class="num" data-v="2100">$2,100</td><td class="num">$2,100</td><td class="num up" data-v="0">$0</td></tr>
-          <tr data-branch="coffee"><td>04/06</td><td>Coffee</td><td><span class="pill pill-t">Tarde</span></td><td class="num">$620</td><td class="num">$940</td><td class="num">$330</td><td class="num">$0</td><td class="num" data-v="1890">$1,890</td><td class="num">$1,890</td><td class="num up" data-v="0">$0</td></tr>
-          <tr data-branch="coffee" class="hl-row"><td>03/06</td><td>Coffee</td><td><span class="pill pill-m">Mañana</span></td><td class="num">$488</td><td class="num">$876</td><td class="num">$840</td><td class="num">$0</td><td class="num" data-v="2204">$2,204</td><td class="num">$2,039</td><td class="num dn" data-v="-165">−$165</td></tr>
-          <tr data-branch="coffee"><td>03/06</td><td>Coffee</td><td><span class="pill pill-t">Tarde</span></td><td class="num">$620</td><td class="num">$710</td><td class="num">$341</td><td class="num">$0</td><td class="num" data-v="1671">$1,671</td><td class="num">$1,671</td><td class="num up" data-v="0">$0</td></tr>
-          <tr data-branch="helfy"><td>02/06</td><td>Helfy Fü</td><td><span class="pill pill-m">Mañana</span></td><td class="num">$210</td><td class="num">$480</td><td class="num">$250</td><td class="num">$0</td><td class="num" data-v="940">$940</td><td class="num">$910</td><td class="num dn" data-v="-30">−$30</td></tr>
+        <tbody id="tabla-ingresos">
+          <tr><td colspan="10" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -1543,10 +1511,10 @@
 <!-- ════════ FACTURAS ════════ -->
 <div id="p-facturas" class="page" data-screen-label="Facturas">
   <div class="kpis">
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Gasto · junio</div><div class="kpi-ico a"><i class="ti ti-receipt"></i></div></div><div class="kpi-val">$43,913</div><div class="kpi-sub">Egresos del mes</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Facturas</div><div class="kpi-ico"><i class="ti ti-file-invoice"></i></div></div><div class="kpi-val">38</div><div class="kpi-sub">Comprobantes</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Mayor proveedor</div><div class="kpi-ico d"><i class="ti ti-building-warehouse"></i></div></div><div class="kpi-val" style="font-size:17px;line-height:1.4">City Club</div><div class="kpi-sub">$12,450</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Costo de venta</div><div class="kpi-ico g"><i class="ti ti-shopping-cart"></i></div></div><div class="kpi-val">35%</div><div class="kpi-sub"><span class="delta up">En rango</span></div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label" id="fact-gasto-label">Gasto · período</div><div class="kpi-ico a"><i class="ti ti-receipt"></i></div></div><div class="kpi-val" id="fact-total-gasto">—</div><div class="kpi-sub">Egresos del período</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Facturas</div><div class="kpi-ico"><i class="ti ti-file-invoice"></i></div></div><div class="kpi-val" id="fact-num-facturas">—</div><div class="kpi-sub">Comprobantes</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Mayor proveedor</div><div class="kpi-ico d"><i class="ti ti-building-warehouse"></i></div></div><div class="kpi-val" id="fact-top-proveedor" style="font-size:16px;line-height:1.4">—</div><div class="kpi-sub" id="fact-top-prov-monto">—</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Artículos comprados</div><div class="kpi-ico g"><i class="ti ti-package"></i></div></div><div class="kpi-val" id="fact-num-articulos">—</div><div class="kpi-sub">Líneas de detalle</div></div>
   </div>
   <div class="card">
     <div class="card-head"><div><div class="card-title"><i class="ti ti-file-invoice"></i>Últimas facturas</div><div class="card-sub">Comprobantes registrados</div></div><div class="card-actions"><span class="filter-note" id="fn-facturas"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><button class="btn btn-primary btn-sm" onclick="openRegister('factura')"><i class="ti ti-plus"></i>Nueva factura</button></div></div>
@@ -1558,12 +1526,8 @@
           <th>Sucursal</th><th>Categoría</th><th>Folio</th>
           <th class="sortable num" data-type="num">Total<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
         </tr></thead>
-        <tbody>
-          <tr data-branch="coffee"><td>04/06</td><td class="t-strong">City Club Piedras Negras</td><td>Coffee</td><td><span class="chan ch-p" style="background:rgba(177,70,24,0.13);color:var(--terra-claro)">Costo de venta</span></td><td class="t-mono">040626-1</td><td class="num" data-v="3218">$3,218</td></tr>
-          <tr data-branch="coffee"><td>03/06</td><td class="t-strong">HEB</td><td>Coffee</td><td><span class="chan ch-r">Frutas y verduras</span></td><td class="t-mono">030626-1</td><td class="num" data-v="890">$890</td></tr>
-          <tr data-branch="coffee"><td>03/06</td><td class="t-strong">Grupo Froster</td><td>Coffee</td><td><span class="chan ch-u">Lácteos</span></td><td class="t-mono">030626-2</td><td class="num" data-v="1440">$1,440</td></tr>
-          <tr data-branch="coffee"><td>02/06</td><td class="t-strong">Quick Services</td><td>Coffee</td><td><span class="chan ch-e">Gastos operativos</span></td><td class="t-mono">020626-1</td><td class="num" data-v="60">$60</td></tr>
-          <tr data-branch="coffee"><td>01/06</td><td class="t-strong">LALA</td><td>Coffee</td><td><span class="chan ch-u">Lácteos</span></td><td class="t-mono">010626-1</td><td class="num" data-v="369">$369</td></tr>
+        <tbody id="tabla-facturas">
+          <tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -2279,19 +2243,21 @@ const LS_API = (() => {
 
   // Obtener artículos detalle (ventas por artículo)
   async function getArticulosDetalle() {
-    const rows = await leerHoja(SHEETS.ING_DETALLES);
+    // Hoja ARTICULOS DETALLES (detalle de compras de facturas)
+    // Cols: A=Z(id) B=ID_FACTURA C=FECHA D=ARTICULO E=CANTIDAD F=PRECIO UNIT G=IVA? H=IVA I=TOTAL
+    const rows = await leerHoja(SHEETS.ART_DETALLES);
     if (!rows) return [];
     return rows.slice(1)
-      .filter(r => r.length > 3 && r[COLS.ING_DETALLES.ARTICULO])
+      .filter(r => r.length > 3 && r[3])
       .map(r => ({
-        id:         r[COLS.ING_DETALLES.ID]          || '',
-        idIngresos: r[COLS.ING_DETALLES.ID_INGRESOS] || '',
-        fecha:      r[COLS.ING_DETALLES.FECHA]       || '',
-        articulo:   r[COLS.ING_DETALLES.ARTICULO]    || '',
-        cantidad:   parseNum(r[COLS.ING_DETALLES.CANTIDAD]),
-        precioUnit: parseNum(r[COLS.ING_DETALLES.PRECIO_UNIT]),
-        subtotal:   parseNum(r[COLS.ING_DETALLES.SUBTOTAL]),
-        total:      parseNum(r[COLS.ING_DETALLES.TOTAL]),
+        id:         r[0] || '',
+        idFactura:  r[1] || '',
+        fecha:      r[2] || '',
+        articulo:   r[3] || '',
+        cantidad:   parseNum(r[4]),
+        precioUnit: parseNum(r[5]),
+        subtotal:   parseNum(r[8]),  // I=TOTAL (no hay columna subtotal separada)
+        total:      parseNum(r[8]),  // I=TOTAL
       }))
       .filter(r => r.articulo && r.articulo !== 'ARTICULO');
   }
@@ -2563,16 +2529,15 @@ const LS_API = (() => {
   }
 
   // Gasto por categoría
-  async function getGastoPorCategoria() {
-    const [facturas, artDetalles, categorias] = await Promise.all([
-      getFacturas(),
-      leerHoja(SHEETS.ART_DETALLES),
-      getCategorias(),
-    ]);
-    // Simplificado: agrupar facturas por unidad de negocio como proxy de categoría
+  async function getGastoPorCategoria(desde, hasta) {
+    const facturas = await getFacturas();
+    const filtradas = (desde && hasta)
+      ? facturas.filter(f => _enRango(f.fecha, desde, hasta))
+      : facturas;
+    // Agrupar por unidad de negocio (proxy de categoría hasta tener categorías por artículo)
     const agg = {};
-    facturas.forEach(f => {
-      const cat = f.tipo || f.unidad || 'Otros';
+    filtradas.forEach(f => {
+      const cat = f.unidad || 'Sin clasificar';
       agg[cat] = (agg[cat] || 0) + f.total;
     });
     return Object.entries(agg)
@@ -2591,21 +2556,17 @@ const LS_API = (() => {
     const nombres = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                      'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
+    const anioStr = String(anio);
     return meses.map((m, i) => {
-      const filtro = `${m}/${String(anio).slice(-2)}`;
-      const altFiltro = `${anio}-${m}`;
-
-      const ventas = ingresos
-        .filter(r => r.fecha.includes(filtro) || r.fecha.includes(altFiltro))
-        .reduce((s, r) => s + r.ventaTotal, 0);
-
-      const gastos = facturas
-        .filter(f => f.fecha.includes(filtro) || f.fecha.includes(altFiltro))
-        .reduce((s, f) => s + f.total, 0);
-
+      // Coincide si el mes normalizado == m y el año coincide
+      const matchMes = (fecha) => {
+        const fISO = _fechaISO(fecha); // YYYY-MM-DD
+        return fISO && fISO.substring(0,4) === anioStr && fISO.substring(5,7) === m;
+      };
+      const ventas = ingresos.filter(r => matchMes(r.fecha)).reduce((s, r) => s + r.ventaTotal, 0);
+      const gastos = facturas.filter(f => matchMes(f.fecha)).reduce((s, f) => s + f.total, 0);
       const utilidad = ventas - gastos;
       const margen = ventas > 0 ? utilidad / ventas * 100 : 0;
-
       return { mes: nombres[i], num: m, ventas, gastos, utilidad, margen };
     });
   }
@@ -2748,6 +2709,7 @@ const LS_API = (() => {
     getGastoPorCategoria, getResumenMensual, getAlertasInventario,
     // Utilidades
     parseNum, formatMXN, formatMXNDec, formatPct, hoy, mesFiltro, getRangoPeriodo,
+    _enRango, _fechaISO, _mesDeDate,
     invalidarCache,
     // Configurar
     setConfig(cfg) { Object.assign(CONFIG, cfg); },
@@ -3007,14 +2969,20 @@ const LS_UI = (() => {
     showLoading(containerId);
 
     try {
-      const datos = await LS_API.getIngresos();
+      const period = (typeof state !== 'undefined' && state.period) ? state.period : 'mes';
+      const { desde, hasta } = LS_API.getRangoPeriodo(period);
+      const todos = await LS_API.getIngresos();
+      // Filtrar por período y ordenar por fecha (más reciente primero)
+      const datos = todos
+        .filter(r => LS_API._enRango ? LS_API._enRango(r.fecha, desde, hasta) : true)
+        .sort((a, b) => (LS_API._fechaISO(b.fecha) || '').localeCompare(LS_API._fechaISO(a.fecha) || ''));
 
       if (datos.length === 0) {
-        setEl(containerId, '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--tx-3)">Sin ingresos registrados</td></tr>');
+        setEl(containerId, '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--tx-3)">Sin cortes en el período seleccionado</td></tr>');
         return;
       }
 
-      setEl(containerId, datos.slice(0, 50).map(r => `
+      setEl(containerId, datos.slice(0, 100).map(r => `
         <tr data-branch="${r.sucursal.toLowerCase().includes('coffee') ? 'coffee' : 'all'}">
           <td>${r.fecha}</td>
           <td>${r.sucursal}</td>
@@ -3043,25 +3011,44 @@ const LS_UI = (() => {
     showLoading(containerId);
 
     try {
-      const [facturas, topProv] = await Promise.all([
+      const period = (typeof state !== 'undefined' && state.period) ? state.period : 'mes';
+      const { desde, hasta } = LS_API.getRangoPeriodo(period);
+      const [facturasAll, artDet] = await Promise.all([
         LS_API.getFacturas(),
-        LS_API.getTopProveedores(5),
+        LS_API.getArticulosDetalle(),
       ]);
+      // Filtrar por período, ordenar por más reciente
+      const facturas = facturasAll
+        .filter(f => LS_API._enRango(f.fecha, desde, hasta))
+        .sort((a, b) => (LS_API._fechaISO(b.fecha) || '').localeCompare(LS_API._fechaISO(a.fecha) || ''));
+
+      // Top proveedores del período
+      const provAgg = {};
+      facturas.forEach(f => { if (f.proveedor) provAgg[f.proveedor] = (provAgg[f.proveedor]||0) + f.total; });
+      const topProv = Object.entries(provAgg).map(([nombre,total])=>({nombre,total})).sort((a,b)=>b.total-a.total);
+
+      // Artículos comprados en el período
+      const artsPeriodo = artDet.filter(a => LS_API._enRango(a.fecha, desde, hasta)).length;
 
       // KPIs
       const totalGasto = facturas.reduce((s, f) => s + f.total, 0);
+      const lblP = period === 'mes' ? 'mes' : period === 'ano' ? 'año' : period === 'semana' ? 'semana' : 'hoy';
+      setTxt('fact-gasto-label', 'Gasto · ' + lblP);
       setTxt('fact-total-gasto',  fmt(totalGasto));
       setTxt('fact-num-facturas', facturas.length);
+      setTxt('fact-num-articulos', artsPeriodo);
       if (topProv.length > 0) {
         setTxt('fact-top-proveedor', topProv[0].nombre);
         setTxt('fact-top-prov-monto', fmt(topProv[0].total));
+      } else {
+        setTxt('fact-top-proveedor', '—'); setTxt('fact-top-prov-monto', '$0');
       }
 
       // Tabla facturas
       if (facturas.length === 0) {
-        setEl(containerId, '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--tx-3)">Sin facturas registradas</td></tr>');
+        setEl(containerId, '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--tx-3)">Sin facturas en el período seleccionado</td></tr>');
       } else {
-        setEl(containerId, facturas.slice(0, 50).map(f => `
+        setEl(containerId, facturas.slice(0, 100).map(f => `
           <tr>
             <td>${f.fecha}</td>
             <td>${f.proveedor}</td>
@@ -3116,6 +3103,19 @@ const LS_UI = (() => {
       // Nota aclaratoria sobre origen de datos
       const notaEl = document.getElementById('articulos-nota-origen');
       if (notaEl) notaEl.style.display = '';
+
+      // KPIs
+      try {
+        const cat = await LS_API.getCatalogo();
+        setTxt('art-skus', cat.length);
+      } catch(_) {}
+      const gastoTotal = articulos.reduce((s,a)=>s+a.total,0);
+      setTxt('art-distintos', articulos.length);
+      setTxt('art-gasto', fmt(gastoTotal));
+      if (articulos[0]) {
+        setTxt('art-top', articulos[0].nombre);
+        setTxt('art-top-sub', articulos[0].cantidad + ' uds · ' + fmt(articulos[0].total));
+      }
 
       const maxTotal = articulos[0].total;
       setEl(containerId, articulos.map((a, i) => `
@@ -3207,32 +3207,51 @@ const LS_UI = (() => {
   // ══════════════════════════════════════════════════════════
   async function renderGastos() {
     try {
-      const [topProv, porCat] = await Promise.all([
-        LS_API.getTopProveedores(8),
-        LS_API.getGastoPorCategoria(),
-      ]);
+      const period = (typeof state !== 'undefined' && state.period) ? state.period : 'mes';
+      const { desde, hasta } = LS_API.getRangoPeriodo(period);
+      const facturasAll = await LS_API.getFacturas();
+      const facturas = facturasAll.filter(f => LS_API._enRango(f.fecha, desde, hasta));
 
+      // KPIs
+      const totalGasto = facturas.reduce((s, f) => s + f.total, 0);
+      const provAgg = {};
+      facturas.forEach(f => { if (f.proveedor) provAgg[f.proveedor] = (provAgg[f.proveedor]||0) + f.total; });
+      const topProv = Object.entries(provAgg).map(([nombre,total])=>({nombre,total})).sort((a,b)=>b.total-a.total);
+      const lblP = period === 'mes' ? 'mes' : period === 'ano' ? 'año' : period === 'semana' ? 'semana' : 'hoy';
+      setTxt('gas-total-label', 'Gasto total · ' + lblP);
+      setTxt('gas-total',     fmt(totalGasto));
+      setTxt('gas-total-sub', facturas.length + ' factura(s)');
+      setTxt('gas-num-prov',  topProv.length);
+      setTxt('gas-promedio',  fmt(facturas.length ? totalGasto / facturas.length : 0));
+      if (topProv.length > 0) {
+        const pct = totalGasto > 0 ? Math.round(topProv[0].total / totalGasto * 100) : 0;
+        setTxt('gas-top-prov', topProv[0].nombre);
+        setTxt('gas-top-prov-sub', fmt(topProv[0].total) + ' · ' + pct + '%');
+      } else { setTxt('gas-top-prov','—'); setTxt('gas-top-prov-sub','$0'); }
+
+      // Tabla top proveedores (3 cols: Proveedor, Monto, Part.)
       const tablaProvEl = document.getElementById('tabla-gastos-prov');
-      if (tablaProvEl && topProv.length > 0) {
-        const maxProv = topProv[0].total;
-        tablaProvEl.innerHTML = topProv.map((p, i) => `
+      if (tablaProvEl) {
+        const top = topProv.slice(0, 12);
+        tablaProvEl.innerHTML = top.length ? top.map(p => `
           <tr>
-            <td style="color:var(--tx-3)">${i + 1}</td>
             <td>${p.nombre}</td>
-            <td style="font-family:var(--mono);font-weight:600">${fmt(p.total)}</td>
-            <td style="min-width:80px">${barHtml(p.total, maxProv)}</td>
-          </tr>`).join('');
+            <td class="num" style="font-family:var(--mono);font-weight:600">${fmt(p.total)}</td>
+            <td style="min-width:90px">${barHtml(p.total, top[0].total)}</td>
+          </tr>`).join('') : '<tr><td colspan="3" style="text-align:center;padding:24px;color:var(--tx-3)">Sin gastos en el período</td></tr>';
       }
 
+      // Tabla por categoría (desde ARTICULOS DETALLES + Catálogo Maestro)
+      const porCat = await LS_API.getGastoPorCategoria(desde, hasta);
       const tablaCatEl = document.getElementById('tabla-gastos-cat');
-      if (tablaCatEl && porCat.length > 0) {
-        const maxCat = porCat[0].total;
-        tablaCatEl.innerHTML = porCat.map(c => `
+      if (tablaCatEl) {
+        const totCat = porCat.reduce((s,c)=>s+c.total,0);
+        tablaCatEl.innerHTML = porCat.length ? porCat.map(c => `
           <tr>
             <td>${c.categoria}</td>
-            <td style="font-family:var(--mono);font-weight:600">${fmt(c.total)}</td>
-            <td style="min-width:80px">${barHtml(c.total, maxCat)}</td>
-          </tr>`).join('');
+            <td class="num" style="font-family:var(--mono);font-weight:600">${fmt(c.total)}</td>
+            <td class="num">${totCat>0?Math.round(c.total/totCat*100):0}%</td>
+          </tr>`).join('') : '<tr><td colspan="3" style="text-align:center;padding:24px;color:var(--tx-3)">Sin datos de categoría</td></tr>';
       }
 
     } catch (err) {
@@ -3249,6 +3268,19 @@ const LS_UI = (() => {
 
     try {
       const resumen = await LS_API.getResumenMensual(2026);
+
+      // KPIs acumulados del año
+      const totIng = resumen.reduce((s,m)=>s+m.ventas,0);
+      const totGas = resumen.reduce((s,m)=>s+m.gastos,0);
+      const totUti = totIng - totGas;
+      const margenProm = totIng > 0 ? totUti/totIng*100 : 0;
+      const conDatos = resumen.filter(m=>m.ventas>0||m.gastos>0);
+      const mejor = conDatos.slice().sort((a,b)=>b.utilidad-a.utilidad)[0];
+      setTxt('bal-ingresos', fmt(totIng));
+      setTxt('bal-gastos',   fmt(totGas));
+      setTxt('bal-utilidad', fmt(totUti));
+      setTxt('bal-margen',   fmtP(margenProm));
+      if (mejor) { setTxt('bal-mejor-mes', mejor.mes); setTxt('bal-mejor-mes-sub', fmt(mejor.utilidad) + ' utilidad'); }
 
       let acumulado = 0;
       setEl(containerId, resumen.map(m => {
@@ -3289,6 +3321,7 @@ const LS_UI = (() => {
 
       setTxt('inv-total-articulos', inventario.length);
       setTxt('inv-criticos', alertas.filter(a => a.urgente).length);
+      setTxt('inv-registros', inventario.length);
       const valorTotal = inventario.reduce((s, i) => s + (i.stockFisico * i.costoUnit), 0);
       setTxt('inv-valor', fmt(valorTotal));
 
@@ -3315,6 +3348,100 @@ const LS_UI = (() => {
 
     } catch (err) {
       showError(containerId, 'Error cargando inventario');
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // SUCURSALES (tarjetas con datos reales)
+  // ══════════════════════════════════════════════════════════
+  const _SUC_META = {
+    'SUEÑO DE LUNA':      { nom:'Coffee & Roasters',     ico:'ti-coffee',             meta:'Manual · Expos y granos',  foot:['<span class="chan ch-m">Manual</span>','<span class="chan ch-e">Expos</span>'] },
+    'CASA DE LA CULTURA': { nom:'Casa de la Cultura',    ico:'ti-building-community', meta:'Parrot POS · activo',      foot:['<span class="chan ch-p"><i class="ti ti-device-desktop"></i>Parrot</span>','<span class="chan ch-r">Rappi</span>'] },
+    'HELFY FÜ':           { nom:'Helfy Fü',              ico:'ti-salad',              meta:'Parrot · Delivery',        foot:['<span class="chan ch-p"><i class="ti ti-device-desktop"></i>Parrot</span>','<span class="chan ch-r">Rappi</span>','<span class="chan ch-u">Uber Eats</span>'] },
+    'HELFY FU':           { nom:'Helfy Fü',              ico:'ti-salad',              meta:'Parrot · Delivery',        foot:['<span class="chan ch-p"><i class="ti ti-device-desktop"></i>Parrot</span>','<span class="chan ch-r">Rappi</span>','<span class="chan ch-u">Uber Eats</span>'] },
+    'BARBACOA Y MENUDO':  { nom:'Barbacoa y Menudo',     ico:'ti-meat',               meta:'Domingos · venta directa', foot:['<span class="chan ch-m">Manual</span>'] },
+    'EVENTOS':            { nom:'Sueño de Luna Eventos', ico:'ti-confetti',           meta:'Eventos contratados',      foot:['<span class="chan ch-e">Cotización</span>'] },
+  };
+
+  async function renderSucursales() {
+    const grid = document.getElementById('suc-grid');
+    if (!grid) return;
+    try {
+      const period = (typeof state !== 'undefined' && state.period) ? state.period : 'mes';
+      const { desde, hasta } = LS_API.getRangoPeriodo(period);
+      const ventas = await LS_API.getVentasPorSucursal(period);
+      // Para ticket promedio: contar turnos por sucursal
+      const ingresos = (await LS_API.getIngresos()).filter(r => LS_API._enRango(r.fecha, desde, hasta));
+      const turnosPorSuc = {};
+      ingresos.forEach(r => { const k=(r.sucursal||'').trim().toUpperCase(); turnosPorSuc[k]=(turnosPorSuc[k]||0)+1; });
+
+      const cards = ventas.map(s => {
+        const m = _SUC_META[s.sucursal] || { nom: s.sucursal, ico:'ti-building', meta:'Sucursal', foot:[] };
+        const turnos = turnosPorSuc[s.sucursal] || 0;
+        const ticket = turnos > 0 ? s.total / turnos : 0;
+        return `<div class="b-card">
+          <div class="b-card-head"><div class="b-card-ico"><i class="ti ${m.ico}"></i></div><div><div class="b-card-name">${m.nom}</div><div class="b-card-meta">${m.meta}</div></div><span class="badge b-s" style="margin-left:auto"><span class="bdot"></span>Activa</span></div>
+          <div class="b-card-val">${fmt(s.total)}</div><div class="b-card-sub">Venta del período · ${turnos} turno(s)</div>
+          <div class="b-card-foot">${m.foot.join('')}</div>
+        </div>`;
+      }).join('');
+
+      grid.innerHTML = cards + `<div class="add-card" onclick="toast('Próximamente','El alta de sucursales estará disponible pronto','warn','ti-plus')"><i class="ti ti-plus"></i><span>Nueva sucursal</span></div>`;
+    } catch(err) {
+      console.error('Error sucursales:', err);
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // CANALES DE VENTA (métodos de pago reales desde INGRESOS)
+  // ══════════════════════════════════════════════════════════
+  async function renderCanales() {
+    try {
+      const period = (typeof state !== 'undefined' && state.period) ? state.period : 'mes';
+      const { desde, hasta } = LS_API.getRangoPeriodo(period);
+      const ingresos = (await LS_API.getIngresos()).filter(r => LS_API._enRango(r.fecha, desde, hasta));
+
+      // Totales por método de pago
+      let efe=0, tar=0, tra=0, rap=0;
+      const porSuc = {};
+      ingresos.forEach(r => {
+        efe += r.efectivo; tar += r.tarjeta; tra += r.transferencia; rap += r.rappi;
+        const k = (r.sucursal||'Sin sucursal').trim().toUpperCase();
+        if (!porSuc[k]) porSuc[k] = { efe:0, tar:0, tra:0, rap:0, total:0 };
+        porSuc[k].efe += r.efectivo; porSuc[k].tar += r.tarjeta;
+        porSuc[k].tra += r.transferencia; porSuc[k].rap += r.rappi;
+        porSuc[k].total += r.ventaTotal || (r.efectivo+r.tarjeta+r.transferencia+r.rappi);
+      });
+      const total = efe + tar + tra + rap;
+      const pct = v => total > 0 ? Math.round(v/total*100) + '% del total' : '0%';
+      setTxt('can-efectivo', fmt(efe)); setTxt('can-efectivo-sub', pct(efe));
+      setTxt('can-tarjeta',  fmt(tar)); setTxt('can-tarjeta-sub',  pct(tar));
+      setTxt('can-transfer', fmt(tra)); setTxt('can-transfer-sub', pct(tra));
+      setTxt('can-rappi',    fmt(rap)); setTxt('can-rappi-sub',    pct(rap));
+
+      // Tabla por sucursal
+      const filas = Object.entries(porSuc)
+        .filter(([k]) => !['TEST','PRUEBA','VERIFICACION'].some(t => k.includes(t)))
+        .map(([k,v]) => ({ suc:k, ...v }))
+        .sort((a,b)=>b.total-a.total);
+      const tbody = document.getElementById('tabla-canales');
+      if (tbody) {
+        const granTotal = filas.reduce((s,f)=>s+f.total,0);
+        tbody.innerHTML = filas.length ? filas.map(f => {
+          const m = _SUC_META[f.suc] || { nom: f.suc };
+          return `<tr>
+            <td style="font-weight:500">${m.nom}</td>
+            <td class="num" style="font-family:var(--mono)">${fmt(f.efe)}</td>
+            <td class="num" style="font-family:var(--mono)">${fmt(f.tar)}</td>
+            <td class="num" style="font-family:var(--mono)">${fmt(f.tra)}</td>
+            <td class="num" style="font-family:var(--mono)">${fmt(f.rap)}</td>
+            <td class="num" style="font-family:var(--mono);font-weight:600">${fmt(f.total)}</td>
+            <td class="num">${granTotal>0?Math.round(f.total/granTotal*100):0}%</td>
+          </tr>`;
+        }).join('') : '<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--tx-3)">Sin ventas en el período seleccionado</td></tr>';
+      }
+    } catch(err) {
+      console.error('Error canales:', err);
     }
   }
 
@@ -4109,9 +4236,11 @@ const LS_UI = (() => {
     switch (pageId) {
       case 'dashboard':    await renderDashboard();    break;
       case 'conciliacion': await renderConciliacion(); break;
+      case 'sucursales':   await renderSucursales();   break;
       case 'ingresos':     await renderIngresos();     break;
       case 'facturas':     await renderFacturas();     break;
       case 'articulos':    await renderArticulos();    break;
+      case 'canales':      await renderCanales();      break;
       case 'rentabilidad': await renderRentabilidad(); break;
       case 'gastos':       await renderGastos();       break;
       case 'balance':      await renderBalance();      break;
