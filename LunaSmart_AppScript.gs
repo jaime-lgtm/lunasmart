@@ -547,6 +547,47 @@ function _getUsuarios() {
   } catch(e) { return _err(e.message); }
 }
 
+// ── LISTAR TIENDAS / TERMINALES PARROT ────────────────────────────────────
+// Ejecuta esta función desde el editor de Apps Script para ver todos los UUIDs.
+// 1. Selecciona "listarTiendasParrot" en el menú de funciones
+// 2. Haz clic en ▶ Ejecutar
+// 3. Lee el resultado en el panel "Registro de ejecución" abajo
+function listarTiendasParrot() {
+  var endpoints = [
+    'https://api.parrotsoftware.io/v2/stores/',
+    'https://api.parrotsoftware.io/v1/stores/',
+    'https://api.parrotsoftware.io/v2/restaurants/',
+    'https://api.parrotsoftware.io/v2/locations/',
+  ];
+  var headers = { 'Authorization': 'Bearer ' + PARROT_API_KEY, 'Content-Type': 'application/json' };
+
+  for (var i = 0; i < endpoints.length; i++) {
+    try {
+      var resp = UrlFetchApp.fetch(endpoints[i], { headers: headers, muteHttpExceptions: true });
+      var code = resp.getResponseCode();
+      var body = resp.getContentText();
+      Logger.log('Endpoint: ' + endpoints[i] + ' → HTTP ' + code);
+      if (code === 200) {
+        var data = JSON.parse(body);
+        var items = Array.isArray(data) ? data : (data.results || data.stores || data.data || []);
+        Logger.log('✅ Tiendas encontradas: ' + items.length);
+        items.forEach(function(s) {
+          Logger.log('  UUID: ' + (s.uuid || s.id || '?'));
+          Logger.log('  Nombre: ' + (s.name || s.display_name || s.title || '?'));
+          Logger.log('  Activa: ' + (s.is_active !== undefined ? s.is_active : s.active || '?'));
+          Logger.log('---');
+        });
+        return; // Si encontró, para aquí
+      }
+      Logger.log('  Respuesta: ' + body.substring(0, 200));
+    } catch(e) {
+      Logger.log('Error en ' + endpoints[i] + ': ' + e.message);
+    }
+  }
+  Logger.log('⚠️ No se encontraron tiendas. Verifica la API Key de Parrot.');
+  Logger.log('API Key usada: ' + PARROT_API_KEY.substring(0, 20) + '...');
+}
+
 // ── REORGANIZAR HOJAS ──────────────────────────────────────────────────────
 // Llamar una sola vez desde Apps Script editor: reorganizarHojas()
 // NO expuesto como endpoint web por seguridad.
