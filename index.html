@@ -791,10 +791,13 @@
     }
     /* Mobile */
     @media (max-width: 820px) {
+      /* La fila flex se vuelve columna: m-topbar arriba, main abajo a todo lo ancho */
+      .layout { flex-direction: column; }
       .sidebar { display: none; }
       .topbar { display: none; }
-      .main { margin-left: 0; }
-      .m-topbar { display: flex; }
+      .main { margin-left: 0; width: 100%; flex: 1 1 auto; min-width: 0; }
+      .m-topbar { display: flex; width: 100%; flex: 0 0 auto; }
+      .scroll-area { width: 100%; }
       .m-nav { display: block; }
       .content { padding: 14px 13px 86px; }
       .kpis { grid-template-columns: repeat(2, 1fr); gap: 10px; }
@@ -3461,9 +3464,8 @@ const LS_UI = (() => {
     ]);
     window._catalogoCache = catalogo;
 
-    const provOpts = proveedores.length > 0
-      ? proveedores.map(p => `<option value="${p.nombre}">${p.nombre}</option>`).join('')
-      : '<option value="">Sin proveedores registrados</option>';
+    // Guardar lista de proveedores para el buscador
+    window._proveedoresCache = proveedores || [];
 
     openModal(`
     <div class="modal-overlay" id="modal-factura" onclick="if(event.target===this)_cerrarModal()">
@@ -3481,18 +3483,14 @@ const LS_UI = (() => {
           <!-- CABECERA -->
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--line)">
 
-            <div class="ff" style="grid-column:1/-1">
+            <div class="ff" style="grid-column:1/-1;position:relative">
               <label>Proveedor</label>
-              <select id="fact-proveedor" style="width:100%" onchange="LS_UI.onProveedorChange(this)">
-                <option value="">Seleccionar proveedor...</option>
-                ${provOpts}
-                <option value="__nuevo__">+ Agregar nuevo proveedor</option>
-              </select>
-            </div>
-
-            <div class="ff" id="fact-nuevo-prov-wrap" style="display:none;grid-column:1/-1">
-              <label>Nombre del nuevo proveedor</label>
-              <input type="text" id="fact-nuevo-prov-nombre" placeholder="Ej: Walmart Eagle Pass">
+              <input type="text" id="fact-proveedor" autocomplete="off"
+                placeholder="Escribe para buscar proveedor..."
+                oninput="LS_UI.filtrarProveedores(this)"
+                onfocus="LS_UI.filtrarProveedores(this)"
+                onblur="setTimeout(()=>{var d=document.getElementById('prov-dd');if(d)d.style.display='none'},220)">
+              <div id="prov-dd" class="art-dd" style="display:none"></div>
             </div>
 
             <div class="ff">
@@ -3569,14 +3567,63 @@ const LS_UI = (() => {
     setTimeout(() => { LS_UI.agregarLineaFactura(); LS_UI.agregarLineaFactura(); }, 80);
   }
 
-  function onProveedorChange(sel) {
-    const wrap = document.getElementById('fact-nuevo-prov-wrap');
-    if (wrap) wrap.style.display = sel.value === '__nuevo__' ? '' : 'none';
-  }
-
   // ── NORMALIZAR texto para búsqueda sin tildes ni mayúsculas ──────────────
   function _norm(s) {
     return String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+  }
+
+  // ── BUSCADOR DE PROVEEDORES ──────────────────────────────────────────────
+  function filtrarProveedores(input) {
+    const dd = document.getElementById('prov-dd');
+    if (!dd) return;
+    const val = input.value;
+    const q = _norm(val);
+    const provs = window._proveedoresCache || [];
+
+    // Filtrar: prioriza los que empiezan con la búsqueda
+    const empiezan = [], contienen = [];
+    provs.forEach(p => {
+      const n = _norm(p.nombre);
+      if (!q || n.startsWith(q)) empiezan.push(p);
+      else if (n.includes(q)) contienen.push(p);
+    });
+    const hits = empiezan.concat(contienen).slice(0, 40);
+
+    const row = (p) => {
+      const nom = p.nombre.replace(/'/g,"&#39;");
+      return `<div class="art-opt" onmousedown="event.preventDefault();LS_UI.seleccionarProveedor('${nom}')">
+        <div class="art-opt-nom">${p.nombre}</div>
+      </div>`;
+    };
+
+    let html = '';
+    if (hits.length > 0) {
+      html += `<div style="padding:7px 16px;font-size:10px;color:var(--tx-4);text-transform:uppercase;letter-spacing:.08em;background:var(--cafe-card-hi);position:sticky;top:0;z-index:1">${hits.length} proveedor${hits.length>1?'es':''}</div>`;
+      html += hits.map(row).join('');
+    }
+    // Opción de registrar nuevo si lo escrito no coincide exacto
+    const existeExacto = provs.some(p => _norm(p.nombre) === q);
+    if (val.trim() && !existeExacto) {
+      const valEsc = val.replace(/'/g,"&#39;");
+      html += `<div class="art-opt" style="display:flex;align-items:center;gap:9px;color:var(--terra-claro);border-top:1px solid var(--line-2);background:rgba(177,70,24,0.05)"
+        onmousedown="event.preventDefault();LS_UI.seleccionarProveedor('${valEsc}',true)">
+        <i class="ti ti-circle-plus" style="font-size:18px;flex-shrink:0"></i>
+        <span style="font-size:13px">Usar <strong>"${val}"</strong> como proveedor nuevo</span>
+      </div>`;
+    }
+
+    dd.innerHTML = html || `<div style="padding:11px 16px;font-size:12.5px;color:var(--tx-3)">Escribe el nombre del proveedor</div>`;
+    dd.style.display = 'block';
+    _posicionarDropdown(input, dd);
+  }
+
+  function seleccionarProveedor(nombre, esNuevo) {
+    const input = document.getElementById('fact-proveedor');
+    if (input) input.value = nombre;
+    const dd = document.getElementById('prov-dd');
+    if (dd) dd.style.display = 'none';
+    // Marcar si es nuevo (para guardarFactura)
+    if (input) input.dataset.nuevo = esNuevo ? '1' : '';
   }
 
   // ── BUSCADOR DE ARTÍCULOS (dropdown personalizado) ───────────────────────
@@ -3887,20 +3934,21 @@ const LS_UI = (() => {
   async function guardarFactura() {
     const s = id => document.getElementById(id)?.value || '';
 
-    // Proveedor — nuevo o existente
-    let proveedor = s('fact-proveedor');
-    if (proveedor === '__nuevo__') {
-      const nuevoNombre = s('fact-nuevo-prov-nombre').trim();
-      if (!nuevoNombre) {
-        typeof toast !== 'undefined' && toast('Falta nombre', 'Escribe el nombre del nuevo proveedor', 'err', 'ti-alert-circle');
-        return;
-      }
-      const resP = await LS_API.registrarProveedor({ nombre: nuevoNombre });
+    // Proveedor — del buscador (texto libre)
+    let proveedor = s('fact-proveedor').trim();
+    if (!proveedor) {
+      typeof toast !== 'undefined' && toast('Falta proveedor', 'Escribe o selecciona un proveedor', 'err', 'ti-alert-circle');
+      return;
+    }
+    // Si el proveedor no existe en la lista, registrarlo como nuevo automáticamente
+    const provs = window._proveedoresCache || [];
+    const existe = provs.some(p => _norm(p.nombre) === _norm(proveedor));
+    if (!existe) {
+      const resP = await LS_API.registrarProveedor({ nombre: proveedor });
       if (resP?.status !== 'ok' && resP?.msg !== 'El proveedor ya existe') {
         typeof toast !== 'undefined' && toast('Error', 'No se pudo registrar el proveedor', 'err', 'ti-alert-circle');
         return;
       }
-      proveedor = nuevoNombre;
     }
 
     // Recopilar artículos
@@ -4024,7 +4072,8 @@ const LS_UI = (() => {
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },
     async abrirNuevaFactura() { await buildFormFactura(); },
-    onProveedorChange,
+    filtrarProveedores,
+    seleccionarProveedor,
     factPaso2,
     agregarLineaFactura,
     filtrarArticulos,
