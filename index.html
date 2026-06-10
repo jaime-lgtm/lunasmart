@@ -3154,7 +3154,7 @@ const LS_UI = (() => {
 
     if (result?.status === 'ok') {
       closeModal('modal-ingreso');
-      LS_API.invalidarCache(SHEETS?.INGRESOS);
+      LS_API.invalidarCache('INGRESOS');
       typeof toast !== 'undefined' && toast('Ingreso registrado', 'El corte fue guardado correctamente', 'ok', 'ti-check');
       await renderIngresos();
       await renderDashboard();
