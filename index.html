@@ -96,44 +96,47 @@
        THEMES — Vista día (light) & Protección ocular (sepia)
        Applied on #app so the login splash stays on-brand dark.
     ═══════════════════════════════════════════════════════ */
+    /* ── FORMAL / CLARO — estilo corporativo, fondos casi blancos,
+          texto carbón neutro, terracota de marca solo como acento ── */
     #app[data-theme="dia"] {
-      --cafe-950: #f4ebdc;
-      --cafe-900: #efe4d1;
-      --cafe-850: #ece0ca;
-      --cafe-800: #fffaf1;
-      --cafe-750: #fbf3e5;
-      --cafe-700: #f0e2cc;
-      --cafe-sidebar: #efe3d0;
-      --cafe-card: #fffaf2;
-      --cafe-card-hi: #fffdf9;
+      --cafe-950: #f6f4f1;   /* fondo base — gris cálido muy claro */
+      --cafe-900: #f0ede8;
+      --cafe-850: #ebe7e1;
+      --cafe-800: #ffffff;   /* inputs / superficies elevadas */
+      --cafe-750: #f8f6f3;
+      --cafe-700: #edeae5;
+      --cafe-sidebar: #ffffff; /* sidebar blanco limpio */
+      --cafe-card: #ffffff;    /* tarjetas blancas, datos nítidos */
+      --cafe-card-hi: #faf9f7;
 
       --terra: #b14618;
       --terra-claro: #a8430f;
       --terra-osc: #8a3512;
 
       --dorado: #9a7c2c;
-      --verde: #2f7d4f;   --verde-bg: rgba(47,125,79,0.12);
-      --rojo: #c5241a;    --rojo-bg: rgba(197,36,26,0.13);
-      --ambar: #976713;   --ambar-bg: rgba(151,103,19,0.13);
+      --verde: #2e7d52;   --verde-bg: rgba(46,125,82,0.10);
+      --rojo: #c23934;    --rojo-bg: rgba(194,57,52,0.10);
+      --ambar: #b07d1a;   --ambar-bg: rgba(176,125,26,0.12);
 
-      --tx: #2a1a0d;
-      --tx-2: #574330;
-      --tx-3: #897157;
-      --tx-4: #b29b80;
+      --tx: #211c17;      /* carbón cálido — formal */
+      --tx-2: #4d453c;
+      --tx-3: #857c70;
+      --tx-4: #ad9f8d;    /* mantiene un toque de marca en lo terciario */
 
-      --line: rgba(177,70,24,0.18);
-      --line-2: rgba(177,70,24,0.30);
-      --line-soft: rgba(42,26,14,0.08);
-      --hair: rgba(42,26,14,0.07);
-      --track: rgba(42,26,14,0.09);
-      --th-bg: rgba(177,70,24,0.06);
-      --topbar-bg: rgba(244,235,220,0.86);
+      /* Líneas neutras (gris cálido) en vez de terracota — más sobrio */
+      --line: rgba(38,28,18,0.10);
+      --line-2: rgba(38,28,18,0.15);
+      --line-soft: rgba(38,28,18,0.06);
+      --hair: rgba(38,28,18,0.05);
+      --track: rgba(38,28,18,0.08);
+      --th-bg: rgba(177,70,24,0.045);   /* encabezado de tabla: acento de marca muy sutil */
+      --topbar-bg: rgba(255,255,255,0.85);
 
-      --sh-1: 0 1px 2px rgba(74,48,22,0.12);
-      --sh-2: 0 4px 16px rgba(74,48,22,0.12);
-      --sh-card: 0 1px 2px rgba(74,48,22,0.05), 0 2px 10px rgba(74,48,22,0.05);
-      --sh-pop: 0 12px 40px rgba(74,48,22,0.20), 0 0 0 1px rgba(177,70,24,0.12);
-      --sh-glow: 0 8px 26px rgba(177,70,24,0.22);
+      --sh-1: 0 1px 2px rgba(38,28,18,0.06);
+      --sh-2: 0 4px 14px rgba(38,28,18,0.07);
+      --sh-card: 0 1px 2px rgba(38,28,18,0.04), 0 1px 3px rgba(38,28,18,0.04);
+      --sh-pop: 0 12px 40px rgba(38,28,18,0.14), 0 0 0 1px rgba(38,28,18,0.06);
+      --sh-glow: 0 6px 20px rgba(177,70,24,0.14);
     }
     #app[data-theme="ocular"] {
       --cafe-950: #e9ddc5;
@@ -1619,13 +1622,13 @@ const PERIODS = {
 };
 
 const THEMES = {
+  dia:    { name: 'Formal',          sub: 'Claro · corporativo',          icon: 'ti-sun-high',  sw: 'sw-dia' },
   noche:  { name: 'Noche',           sub: 'Café oscuro · alto contraste', icon: 'ti-moon-stars', sw: 'sw-noche' },
-  dia:    { name: 'Día',             sub: 'Claro · papel cremoso',        icon: 'ti-sun-high',  sw: 'sw-dia' },
   ocular: { name: 'Protección ocular', sub: 'Sepia · baja luz azul',       icon: 'ti-eye',       sw: 'sw-ocular' },
 };
-const THEME_ORDER = ['noche', 'dia', 'ocular'];
+const THEME_ORDER = ['dia', 'noche', 'ocular'];
 
-let state = { page: 'dashboard', branch: 'all', period: 'mes', theme: 'noche' };
+let state = { page: 'dashboard', branch: 'all', period: 'mes', theme: 'dia' };
 
 /* ─── THEME ─── */
 function buildThemeMenu() {
@@ -1896,7 +1899,7 @@ window.addEventListener('load', () => {
   initSort();
   updateSubtitle();
   let savedTheme = 'noche';
-  try { savedTheme = localStorage.getItem('ls_theme') || 'noche'; } catch (e) {}
+  try { savedTheme = localStorage.getItem('ls_theme') || 'dia'; } catch (e) {}
   applyTheme(savedTheme, false);
   const s = sessionStorage.getItem('ls_user');
   if (s) {
