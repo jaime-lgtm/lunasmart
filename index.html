@@ -3143,28 +3143,41 @@ const LS_UI = (() => {
             </div>
           </div>
 
-          <!-- Métodos de pago -->
+          <!-- Métodos de pago — grid 2x3 con Terminal Pay separado -->
           <div style="border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;margin-bottom:14px">
             <div style="background:var(--cafe-card-hi);padding:10px 16px;border-bottom:1px solid var(--line)">
               <div style="font-size:11px;font-weight:600;color:var(--tx-2);text-transform:uppercase;letter-spacing:.06em">Desglose de métodos de pago</div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
+              <!-- Efectivo -->
               <div style="padding:12px 16px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)">
                 <div style="font-size:11px;color:var(--tx-3);margin-bottom:6px">💵 Efectivo</div>
                 <input type="number" id="ing-efectivo" placeholder="0.00" step="0.01" min="0" oninput="LS_UI.calcIngreso()"
                   style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'DM Mono',monospace">
               </div>
+              <!-- Mercado Pago -->
               <div style="padding:12px 16px;border-bottom:1px solid var(--line)">
-                <div style="font-size:11px;color:var(--tx-3);margin-bottom:6px">💳 Tarjeta / Mercado Pago</div>
+                <div style="font-size:11px;color:var(--tx-3);margin-bottom:6px">📱 Mercado Pago</div>
                 <input type="number" id="ing-tarjeta" placeholder="0.00" step="0.01" min="0" oninput="LS_UI.calcIngreso()"
                   style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'DM Mono',monospace">
               </div>
-              <div style="padding:12px 16px;border-right:1px solid var(--line)">
+              <!-- Terminal Pay (Parrot) -->
+              <div style="padding:12px 16px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)">
+                <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx-3);margin-bottom:6px">
+                  <i class="ti ti-device-tablet-pay" style="font-size:13px;color:var(--terra-claro)"></i>
+                  Terminal Pay (Parrot)
+                </div>
+                <input type="number" id="ing-terminal-pay" placeholder="0.00" step="0.01" min="0" oninput="LS_UI.calcIngreso()"
+                  style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'DM Mono',monospace">
+              </div>
+              <!-- Transferencia -->
+              <div style="padding:12px 16px;border-bottom:1px solid var(--line)">
                 <div style="font-size:11px;color:var(--tx-3);margin-bottom:6px">🏦 Transferencia</div>
                 <input type="number" id="ing-transferencia" placeholder="0.00" step="0.01" min="0" oninput="LS_UI.calcIngreso()"
                   style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'DM Mono',monospace">
               </div>
-              <div style="padding:12px 16px">
+              <!-- Rappi / Uber Eats — ancho completo -->
+              <div style="padding:12px 16px;grid-column:1/-1">
                 <div style="font-size:11px;color:var(--tx-3);margin-bottom:6px">🛵 Rappi / Uber Eats</div>
                 <input type="number" id="ing-rappi" placeholder="0.00" step="0.01" min="0" oninput="LS_UI.calcIngreso()"
                   style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'DM Mono',monospace">
@@ -3198,9 +3211,9 @@ const LS_UI = (() => {
     </div>`);
   }
 
-    function calcIngreso() {
+  function calcIngreso() {
     const n = id => parseFloat(document.getElementById(id)?.value || 0) || 0;
-    const total = n('ing-efectivo') + n('ing-tarjeta') + n('ing-transferencia') + n('ing-rappi');
+    const total = n('ing-efectivo') + n('ing-tarjeta') + n('ing-terminal-pay') + n('ing-transferencia') + n('ing-rappi');
     const el = document.getElementById('ing-total-calc');
     if (el) el.textContent = LS_API.formatMXNDec(total);
   }
@@ -3209,6 +3222,9 @@ const LS_UI = (() => {
     const n = id => parseFloat(document.getElementById(id)?.value || 0) || 0;
     const s = id => document.getElementById(id)?.value || '';
 
+    const terminalPay = n('ing-terminal-pay');
+    // Terminal Pay se suma a Tarjeta en el Sheet (PAGO_TARJETA)
+    // Se registra el desglose en Observaciones para trazabilidad
     const datos = {
       fecha:          s('ing-fecha').split('-').reverse().join('/'),
       sucursal:       s('ing-sucursal'),
@@ -3216,11 +3232,21 @@ const LS_UI = (() => {
       inicioCaja:     n('ing-inicio-caja'),
       retiros:        n('ing-retiros'),
       efectivo:       n('ing-efectivo'),
-      tarjeta:        n('ing-tarjeta'),
+      tarjeta:        n('ing-tarjeta') + terminalPay,  // MP + Terminal Pay juntos en col PAGO_TARJETA
       transferencia:  n('ing-transferencia'),
       rappi:          n('ing-rappi'),
-      totalDeclarado: n('ing-efectivo') + n('ing-tarjeta') + n('ing-transferencia') + n('ing-rappi'),
-      observaciones:  s('ing-obs') || 'MANUAL',
+      totalDeclarado: n('ing-efectivo') + n('ing-tarjeta') + terminalPay + n('ing-transferencia') + n('ing-rappi'),
+      // Desglose de terminales en observaciones para reportes exactos
+      observaciones:  (() => {
+        const obs = s('ing-obs');
+        const mp = n('ing-tarjeta');
+        const pay = terminalPay;
+        const detalle = [
+          mp > 0 ? `MP:$${mp.toFixed(0)}` : '',
+          pay > 0 ? `PAY:$${pay.toFixed(0)}` : '',
+        ].filter(Boolean).join('|');
+        return (obs || '') + (detalle ? (obs ? ' · ' : '') + detalle : '') || 'MANUAL';
+      })(),
     };
 
     if (!datos.fecha || datos.totalDeclarado === 0) {
