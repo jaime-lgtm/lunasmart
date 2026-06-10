@@ -81,17 +81,48 @@ function _hoja(nombre) {
   }
 }
 
+/**
+ * Devuelve la fila donde escribir el PRÓXIMO registro.
+ * Escanea desde el FINAL hacia arriba buscando la última fila con dato
+ * real en la columna `col` (base 1), y devuelve esa fila + 1.
+ *
+ * Ventaja vs buscar la primera vacía: ignora filas con formato/validación
+ * que quedan después del último registro real, y siempre escribe
+ * inmediatamente después del dato más reciente.
+ */
+function _siguienteFilaLibre(sh, col) {
+  var col0 = col - 1;
+  var vals = sh.getDataRange().getValues();
+  for (var i = vals.length - 1; i >= 1; i--) {
+    var cell = String(vals[i][col0]).trim();
+    if (cell !== '' && cell !== '0' && cell !== '$0.00') {
+      return i + 2; // fila Sheets = i+1, siguiente = i+2
+    }
+  }
+  return 2; // solo hay encabezado
+}
+
+/**
+ * Escribe datos inmediatamente después del último registro real.
+ * Col B (FECHA) es el indicador de fila con dato en todas las hojas principales.
+ */
+function _escribirFila(sh, datos) {
+  var fila = _siguienteFilaLibre(sh, 2);
+  sh.getRange(fila, 1, 1, datos.length).setValues([datos]);
+}
+
 /** Genera un ID incremental del tipo PREFIX-NNNNN */
 function _nextId(hoja, prefix) {
   try {
     const sh = _getSheet(hoja);
-    const last = sh.getLastRow();
-    if (last < 2) return prefix + '-00001';
-    const ids = sh.getRange(2, 1, last - 1, 1).getValues()
-      .map(r => r[0]).filter(v => String(v).startsWith(prefix));
+    const vals = sh.getDataRange().getValues();
+    // Buscar IDs existentes con ese prefijo en col A
+    const ids = vals.slice(1)
+      .map(function(r) { return String(r[0]); })
+      .filter(function(v) { return v.indexOf(prefix) === 0; });
     if (ids.length === 0) return prefix + '-00001';
-    const nums = ids.map(id => parseInt(String(id).split('-').pop(), 10) || 0);
-    const next = Math.max(...nums) + 1;
+    const nums = ids.map(function(id) { return parseInt(id.split('-').pop(), 10) || 0; });
+    const next = Math.max.apply(null, nums) + 1;
     return prefix + '-' + String(next).padStart(5, '0');
   } catch(e) {
     return prefix + '-' + Date.now();
@@ -122,6 +153,8 @@ function doGet(e) {
     getDATAINGRESOS:               HOJAS.DATA_INGRESOS,
   };
 
+  if (accion === 'getUSUARIOS') return _getUsuarios();
+
   if (map[accion]) {
     return _json(_hoja(map[accion]));
   }
@@ -147,7 +180,8 @@ function doPost(e) {
     case 'registrarArticuloDetalle': return _registrarArticuloDetalle(body);
     case 'registrarProveedor':      return _registrarProveedor(body);
     case 'registrarCliente':        return _registrarCliente(body);
-    case 'sincronizarParrot':       return _sincronizarParrot();
+    case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || 'CASA DE LA CULTURA');
+    case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(body.datos || body);
     default: return _err('Acción desconocida: ' + accion);
   }
 }
@@ -167,7 +201,7 @@ function _registrarIngreso(b) {
     const ventaTotal    = parseFloat(b.ventaTotal    || total);
     const diferencia    = total - ventaTotal;
 
-    sh.appendRow([
+    _escribirFila(sh, [
       id,
       b.fecha || _fechaHoy(),
       b.sucursal || '',
@@ -192,19 +226,21 @@ function _registrarIngreso(b) {
 }
 
 // ── REGISTRAR FACTURA ──────────────────────────────────────────────────────
+// Estructura real del Sheet FACTURAS (7 cols, sin TIPO):
+// A=ID_FACTURA | B=FECHA | C=UNIDAD DE NEGOCIO | D=PROVEEDOR |
+// E=FOLIO/TICKET | F=FOTO COMPROBANTE | G=TOTAL FACTURA
 function _registrarFactura(b) {
   try {
     const sh = _getSheet(HOJAS.FACTURAS);
     const id = _nextId(HOJAS.FACTURAS, 'FACT');
 
-    sh.appendRow([
+    _escribirFila(sh, [
       id,
-      b.fecha    || _fechaHoy(),
-      b.unidad   || '',
-      b.proveedor|| '',
-      b.tipo     || '',
-      b.folio    || '',
-      b.foto     || '',
+      b.fecha     || _fechaHoy(),
+      b.unidad    || '',
+      b.proveedor || '',
+      b.folio     || '',   // col E (sin TIPO intermedio)
+      b.foto      || '',
       parseFloat(b.total || 0),
     ]);
 
@@ -215,37 +251,43 @@ function _registrarFactura(b) {
 }
 
 // ── REGISTRAR ARTÍCULO DETALLE ─────────────────────────────────────────────
+// Estructura real del Sheet ARTICULOS DETALLES (9 cols):
+// A=Z(auto) | B=ID_FACTURA | C=FECHA | D=ARTICULO | E=CANTIDAD |
+// F=PRECIO UNIT | G=¿APLICA IVA? | H=IVA MONTO | I=TOTAL
+// → Escribimos desde col B (dejamos col A para el contador automático del Sheet)
 function _registrarArticuloDetalle(b) {
   try {
     const sh = _getSheet(HOJAS.ART_DETALLES);
-    const id = _nextId(HOJAS.ART_DETALLES, 'ARTDET');
-    const qty   = parseFloat(b.cantidad  || 0);
-    const precio= parseFloat(b.precioUnit|| 0);
+    const qty   = parseFloat(b.cantidad   || 0);
+    const precio= parseFloat(b.precioUnit || 0);
     const sub   = qty * precio;
-    const iva   = b.aplicaIva ? sub * 0.16 : 0;
+    const aplica= !!(b.aplicaIva);
+    const iva   = aplica ? sub * 0.16 : 0;
     const total = sub + iva;
 
-    sh.appendRow([
-      id,
-      b.idFactura  || '',
-      b.fecha      || _fechaHoy(),
-      b.articulo   || '',
-      qty,
-      b.unidadMed  || '',
-      precio,
-      sub,
-      b.aplicaIva  ? 'SI' : 'NO',
-      total,
-    ]);
+    // Escribir después del último registro con dato en col B (ID_FACTURA)
+    var fila = _siguienteFilaLibre(sh, 2);
+    sh.getRange(fila, 2, 1, 8).setValues([[
+      b.idFactura  || '',   // B
+      b.fecha      || _fechaHoy(), // C
+      b.articulo   || '',   // D
+      qty,                  // E
+      precio,               // F
+      aplica ? 'SI' : 'NO', // G
+      iva,                  // H
+      total,                // I
+    ]]);
 
     // Actualizar Costo Dinámico en Catálogo Maestro
     _actualizarCostoDinamico(b.articulo, precio);
 
-    return _json({ status: 'ok', idDetalle: id });
+    return _json({ status: 'ok', idDetalle: 'ARTDET-' + fila });
   } catch(e) {
     return _err(e.message);
   }
 }
+
+// _siguienteFilaLibre reemplaza a _primeraFilaVaciaDesdeCol en todos los usos.
 
 /** Actualiza la columna Costo Dinámico (col C) en Catálogo Maestro */
 function _actualizarCostoDinamico(nombreArticulo, nuevoCosto) {
@@ -274,7 +316,7 @@ function _registrarProveedor(b) {
       }
     }
     const id = _nextId(HOJAS.PROVEEDORES, 'PROV');
-    sh.appendRow([
+    _escribirFila(sh, [
       id,
       b.nombre    || '',
       b.rfc       || '',
@@ -301,7 +343,7 @@ function _registrarCliente(b) {
       }
     }
     const id = _nextId(HOJAS.CLIENTES, 'INGRESOS');
-    sh.appendRow([
+    _escribirFila(sh, [
       id,
       b.nombre    || '',
       b.rfc       || '',
@@ -318,7 +360,15 @@ function _registrarCliente(b) {
 }
 
 // ── SINCRONIZAR PARROT POS ─────────────────────────────────────────────────
-function _sincronizarParrot() {
+// Sucursales con Parrot POS (UUID compartido):
+//   CASA DE LA CULTURA → sucursal principal (punto de venta físico)
+//   HELFY FÜ          → multi-marca Parrot (Rappi/Uber)
+// Sucursales SIN Parrot (manuales):
+//   SUEÑO DE LUNA     → Coffee & Roasters (expos, mercados, redes sociales)
+//   BARBACOA Y MENUDO → solo domingos, desde casa
+//   EVENTOS           → bar móvil y eventos
+function _sincronizarParrot(sucursal) {
+  sucursal = sucursal || 'CASA DE LA CULTURA';
   try {
     const hoy = new Date();
     const hace7 = new Date(hoy - 7 * 24 * 60 * 60 * 1000);
@@ -373,7 +423,7 @@ function _sincronizarParrot() {
     Object.values(turnos).forEach(t => {
       const key = t.fecha + '|' + t.turno;
       if (!existentes.includes(key)) {
-        shConc.appendRow([
+        _escribirFila(shConc, [
           t.fecha,
           t.turno,
           t.total,   // VENTA_PARROT
@@ -397,9 +447,9 @@ function _sincronizarParrot() {
       const sesionId = 'PARROT-' + t.fecha.replace(/\//g, '') + '-' + t.turno;
       if (!existIngIDs.includes(sesionId)) {
         const id = _nextId(HOJAS.INGRESOS, 'INGRESOS');
-        shIng.appendRow([
+        _escribirFila(shIng, [
           id, t.fecha,
-          'SUEÑO DE LUNA', t.turno,
+          sucursal, t.turno,
           0, 0, 0,
           0, t.total, 0, 0,  // efectivo=0, tarjeta=total (aproximado Parrot), transf=0, rappi=0
           t.total, t.total, 0,
@@ -438,7 +488,7 @@ function _sincronizarParrotFallback() {
     if (total > 0) {
       const shConc = _getSheet(HOJAS.CONCILIACION);
       const fecha  = Utilities.formatDate(hoy, Session.getScriptTimeZone(), 'dd/MM/yyyy');
-      shConc.appendRow([
+      _escribirFila(shConc, [
         fecha, 'INGRESOS-00013',
         total, 0, 0, 0, 'PENDIENTE', 'PARROT-RESUMEN',
         new Date().toISOString(),
@@ -450,3 +500,151 @@ function _sincronizarParrotFallback() {
     return _json({ status: 'ok', msg: 'Parrot fallback falló: ' + e.message, registros: 0 });
   }
 }
+
+// ── REGISTRAR ARTÍCULO EN CATÁLOGO MAESTRO ────────────────────────────────
+// Columnas: ARTICULO | COSTO BASE | COSTO DINAMICO | CANTIDAD | UNIDA DE MEDIDA
+//           % MERMA  | COSTO FINAL | CATEGORIA | SUBCATEGORIA | PROVEEDOR
+function _registrarCatalogoArticulo(b) {
+  try {
+    var sh = _getSheet(HOJAS.CATALOGO);
+    var vals = sh.getDataRange().getValues();
+    // Verificar duplicado (col A = ARTICULO)
+    for (var i = 1; i < vals.length; i++) {
+      if (String(vals[i][0]).trim().toLowerCase() === String(b.articulo || '').trim().toLowerCase()) {
+        return _json({ status: 'ok', msg: 'El artículo ya existe en el Catálogo Maestro' });
+      }
+    }
+    var costo = parseFloat(b.costoBase || 0);
+    var merma = parseFloat(b.merma || 0);
+    var costoFinal = merma > 0 ? costo / (1 - merma / 100) : costo;
+
+    var fila = _siguienteFilaLibre(sh, 1); // col A = ARTICULO
+    sh.getRange(fila, 1, 1, 10).setValues([[
+      b.articulo     || '',
+      costo,                 // COSTO BASE
+      costo,                 // COSTO DINAMICO (igual al base al inicio)
+      1,                     // CANTIDAD
+      b.unidad       || '',  // UNIDA DE MEDIDA
+      merma,                 // % MERMA
+      costoFinal,            // COSTO FINAL
+      b.categoria    || '',  // CATEGORIA
+      b.subcategoria || '',  // SUBCATEGORIA
+      b.proveedor    || '',  // PROVEEDOR
+    ]]);
+    return _json({ status: 'ok', msg: 'Artículo registrado en Catálogo Maestro' });
+  } catch(e) {
+    return _err(e.message);
+  }
+}
+
+// ── AUTENTICACIÓN DESDE USUARIOS_APP ──────────────────────────────────────
+// Permite al frontend verificar credenciales contra la hoja USUARIOS_APP
+// Llamada: GET ?accion=getUSUARIOS (devuelve lista sin contraseñas)
+//          POST { accion:'login', email, password }
+// NOTA: por seguridad real implementar OAuth; esto es suficiente para uso interno.
+function _getUsuarios() {
+  try {
+    var sh = _getSheet('USUARIOS_APP');
+    var vals = sh.getDataRange().getValues();
+    // Devolver solo email, nombre, rol, sucursal (sin contraseñas)
+    var users = vals.slice(1).filter(function(r){ return r[0]; }).map(function(r){
+      return { email: r[0], nombre: r[1], rol: r[2], sucursal: r[3] };
+    });
+    return _json({ status: 'ok', data: users });
+  } catch(e) { return _err(e.message); }
+}
+
+// ── LISTAR TIENDAS / TERMINALES PARROT ────────────────────────────────────
+// Ejecuta esta función desde el editor de Apps Script para ver todos los UUIDs.
+// 1. Selecciona "listarTiendasParrot" en el menú de funciones
+// 2. Haz clic en ▶ Ejecutar
+// 3. Lee el resultado en el panel "Registro de ejecución" abajo
+function listarTiendasParrot() {
+  var endpoints = [
+    'https://api.parrotsoftware.io/v2/stores/',
+    'https://api.parrotsoftware.io/v1/stores/',
+    'https://api.parrotsoftware.io/v2/restaurants/',
+    'https://api.parrotsoftware.io/v2/locations/',
+  ];
+  var headers = { 'Authorization': 'Bearer ' + PARROT_API_KEY, 'Content-Type': 'application/json' };
+
+  for (var i = 0; i < endpoints.length; i++) {
+    try {
+      var resp = UrlFetchApp.fetch(endpoints[i], { headers: headers, muteHttpExceptions: true });
+      var code = resp.getResponseCode();
+      var body = resp.getContentText();
+      Logger.log('Endpoint: ' + endpoints[i] + ' → HTTP ' + code);
+      if (code === 200) {
+        var data = JSON.parse(body);
+        var items = Array.isArray(data) ? data : (data.results || data.stores || data.data || []);
+        Logger.log('✅ Tiendas encontradas: ' + items.length);
+        items.forEach(function(s) {
+          Logger.log('  UUID: ' + (s.uuid || s.id || '?'));
+          Logger.log('  Nombre: ' + (s.name || s.display_name || s.title || '?'));
+          Logger.log('  Activa: ' + (s.is_active !== undefined ? s.is_active : s.active || '?'));
+          Logger.log('---');
+        });
+        return; // Si encontró, para aquí
+      }
+      Logger.log('  Respuesta: ' + body.substring(0, 200));
+    } catch(e) {
+      Logger.log('Error en ' + endpoints[i] + ': ' + e.message);
+    }
+  }
+  Logger.log('⚠️ No se encontraron tiendas. Verifica la API Key de Parrot.');
+  Logger.log('API Key usada: ' + PARROT_API_KEY.substring(0, 20) + '...');
+}
+
+// ── REORGANIZAR HOJAS ──────────────────────────────────────────────────────
+// Llamar una sola vez desde Apps Script editor: reorganizarHojas()
+// NO expuesto como endpoint web por seguridad.
+function reorganizarHojas() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+
+  // Orden deseado (22 hojas)
+  var orden = [
+    // 📊 OPERACIONES DIARIAS
+    'INGRESOS',
+    'CONCILIACION',
+    'FACTURAS',
+    'ARTICULOS DETALLES',
+    'INGRESOS DETALLES',
+    // 🍽️ MENÚ Y COSTOS
+    'Catálogo Maestro',
+    'Recetas',
+    'Costo de Producto',
+    'Simulador Cotizador',
+    'DATA_INGRESOS',
+    // 📦 INVENTARIO
+    'BD_INVENTARIO_GENERAL',
+    // 👥 MAESTROS
+    'DATOS_CLIENTES',
+    'DATOS_PROVEEDORES',
+    'DATOS_CATEGORIASSUBCATEGORIAS',
+    'USUARIOS_APP',
+    // 📈 ANÁLISIS Y REPORTES
+    'Dashboard Anual',
+    'Analisis Financiero 💰',
+    'Planificación de Gastos',
+    // 🗄️ SISTEMA / COTIZACIONES
+    'DATA_COTIZACIONES_MAESTRO',
+    'ID_COTIZACION_DETALLE',
+    'DATA_APP',
+    // 🗂️ ARCHIVO LEGADO
+    'ZEGRESOS:VIEJO',
+  ];
+
+  for (var i = 0; i < orden.length; i++) {
+    var sh = ss.getSheetByName(orden[i]);
+    if (sh) {
+      ss.setActiveSheet(sh);
+      ss.moveActiveSheet(i + 1);
+      Utilities.sleep(100); // evitar rate limit
+    }
+  }
+
+  Logger.log('✅ Hojas reorganizadas correctamente.');
+}
+
+// ── EXPONER getUSUARIOS en doGet ───────────────────────────────────────────
+// (ya incluido en el map de doGet de arriba — agregar manualmente si se necesita)
