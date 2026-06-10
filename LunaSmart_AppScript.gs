@@ -180,7 +180,8 @@ function doPost(e) {
     case 'registrarArticuloDetalle': return _registrarArticuloDetalle(body);
     case 'registrarProveedor':      return _registrarProveedor(body);
     case 'registrarCliente':        return _registrarCliente(body);
-    case 'sincronizarParrot':       return _sincronizarParrot();
+    case 'sincronizarParrot':          return _sincronizarParrot();
+    case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(body.datos || body);
     default: return _err('Acción desconocida: ' + accion);
   }
 }
@@ -489,6 +490,42 @@ function _sincronizarParrotFallback() {
     return _json({ status: 'ok', msg: 'Resumen Parrot del día importado', registros: total > 0 ? 1 : 0 });
   } catch(e) {
     return _json({ status: 'ok', msg: 'Parrot fallback falló: ' + e.message, registros: 0 });
+  }
+}
+
+// ── REGISTRAR ARTÍCULO EN CATÁLOGO MAESTRO ────────────────────────────────
+// Columnas: ARTICULO | COSTO BASE | COSTO DINAMICO | CANTIDAD | UNIDA DE MEDIDA
+//           % MERMA  | COSTO FINAL | CATEGORIA | SUBCATEGORIA | PROVEEDOR
+function _registrarCatalogoArticulo(b) {
+  try {
+    var sh = _getSheet(HOJAS.CATALOGO);
+    var vals = sh.getDataRange().getValues();
+    // Verificar duplicado (col A = ARTICULO)
+    for (var i = 1; i < vals.length; i++) {
+      if (String(vals[i][0]).trim().toLowerCase() === String(b.articulo || '').trim().toLowerCase()) {
+        return _json({ status: 'ok', msg: 'El artículo ya existe en el Catálogo Maestro' });
+      }
+    }
+    var costo = parseFloat(b.costoBase || 0);
+    var merma = parseFloat(b.merma || 0);
+    var costoFinal = merma > 0 ? costo / (1 - merma / 100) : costo;
+
+    var fila = _siguienteFilaLibre(sh, 1); // col A = ARTICULO
+    sh.getRange(fila, 1, 1, 10).setValues([[
+      b.articulo     || '',
+      costo,                 // COSTO BASE
+      costo,                 // COSTO DINAMICO (igual al base al inicio)
+      1,                     // CANTIDAD
+      b.unidad       || '',  // UNIDA DE MEDIDA
+      merma,                 // % MERMA
+      costoFinal,            // COSTO FINAL
+      b.categoria    || '',  // CATEGORIA
+      b.subcategoria || '',  // SUBCATEGORIA
+      b.proveedor    || '',  // PROVEEDOR
+    ]]);
+    return _json({ status: 'ok', msg: 'Artículo registrado en Catálogo Maestro' });
+  } catch(e) {
+    return _err(e.message);
   }
 }
 
