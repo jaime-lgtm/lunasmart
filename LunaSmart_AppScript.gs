@@ -82,27 +82,32 @@ function _hoja(nombre) {
 }
 
 /**
- * Encuentra la primera fila realmente vacía (sin valor en col A ni col B).
- * Evita el problema de filas con formato/validación que appendRow() salta.
+ * Devuelve la fila donde escribir el PRÓXIMO registro.
+ * Escanea desde el FINAL hacia arriba buscando la última fila con dato
+ * real en la columna `col` (base 1), y devuelve esa fila + 1.
+ *
+ * Ventaja vs buscar la primera vacía: ignora filas con formato/validación
+ * que quedan después del último registro real, y siempre escribe
+ * inmediatamente después del dato más reciente.
  */
-function _primeraFilaVacia(sh) {
-  const vals = sh.getDataRange().getValues();
-  for (var i = 1; i < vals.length; i++) {
-    var colA = String(vals[i][0]).trim();
-    var colB = String(vals[i][1]).trim();
-    if (colA === '' && colB === '') {
-      return i + 1; // número de fila en Sheets (base 1)
+function _siguienteFilaLibre(sh, col) {
+  var col0 = col - 1;
+  var vals = sh.getDataRange().getValues();
+  for (var i = vals.length - 1; i >= 1; i--) {
+    var cell = String(vals[i][col0]).trim();
+    if (cell !== '' && cell !== '0' && cell !== '$0.00') {
+      return i + 2; // fila Sheets = i+1, siguiente = i+2
     }
   }
-  // Si no hay filas vacías intermedias, usar la siguiente después del último dato
-  return vals.length + 1;
+  return 2; // solo hay encabezado
 }
 
 /**
- * Escribe una fila de datos en la primera fila vacía real (no appendRow).
+ * Escribe datos inmediatamente después del último registro real.
+ * Col B (FECHA) es el indicador de fila con dato en todas las hojas principales.
  */
 function _escribirFila(sh, datos) {
-  var fila = _primeraFilaVacia(sh);
+  var fila = _siguienteFilaLibre(sh, 2);
   sh.getRange(fila, 1, 1, datos.length).setValues([datos]);
 }
 
@@ -259,8 +264,8 @@ function _registrarArticuloDetalle(b) {
     const iva   = aplica ? sub * 0.16 : 0;
     const total = sub + iva;
 
-    // Encontrar primera fila vacía (buscando en col B, ya que col A es contador)
-    var fila = _primeraFilaVaciaDesdeCol(sh, 2);
+    // Escribir después del último registro con dato en col B (ID_FACTURA)
+    var fila = _siguienteFilaLibre(sh, 2);
     sh.getRange(fila, 2, 1, 8).setValues([[
       b.idFactura  || '',   // B
       b.fecha      || _fechaHoy(), // C
@@ -281,16 +286,7 @@ function _registrarArticuloDetalle(b) {
   }
 }
 
-/** Variante de _primeraFilaVacia que busca en la columna indicada (base 1). */
-function _primeraFilaVaciaDesdeCol(sh, col) {
-  var vals = sh.getDataRange().getValues();
-  for (var i = 1; i < vals.length; i++) {
-    if (String(vals[i][col - 1]).trim() === '') {
-      return i + 1;
-    }
-  }
-  return vals.length + 1;
-}
+// _siguienteFilaLibre reemplaza a _primeraFilaVaciaDesdeCol en todos los usos.
 
 /** Actualiza la columna Costo Dinámico (col C) en Catálogo Maestro */
 function _actualizarCostoDinamico(nombreArticulo, nuevoCosto) {
