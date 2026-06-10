@@ -2,8 +2,22 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Luna Smart — Sueño de Luna Coffee &amp; Roasters</title>
+
+  <!-- ══ PWA — App instalable en celular/tablet ══ -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#1a1008">
+  <!-- iOS (iPhone / iPad) -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Luna Smart">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <!-- Android / general -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -4128,6 +4142,15 @@ window.addEventListener('load', () => {
     } catch(e) {}
   }
 });
+
+// ── REGISTRAR SERVICE WORKER (app instalable + offline) ───────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('Luna Smart instalable ✓', reg.scope))
+      .catch(err => console.warn('SW no registrado:', err));
+  });
+}
 
 
 // ── SINCRONIZACIÓN MANUAL PARROT ──────────────────────────────
