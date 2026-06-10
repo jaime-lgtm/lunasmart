@@ -173,15 +173,18 @@ function doPost(e) {
   }
 
   const accion = body.accion || '';
+  // El frontend envía los datos dentro de body.datos. Desenvolvemos aquí
+  // (con fallback a body por compatibilidad con llamadas directas/planas).
+  const datos = body.datos || body;
 
   switch (accion) {
-    case 'registrarIngreso':        return _registrarIngreso(body);
-    case 'registrarFactura':        return _registrarFactura(body);
-    case 'registrarArticuloDetalle': return _registrarArticuloDetalle(body);
-    case 'registrarProveedor':      return _registrarProveedor(body);
-    case 'registrarCliente':        return _registrarCliente(body);
-    case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || 'CASA DE LA CULTURA');
-    case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(body.datos || body);
+    case 'registrarIngreso':           return _registrarIngreso(datos);
+    case 'registrarFactura':           return _registrarFactura(datos);
+    case 'registrarArticuloDetalle':   return _registrarArticuloDetalle(datos);
+    case 'registrarProveedor':         return _registrarProveedor(datos);
+    case 'registrarCliente':           return _registrarCliente(datos);
+    case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || datos.sucursal || 'CASA DE LA CULTURA');
+    case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(datos);
     default: return _err('Acción desconocida: ' + accion);
   }
 }
@@ -315,7 +318,8 @@ function _registrarProveedor(b) {
         return _json({ status: 'ok', msg: 'El proveedor ya existe', idProveedor: datos[i][0] });
       }
     }
-    const id = _nextId(HOJAS.PROVEEDORES, 'PROV');
+    // Usar prefijo SL- para continuar la numeración histórica de proveedores
+    const id = _nextId(HOJAS.PROVEEDORES, 'SL');
     _escribirFila(sh, [
       id,
       b.nombre    || '',
