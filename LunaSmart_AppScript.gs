@@ -180,7 +180,7 @@ function doPost(e) {
     case 'registrarArticuloDetalle': return _registrarArticuloDetalle(body);
     case 'registrarProveedor':      return _registrarProveedor(body);
     case 'registrarCliente':        return _registrarCliente(body);
-    case 'sincronizarParrot':          return _sincronizarParrot();
+    case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || 'SUEÑO DE LUNA');
     case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(body.datos || body);
     default: return _err('Acción desconocida: ' + accion);
   }
@@ -360,7 +360,8 @@ function _registrarCliente(b) {
 }
 
 // ── SINCRONIZAR PARROT POS ─────────────────────────────────────────────────
-function _sincronizarParrot() {
+function _sincronizarParrot(sucursal) {
+  sucursal = sucursal || 'SUEÑO DE LUNA';
   try {
     const hoy = new Date();
     const hace7 = new Date(hoy - 7 * 24 * 60 * 60 * 1000);
@@ -441,7 +442,7 @@ function _sincronizarParrot() {
         const id = _nextId(HOJAS.INGRESOS, 'INGRESOS');
         _escribirFila(shIng, [
           id, t.fecha,
-          'SUEÑO DE LUNA', t.turno,
+          sucursal, t.turno,
           0, 0, 0,
           0, t.total, 0, 0,  // efectivo=0, tarjeta=total (aproximado Parrot), transf=0, rappi=0
           t.total, t.total, 0,
