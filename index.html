@@ -2671,6 +2671,17 @@ const LS_API = (() => {
   }
 
   // Ventas agrupadas por sucursal (para Top sucursales real)
+  // Normaliza/agrupa nombres de sucursal (corrige etiquetas históricas)
+  function aliasSucursal(nombre) {
+    const k = String(nombre || '').trim().toUpperCase();
+    const ALIAS = {
+      'BENJAMIN JAIME SAENZ ESCAREÑO': 'BARBACOA Y MENUDO',
+      'BENJAMIN JAIME SAENZ ESCARENO': 'BARBACOA Y MENUDO',
+      'HELFY FU': 'HELFY FÜ',
+    };
+    return ALIAS[k] || k;
+  }
+
   async function getVentasPorSucursal(period) {
     const { desde, hasta } = getRangoPeriodo(period || 'mes');
     const ingresosAll = await getIngresos();
@@ -2680,7 +2691,7 @@ const LS_API = (() => {
       if (!r.sucursal || r.sucursal.trim() === '') return;
       // Ignorar datos de prueba
       if (['TEST', 'PRUEBA', 'VERIFICACION'].some(t => r.sucursal.toUpperCase().includes(t))) return;
-      const k = r.sucursal.trim().toUpperCase();
+      const k = aliasSucursal(r.sucursal);
       agg[k] = (agg[k] || 0) + (r.ventaTotal || r.totalDeclarado || 0);
     });
     return Object.entries(agg)
@@ -2699,7 +2710,7 @@ const LS_API = (() => {
     getIngresos, getConciliacion, getFacturas,
     getArticulosDetalle, getClientes, getProveedores,
     getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos,
-    getVentasPorSucursal,
+    getVentasPorSucursal, aliasSucursal,
     // Escritura
     registrarIngreso, registrarFactura,
     registrarProveedor, registrarCliente,
@@ -2985,7 +2996,7 @@ const LS_UI = (() => {
       setEl(containerId, datos.slice(0, 100).map(r => `
         <tr data-branch="${r.sucursal.toLowerCase().includes('coffee') ? 'coffee' : 'all'}">
           <td>${r.fecha}</td>
-          <td>${r.sucursal}</td>
+          <td>${LS_API.aliasSucursal(r.sucursal)}</td>
           <td>${turnoLabel(r.cliente)}</td>
           <td style="font-family:var(--mono)">${fmt(r.efectivo)}</td>
           <td style="font-family:var(--mono)">${fmt(r.tarjeta)}</td>
@@ -3406,7 +3417,7 @@ const LS_UI = (() => {
       const porSuc = {};
       ingresos.forEach(r => {
         efe += r.efectivo; tar += r.tarjeta; tra += r.transferencia; rap += r.rappi;
-        const k = (r.sucursal||'Sin sucursal').trim().toUpperCase();
+        const k = LS_API.aliasSucursal(r.sucursal || 'Sin sucursal');
         if (!porSuc[k]) porSuc[k] = { efe:0, tar:0, tra:0, rap:0, total:0 };
         porSuc[k].efe += r.efectivo; porSuc[k].tar += r.tarjeta;
         porSuc[k].tra += r.transferencia; porSuc[k].rap += r.rappi;
