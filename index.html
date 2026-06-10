@@ -827,9 +827,14 @@
       border-radius: var(--r-xl);
       width: 100%; max-height: 92vh;
       overflow-y: auto;
+      overflow-x: visible;
       box-shadow: var(--sh-pop);
       animation: modalup 0.28s var(--ease);
     }
+    /* El modal de factura necesita overflow visible para el dropdown de artículos */
+    #modal-factura.modal { overflow: visible; max-height: none; }
+    #modal-factura.modal .modal-body { overflow-y: auto; max-height: 68vh; overflow-x: visible; }
+    .art-dd { min-width: 340px; }
     @keyframes modalup { from { transform:translateY(18px);opacity:0 } to { transform:translateY(0);opacity:1 } }
 
     .modal-header {
@@ -1326,28 +1331,30 @@
 
 <!-- ════════ RENTABILIDAD ════════ -->
 <div id="p-rentabilidad" class="page" data-screen-label="Rentabilidad">
-  <div class="alert alert-w"><i class="ti ti-alert-circle"></i><span>3 productos con <strong>margen bajo</strong> — considera ajustar precios de venta o revisar costo de elaboración.</span><button class="btn btn-sm a-act" onclick="toast('Filtro aplicado','Mostrando solo margen bajo','ok','ti-filter')"><i class="ti ti-filter"></i>Ver bajos</button></div>
   <div class="card">
-    <div class="card-head"><div><div class="card-title"><i class="ti ti-chart-arrows-vertical"></i>Rentabilidad por producto</div><div class="card-sub">Costo de elaboración vs precio real de venta</div></div></div>
+    <div class="card-head">
+      <div><div class="card-title"><i class="ti ti-chart-arrows-vertical"></i>Rentabilidad por producto</div><div class="card-sub">Fuente: hoja "Costo de Producto" — costo de elaboración vs precio real de venta</div></div>
+      <!-- Filtros de rentabilidad -->
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button data-rent-filtro="mayor" class="btn btn-sm on" onclick="LS_UI.filtrarRentabilidad('mayor')"><i class="ti ti-trending-up"></i> Mayor ganancia</button>
+        <button data-rent-filtro="menor" class="btn btn-sm" onclick="LS_UI.filtrarRentabilidad('menor')"><i class="ti ti-trending-down"></i> Menor ganancia</button>
+        <button data-rent-filtro="mejorar" class="btn btn-sm" onclick="LS_UI.filtrarRentabilidad('mejorar')" style="color:var(--ambar)"><i class="ti ti-alert-triangle"></i> Pueden mejorar</button>
+        <button data-rent-filtro="bajo" class="btn btn-sm" onclick="LS_UI.filtrarRentabilidad('bajo')" style="color:var(--rojo)"><i class="ti ti-alert-circle"></i> Margen bajo</button>
+      </div>
+    </div>
     <div class="tbl-wrap">
       <table class="tbl" data-sortable>
         <thead><tr>
           <th class="sortable" data-type="text">Producto<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
-          <th>Sucursal</th>
+          <th>Categoría</th>
           <th class="sortable num" data-type="num">Costo elab.<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
           <th class="num">P. sugerido</th>
           <th class="num">P. real</th>
           <th class="sortable num" data-type="num">Margen<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
           <th>Estado</th>
         </tr></thead>
-        <tbody>
-          <tr><td class="t-strong">Frappe Cajeta 12oz</td><td>Coffee</td><td class="num" data-v="22.62">$22.62</td><td class="num">$65</td><td class="num">$83</td><td class="num up" data-v="72.7">72.7%</td><td><span class="badge b-s"><span class="bdot"></span>Ganando bien</span></td></tr>
-          <tr><td class="t-strong">Cappuccino Caramelo 20oz</td><td>Coffee</td><td class="num" data-v="34.04">$34.04</td><td class="num">$97</td><td class="num">$100</td><td class="num up" data-v="65.9">65.9%</td><td><span class="badge b-s"><span class="bdot"></span>Ganando bien</span></td></tr>
-          <tr><td class="t-strong">Chilaquiles Verdes Grande</td><td>Coffee</td><td class="num" data-v="40.52">$40.52</td><td class="num">$101</td><td class="num">$110</td><td class="num up" data-v="63.2">63.2%</td><td><span class="badge b-s"><span class="bdot"></span>Ganando bien</span></td></tr>
-          <tr><td class="t-strong">Ensalada César Grande</td><td>Helfy Fü</td><td class="num" data-v="62.32">$62.32</td><td class="num">$156</td><td class="num">$179</td><td class="num up" data-v="65.2">65.2%</td><td><span class="badge b-s"><span class="bdot"></span>Ganando bien</span></td></tr>
-          <tr><td class="t-strong">Frappe Brownie 20oz</td><td>Coffee</td><td class="num" data-v="47.23">$47.23</td><td class="num">$135</td><td class="num">$104</td><td class="num am" data-v="54.6">54.6%</td><td><span class="badge b-w"><span class="bdot"></span>Puede mejorar</span></td></tr>
-          <tr><td class="t-strong">Frappe Ferrero Rocher 20oz</td><td>Coffee</td><td class="num" data-v="50.36">$50.36</td><td class="num">$144</td><td class="num">$104</td><td class="num dn" data-v="51.6">51.6%</td><td><span class="badge b-d"><span class="bdot"></span>Margen bajo</span></td></tr>
-          <tr><td class="t-strong">Frappe Gansito 20oz</td><td>Coffee</td><td class="num" data-v="45.29">$45.29</td><td class="num">$129</td><td class="num">$104</td><td class="num dn" data-v="56.5">56.5%</td><td><span class="badge b-d"><span class="bdot"></span>Margen bajo</span></td></tr>
+        <tbody id="tabla-rentabilidad">
+          <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -1758,7 +1765,27 @@ function setPeriod(p, el) {
   state.period = p;
   document.querySelectorAll('#period-seg button').forEach(b => b.classList.toggle('on', b === el));
   updateSubtitle();
-  toast('Periodo actualizado', 'Mostrando datos de ' + PERIODS[p], 'ok', 'ti-calendar');
+
+  // Recalcular filtro de fechas
+  const hoy = new Date();
+  let desde = null;
+  if (p === 'hoy') {
+    desde = hoy.toISOString().split('T')[0];
+  } else if (p === 'semana') {
+    const d = new Date(hoy); d.setDate(d.getDate() - 7);
+    desde = d.toISOString().split('T')[0];
+  } else if (p === 'mes') {
+    desde = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}-01`;
+  } else if (p === 'ano') {
+    desde = `${hoy.getFullYear()}-01-01`;
+  }
+  state.desde = desde;
+
+  // Recargar la página activa con el nuevo período
+  const paginaActual = document.querySelector('.page.active')?.id;
+  if (paginaActual && typeof LS_UI !== 'undefined') {
+    LS_UI.invalidarCacheYRecargar(paginaActual);
+  }
 }
 
 /* ─── SORTABLE TABLES ─── */
@@ -2088,10 +2115,20 @@ const LS_API = (() => {
       }))
       .filter(r => {
         if (filtros.sucursal && filtros.sucursal !== 'all') {
-          return r.sucursal.toLowerCase().includes(filtros.sucursal.toLowerCase());
+          if (!r.sucursal.toLowerCase().includes(filtros.sucursal.toLowerCase())) return false;
         }
         if (filtros.mes) {
-          return r.fecha.includes(filtros.mes);
+          if (!r.fecha.includes(filtros.mes)) return false;
+        }
+        // Filtro por período global (state.desde)
+        const desde = typeof state !== 'undefined' && state.desde;
+        if (desde && r.fecha) {
+          // Normalizar fecha DD/MM/YYYY → YYYY-MM-DD para comparar
+          const partes = String(r.fecha).split('/');
+          if (partes.length === 3) {
+            const fechaISO = `${partes[2]}-${partes[1].padStart(2,'0')}-${partes[0].padStart(2,'0')}`;
+            if (fechaISO < desde) return false;
+          }
         }
         return true;
       });
@@ -2900,19 +2937,31 @@ const LS_UI = (() => {
     showLoading(containerId);
 
     try {
+      // Artículos de COMPRA (lo que se registra en facturas a proveedores)
       const articulos = await LS_API.getTopArticulos(20);
 
       if (articulos.length === 0) {
-        setEl(containerId, '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--tx-3)">Sin datos de ventas por artículo</td></tr>');
+        setEl(containerId, `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--tx-3)">
+          <i class="ti ti-chart-bar" style="font-size:32px;display:block;margin-bottom:12px;opacity:.3"></i>
+          <div style="font-weight:500;margin-bottom:6px">Sin datos de artículos aún</div>
+          <div style="font-size:12px;max-width:360px;margin:0 auto;line-height:1.5">
+            Los artículos estrella de <strong>ventas</strong> se cargarán cuando sincronices Parrot con datos de órdenes detalladas.<br><br>
+            Por ahora registra tus facturas de compra para ver los artículos más comprados.
+          </div>
+        </td></tr>`);
         return;
       }
+
+      // Nota aclaratoria sobre origen de datos
+      const notaEl = document.getElementById('articulos-nota-origen');
+      if (notaEl) notaEl.style.display = '';
 
       const maxTotal = articulos[0].total;
       setEl(containerId, articulos.map((a, i) => `
         <tr>
-          <td style="color:var(--tx-3);font-weight:600">${i + 1}</td>
+          <td style="color:var(--tx-3);font-weight:600;font-size:11px">${String(i+1).padStart(2,'0')}</td>
           <td style="font-weight:500">${a.nombre}</td>
-          <td style="font-family:var(--mono)">${a.cantidad}</td>
+          <td style="font-family:var(--mono);color:var(--tx-2)">${a.cantidad}</td>
           <td style="font-family:var(--mono);font-weight:600">${fmt(a.total)}</td>
           <td style="min-width:100px">${barHtml(a.total, maxTotal)}</td>
         </tr>`).join(''));
@@ -2925,34 +2974,64 @@ const LS_UI = (() => {
   // ══════════════════════════════════════════════════════════
   // RENTABILIDAD
   // ══════════════════════════════════════════════════════════
-  async function renderRentabilidad() {
+  // Caché de productos de rentabilidad para re-filtrar sin recargar
+  let _rentabilidadData = [];
+
+  async function renderRentabilidad(filtroOrden = 'mayor') {
     const containerId = 'tabla-rentabilidad';
     showLoading(containerId);
 
     try {
-      const productos = await LS_API.getCostoProducto();
+      // Solo cargar del Sheet si no tenemos caché
+      if (_rentabilidadData.length === 0) {
+        _rentabilidadData = await LS_API.getCostoProducto();
+      }
+      const productos = _rentabilidadData;
 
       if (productos.length === 0) {
-        setEl(containerId, '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--tx-3)">Sin datos de rentabilidad</td></tr>');
+        setEl(containerId, '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--tx-3)">Sin datos en Costo de Producto</td></tr>');
         return;
       }
 
-      const ordenados = productos.sort((a, b) => (b.margenReal || b.margen) - (a.margenReal || a.margen));
+      // Actualizar botones de filtro activo
+      document.querySelectorAll('[data-rent-filtro]').forEach(b => {
+        b.classList.toggle('on', b.dataset.rentFiltro === filtroOrden);
+      });
 
-      setEl(containerId, ordenados.slice(0, 30).map(p => {
+      // Ordenar según filtro
+      let ordenados = [...productos];
+      if (filtroOrden === 'mayor') {
+        ordenados.sort((a, b) => (b.margenReal || b.margen || 0) - (a.margenReal || a.margen || 0));
+      } else if (filtroOrden === 'menor') {
+        ordenados.sort((a, b) => (a.margenReal || a.margen || 0) - (b.margenReal || b.margen || 0));
+      } else if (filtroOrden === 'mejorar') {
+        ordenados = ordenados.filter(p => {
+          const m = p.margenReal || p.margen || 0;
+          return m >= 30 && m < 60;
+        }).sort((a, b) => (a.margenReal || a.margen || 0) - (b.margenReal || b.margen || 0));
+      } else if (filtroOrden === 'bajo') {
+        ordenados = ordenados.filter(p => (p.margenReal || p.margen || 0) < 40);
+        ordenados.sort((a, b) => (a.margenReal || a.margen || 0) - (b.margenReal || b.margen || 0));
+      }
+
+      if (ordenados.length === 0) {
+        setEl(containerId, `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--tx-3)">Sin productos en esta categoría</td></tr>`);
+        return;
+      }
+
+      setEl(containerId, ordenados.slice(0, 50).map(p => {
         const margen = p.margenReal || p.margen || 0;
-        const estado = margen >= 60 ? { cls: 'ok', txt: 'Ganando bien' }
+        const estado = margen >= 60 ? { cls: 'ok',  txt: 'Ganando bien' }
                      : margen >= 45 ? { cls: 'warn', txt: 'Puede mejorar' }
-                     :               { cls: 'err', txt: 'Margen bajo' };
+                     :               { cls: 'err',  txt: 'Margen bajo' };
+        const colMargen = margen >= 55 ? 'var(--verde)' : margen >= 40 ? 'var(--ambar)' : 'var(--rojo)';
         return `<tr>
-          <td style="font-weight:500">${p.articulo}</td>
-          <td>${p.categoria || '—'}</td>
-          <td style="font-family:var(--mono)">${fmtD(p.costoUnit)}</td>
-          <td style="font-family:var(--mono)">${fmtD(p.precioSugerido)}</td>
-          <td style="font-family:var(--mono)">${fmtD(p.precioReal || 0)}</td>
-          <td style="font-family:var(--mono);color:${margen >= 50 ? 'var(--verde)' : margen >= 40 ? 'var(--ambar)' : 'var(--rojo)'};font-weight:600">
-            ${fmtP(margen)}
-          </td>
+          <td style="font-weight:500">${p.articulo || '—'}</td>
+          <td style="font-size:11px;color:var(--tx-3)">${p.categoria || '—'}</td>
+          <td style="font-family:var(--mono);font-size:12px">${fmtD(p.costoUnit || p.costoBase || 0)}</td>
+          <td style="font-family:var(--mono);font-size:12px">${fmtD(p.precioSugerido || 0)}</td>
+          <td style="font-family:var(--mono);font-size:12px">${fmtD(p.precioReal || 0)}</td>
+          <td style="font-family:var(--mono);color:${colMargen};font-weight:700">${fmtP(margen)}</td>
           <td><span class="badge ${estado.cls}">${estado.txt}</span></td>
         </tr>`;
       }).join(''));
@@ -3798,12 +3877,20 @@ const LS_UI = (() => {
     onPageChange(pageId);
   }
 
+  // Limpiar caché y recargar la página activa (llamado al cambiar período)
+  function invalidarCacheYRecargar(pageId) {
+    LS_API.invalidarCache();
+    _loaded.delete(pageId);
+    onPageChange(pageId);
+  }
+
   // API pública del módulo UI
   return {
     renderDashboard, renderConciliacion, renderIngresos,
     renderFacturas, renderArticulos, renderRentabilidad,
     renderGastos, renderBalance, renderInventario,
-    onPageChange, reloadPage,
+    onPageChange, reloadPage, invalidarCacheYRecargar,
+    filtrarRentabilidad: (f) => renderRentabilidad(f),
     calcIngreso, guardarIngreso, guardarFactura,
     closeModal,
     // Abrir modales
