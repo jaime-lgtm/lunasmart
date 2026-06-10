@@ -1928,13 +1928,15 @@ const LS_API = (() => {
       DIFERENCIA: 13, OBSERVACIONES: 14,
     },
     ING_DETALLES: {
-      ID: 0, ID_INGRESOS: 1, FECHA: 2, ARTICULO: 3,
-      CANTIDAD: 4, PRECIO_UNIT: 5, SUBTOTAL: 6,
-      APLICA_IVA: 7, IVA_MONTO: 8, TOTAL: 9,
+      // Estructura real: A=Z(auto) B=ID_FACTURA C=FECHA D=ARTICULO
+      // E=CANTIDAD F=PRECIO_UNIT G=APLICA_IVA H=IVA_MONTO I=TOTAL
+      AUTO: 0, ID_FACTURA: 1, FECHA: 2, ARTICULO: 3,
+      CANTIDAD: 4, PRECIO_UNIT: 5, APLICA_IVA: 6, IVA_MONTO: 7, TOTAL: 8,
     },
     FACTURAS: {
+      // Estructura real del Sheet: sin columna TIPO
       ID: 0, FECHA: 1, UNIDAD: 2, PROVEEDOR: 3,
-      TIPO: 4, FOLIO: 5, FOTO: 6, TOTAL: 7,
+      FOLIO: 4, FOTO: 5, TOTAL: 6,
     },
     CONCILIACION: {
       FECHA: 0, TURNO: 1, VENTA_PARROT: 2, VENTA_TOTAL: 3,
