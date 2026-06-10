@@ -1164,29 +1164,29 @@
   </div>
   <div class="kpis k5">
     <div class="kpi">
-      <div class="kpi-top"><div><div class="kpi-label">Venta total · mes</div></div><div class="kpi-ico"><i class="ti ti-coin"></i></div></div>
-      <div class="kpi-val">$84,581</div>
-      <div class="kpi-sub"><span class="delta up"><i class="ti ti-trending-up"></i>12%</span> vs mayo</div>
+      <div class="kpi-top"><div><div class="kpi-label" id="kpi-venta-label">Venta total · mes</div></div><div class="kpi-ico"><i class="ti ti-coin"></i></div></div>
+      <div class="kpi-val" id="kpi-venta-total">—</div>
+      <div class="kpi-sub" id="kpi-venta-sub">Cargando...</div>
     </div>
     <div class="kpi">
       <div class="kpi-top"><div><div class="kpi-label">Gastos totales</div></div><div class="kpi-ico a"><i class="ti ti-receipt"></i></div></div>
-      <div class="kpi-val">$43,913</div>
-      <div class="kpi-sub">38 facturas registradas</div>
+      <div class="kpi-val" id="kpi-gastos">—</div>
+      <div class="kpi-sub" id="kpi-gastos-sub">Cargando...</div>
     </div>
     <div class="kpi">
       <div class="kpi-top"><div><div class="kpi-label">Utilidad neta</div></div><div class="kpi-ico g"><i class="ti ti-chart-pie"></i></div></div>
-      <div class="kpi-val up">$40,667</div>
-      <div class="kpi-sub"><span class="delta up">48.1%</span> margen</div>
+      <div class="kpi-val up" id="kpi-utilidad">—</div>
+      <div class="kpi-sub"><span class="delta up" id="kpi-margen">—</span> margen</div>
     </div>
     <div class="kpi">
-      <div class="kpi-top"><div><div class="kpi-label">Faltantes · mes</div></div><div class="kpi-ico r"><i class="ti ti-alert-triangle"></i></div></div>
-      <div class="kpi-val dn">$196</div>
-      <div class="kpi-sub">En 3 turnos de 41</div>
+      <div class="kpi-top"><div><div class="kpi-label" id="kpi-faltantes-label">Faltantes · mes</div></div><div class="kpi-ico r"><i class="ti ti-alert-triangle"></i></div></div>
+      <div class="kpi-val dn" id="kpi-faltantes">—</div>
+      <div class="kpi-sub" id="kpi-faltantes-sub">&nbsp;</div>
     </div>
     <div class="kpi">
       <div class="kpi-top"><div><div class="kpi-label">Exactitud caja</div></div><div class="kpi-ico d"><i class="ti ti-circle-check"></i></div></div>
-      <div class="kpi-val">93%</div>
-      <div class="kpi-sub"><span class="delta up">38</span> turnos cuadrados</div>
+      <div class="kpi-val" id="kpi-exactitud">—</div>
+      <div class="kpi-sub" id="kpi-exactitud-sub">&nbsp;</div>
     </div>
   </div>
   <div class="grid-21">
@@ -1840,9 +1840,9 @@ function setPeriod(p, el) {
   }
   state.desde = desde;
 
-  // Recargar la página activa con el nuevo período
-  const paginaActual = document.querySelector('.page.active')?.id;
-  if (paginaActual && typeof LS_UI !== 'undefined') {
+  // Recargar la página activa con el nuevo período (usar el id limpio de state.page)
+  const paginaActual = (typeof state !== 'undefined' && state.page) ? state.page : 'dashboard';
+  if (typeof LS_UI !== 'undefined' && LS_UI.invalidarCacheYRecargar) {
     LS_UI.invalidarCacheYRecargar(paginaActual);
   }
 }
@@ -2493,21 +2493,30 @@ const LS_API = (() => {
   // ══════════════════════════════════════════════════════════
 
   // KPIs del dashboard principal
-  async function getKPIsDashboard(mes) {
-    const [ingresos, facturas] = await Promise.all([
-      getIngresos({ mes }),
+  async function getKPIsDashboard(period) {
+    const { desde, hasta, label } = getRangoPeriodo(period || 'mes');
+    const [ingresosAll, facturasAll] = await Promise.all([
+      getIngresos(),
       getFacturas(),
     ]);
 
+    // Filtrar por el rango del período
+    const ingresos = ingresosAll.filter(r => _enRango(r.fecha, desde, hasta));
+    const facturas = facturasAll.filter(f => _enRango(f.fecha, desde, hasta));
+
     const ventaTotal   = ingresos.reduce((s, r) => s + r.ventaTotal, 0);
-    const gastoTotal   = facturas
-      .filter(f => mes ? f.fecha.includes(mes) : true)
-      .reduce((s, f) => s + f.total, 0);
+    const gastoTotal   = facturas.reduce((s, f) => s + f.total, 0);
     const utilidad     = ventaTotal - gastoTotal;
     const margen       = ventaTotal > 0 ? (utilidad / ventaTotal * 100) : 0;
     const faltantes    = ingresos
       .filter(r => r.diferencia < 0)
       .reduce((s, r) => s + Math.abs(r.diferencia), 0);
+
+    // Exactitud de caja: % de turnos que cuadran (diferencia ≈ 0)
+    const totalTurnos  = ingresos.length;
+    const turnosCuadran = ingresos.filter(r => Math.abs(r.diferencia) < 1).length;
+    const turnosFaltante = ingresos.filter(r => r.diferencia < -0.99).length;
+    const exactitud    = totalTurnos > 0 ? (turnosCuadran / totalTurnos * 100) : 0;
 
     // Por método de pago
     const efectivo      = ingresos.reduce((s, r) => s + r.efectivo, 0);
@@ -2516,10 +2525,10 @@ const LS_API = (() => {
     const rappi         = ingresos.reduce((s, r) => s + r.rappi, 0);
 
     return {
-      ventaTotal, gastoTotal, utilidad, margen,
-      faltantes, efectivo, tarjeta, transferencia, rappi,
-      totalIngresos: ingresos.length,
-      totalFacturas: facturas.length,
+      ventaTotal, gastoTotal, utilidad, margen, faltantes,
+      efectivo, tarjeta, transferencia, rappi,
+      totalIngresos: totalTurnos, totalFacturas: facturas.length,
+      exactitud, turnosCuadran, turnosFaltante, periodoLabel: label,
     };
   }
 
@@ -2651,6 +2660,37 @@ const LS_API = (() => {
     return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`;
   }
 
+  // ── RANGO DE FECHAS SEGÚN EL PERÍODO (hoy/semana/mes/ano) ────────────────
+  // Devuelve { desde, hasta, label } en formato ISO YYYY-MM-DD
+  function getRangoPeriodo(period) {
+    const hoyD = new Date();
+    const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    const anio = hoyD.getFullYear();
+    if (period === 'hoy') {
+      return { desde: iso(hoyD), hasta: iso(hoyD), label: 'hoy ' + iso(hoyD).split('-').reverse().join('/') };
+    }
+    if (period === 'semana') {
+      const d7 = new Date(hoyD); d7.setDate(d7.getDate() - 6);
+      return { desde: iso(d7), hasta: iso(hoyD), label: 'últimos 7 días' };
+    }
+    if (period === 'ano') {
+      return { desde: `${anio}-01-01`, hasta: `${anio}-12-31`, label: 'año ' + anio };
+    }
+    // mes (por defecto)
+    const m = hoyD.getMonth();
+    const primero = new Date(anio, m, 1);
+    const ultimo  = new Date(anio, m + 1, 0);
+    return { desde: iso(primero), hasta: iso(ultimo), label: meses[m] + ' ' + anio };
+  }
+
+  // ¿La fecha (cualquier formato) cae dentro de [desde, hasta]? (ISO comparables)
+  function _enRango(fecha, desde, hasta) {
+    const f = _fechaISO(fecha);
+    if (!f) return false;
+    return f >= desde && f <= hasta;
+  }
+
   // Registrar artículo detalle de factura → ARTICULOS DETALLES
   async function registrarArticuloDetalle(datos) {
     return escribirViaScript('registrarArticuloDetalle', {
@@ -2670,8 +2710,10 @@ const LS_API = (() => {
   }
 
   // Ventas agrupadas por sucursal (para Top sucursales real)
-  async function getVentasPorSucursal(mes) {
-    const ingresos = await getIngresos({ mes });
+  async function getVentasPorSucursal(period) {
+    const { desde, hasta } = getRangoPeriodo(period || 'mes');
+    const ingresosAll = await getIngresos();
+    const ingresos = ingresosAll.filter(r => _enRango(r.fecha, desde, hasta));
     const agg = {};
     ingresos.forEach(r => {
       if (!r.sucursal || r.sucursal.trim() === '') return;
@@ -2705,7 +2747,7 @@ const LS_API = (() => {
     getKPIsDashboard, getTopArticulos, getTopProveedores,
     getGastoPorCategoria, getResumenMensual, getAlertasInventario,
     // Utilidades
-    parseNum, formatMXN, formatMXNDec, formatPct, hoy, mesFiltro,
+    parseNum, formatMXN, formatMXNDec, formatPct, hoy, mesFiltro, getRangoPeriodo,
     invalidarCache,
     // Configurar
     setConfig(cfg) { Object.assign(CONFIG, cfg); },
@@ -2798,21 +2840,35 @@ const LS_UI = (() => {
   // DASHBOARD
   // ══════════════════════════════════════════════════════════
   async function renderDashboard() {
-    const mes = LS_API.mesFiltro();
+    const period = (typeof state !== 'undefined' && state.period) ? state.period : 'mes';
 
     try {
       const [kpis, topArt, concilia] = await Promise.all([
-        LS_API.getKPIsDashboard(mes),
+        LS_API.getKPIsDashboard(period),
         LS_API.getTopArticulos(5),
         LS_API.getConciliacion(),
       ]);
 
-      // KPIs principales
+      // KPIs principales (datos REALES del Sheet, filtrados por período)
       setTxt('kpi-venta-total',   fmt(kpis.ventaTotal));
       setTxt('kpi-gastos',        fmt(kpis.gastoTotal));
       setTxt('kpi-utilidad',      fmt(kpis.utilidad));
       setTxt('kpi-faltantes',     fmt(kpis.faltantes));
       setTxt('kpi-margen',        fmtP(kpis.margen));
+      setTxt('kpi-exactitud',     fmtP(kpis.exactitud));
+
+      // Subtítulos de las tarjetas
+      const lblPeriodo = period === 'mes' ? 'mes' : period === 'ano' ? 'año' : period === 'semana' ? 'semana' : 'hoy';
+      setTxt('kpi-venta-label',   'Venta total · ' + lblPeriodo);
+      setTxt('kpi-faltantes-label', 'Faltantes · ' + lblPeriodo);
+      setTxt('kpi-venta-sub',     kpis.totalIngresos + ' turno(s) registrados');
+      setTxt('kpi-gastos-sub',    kpis.totalFacturas + ' factura(s) registradas');
+      setTxt('kpi-faltantes-sub', 'En ' + kpis.turnosFaltante + ' turno(s) de ' + kpis.totalIngresos);
+      setTxt('kpi-exactitud-sub', kpis.turnosCuadran + ' turno(s) cuadrados');
+
+      // Subtítulo general del dashboard
+      const dashSub = document.querySelector('#p-dashboard .tb-sub, .topbar .tb-sub');
+      // (el subtítulo del topbar se actualiza con updateSubtitle; aquí solo KPIs)
 
       // Métodos de pago (actualizar texto en los elementos existentes)
       setTxt('dash-efectivo',      fmt(kpis.efectivo));
@@ -2822,11 +2878,10 @@ const LS_UI = (() => {
 
       // ── TOP SUCURSALES con datos reales ──────────────────────
       try {
-        const sucursales = await LS_API.getVentasPorSucursal(mes);
+        const sucursales = await LS_API.getVentasPorSucursal(period);
         const sucEl = document.getElementById('dash-sucursales-list');
         const subEl = document.getElementById('dash-suc-sub');
-        const mesNom = {'01':'enero','02':'febrero','03':'marzo','04':'abril','05':'mayo','06':'junio','07':'julio','08':'agosto','09':'septiembre','10':'octubre','11':'noviembre','12':'diciembre'};
-        if (subEl) subEl.textContent = 'Venta acumulada — ' + (mesNom[mes] || 'mes actual') + ' 2026';
+        if (subEl) subEl.textContent = 'Venta — ' + (kpis.periodoLabel || 'período actual');
         if (sucEl && sucursales.length > 0) {
           const maxVal = sucursales[0].total;
           // Configuración real de sucursales (actualizado junio 2026)
@@ -3954,24 +4009,17 @@ const LS_UI = (() => {
       return;
     }
     const provs = window._proveedoresCache || [];
-    // 1) ID guardado al seleccionar de la lista
-    let proveedorCodigo = provInput?.dataset.provId || '';
-    // 2) Si no, buscar por nombre exacto en la lista
-    if (!proveedorCodigo) {
-      const match = provs.find(p => _norm(p.nombre) === _norm(proveedorNombre));
-      if (match) proveedorCodigo = match.id;
-    }
-    // 3) Si sigue sin código, es proveedor nuevo → registrarlo y usar el ID devuelto
-    if (!proveedorCodigo) {
+    // Si el proveedor escrito no existe en la lista, registrarlo como nuevo
+    const existe = provs.some(p => _norm(p.nombre) === _norm(proveedorNombre));
+    if (!existe) {
       const resP = await LS_API.registrarProveedor({ nombre: proveedorNombre });
       if (resP?.status !== 'ok' && resP?.msg !== 'El proveedor ya existe') {
         typeof toast !== 'undefined' && toast('Error', 'No se pudo registrar el proveedor', 'err', 'ti-alert-circle');
         return;
       }
-      proveedorCodigo = resP?.idProveedor || proveedorNombre;
     }
-    // El valor que se escribe en FACTURAS es el código (consistente con históricos)
-    const proveedor = proveedorCodigo;
+    // Se guarda el NOMBRE del proveedor en FACTURAS (legible, según preferencia)
+    const proveedor = proveedorNombre;
 
     // Recopilar artículos
     const lineas = [];
@@ -3981,9 +4029,7 @@ const LS_UI = (() => {
       const uni    = linea.querySelector('.fl-uni')?.value    || '';
       const precio = parseFloat(linea.querySelector('.fl-precio')?.value || 0) || 0;
       if (art && qty > 0 && precio > 0) {
-        // Redondear el importe a 2 decimales (centavos)
-        const subtotal = Math.round(qty * precio * 100) / 100;
-        lineas.push({ articulo: art, cantidad: qty, unidad: uni, precioUnit: precio, subtotal });
+        lineas.push({ articulo: art, cantidad: qty, unidad: uni, precioUnit: precio, subtotal: qty * precio });
       }
     });
 
@@ -3992,7 +4038,7 @@ const LS_UI = (() => {
       return;
     }
 
-    const totalFactura = Math.round(lineas.reduce((s, l) => s + l.subtotal, 0) * 100) / 100;
+    const totalFactura = lineas.reduce((s, l) => s + l.subtotal, 0);
     // Enviar la fecha en formato ISO (YYYY-MM-DD) para que Google Sheets NO la
     // malinterprete como mes/día. El Sheet la guarda y muestra como dd/MM/yyyy.
     const fecha        = s('fact-fecha');
