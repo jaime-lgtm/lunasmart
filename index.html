@@ -2119,10 +2119,16 @@ const LS_API = (() => {
       // IMPORTANTE: Content-Type debe ser 'text/plain' para evitar el preflight
       // CORS de OPCIONES que Apps Script no maneja. El cuerpo sigue siendo JSON
       // válido que doPost() parsea con JSON.parse(e.postData.contents).
+      // Enviar los datos TAMBIÉN aplanados al nivel superior (además de en .datos)
+      // para que funcione con cualquier versión del Apps Script (lee b.fecha o b.datos.fecha).
+      const cuerpo = { accion, ...payload };
+      if (payload && payload.datos && typeof payload.datos === 'object') {
+        Object.assign(cuerpo, payload.datos);
+      }
       const resp = await fetch(CONFIG.APPS_SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ accion, ...payload }),
+        body: JSON.stringify(cuerpo),
         redirect: 'follow',
       });
       const data = await resp.json();
@@ -3576,6 +3582,8 @@ const LS_UI = (() => {
   function filtrarProveedores(input) {
     const dd = document.getElementById('prov-dd');
     if (!dd) return;
+    // Al escribir, limpiar el ID guardado (solo se fija al seleccionar de la lista)
+    input.dataset.provId = '';
     const val = input.value;
     const q = _norm(val);
     const provs = window._proveedoresCache || [];
@@ -3591,8 +3599,10 @@ const LS_UI = (() => {
 
     const row = (p) => {
       const nom = p.nombre.replace(/'/g,"&#39;");
-      return `<div class="art-opt" onmousedown="event.preventDefault();LS_UI.seleccionarProveedor('${nom}')">
+      const pid = String(p.id || '').replace(/'/g,"&#39;");
+      return `<div class="art-opt" onmousedown="event.preventDefault();LS_UI.seleccionarProveedor('${nom}','${pid}')">
         <div class="art-opt-nom">${p.nombre}</div>
+        ${pid ? `<div class="art-opt-det">${pid}</div>` : ''}
       </div>`;
     };
 
@@ -3606,7 +3616,7 @@ const LS_UI = (() => {
     if (val.trim() && !existeExacto) {
       const valEsc = val.replace(/'/g,"&#39;");
       html += `<div class="art-opt" style="display:flex;align-items:center;gap:9px;color:var(--terra-claro);border-top:1px solid var(--line-2);background:rgba(177,70,24,0.05)"
-        onmousedown="event.preventDefault();LS_UI.seleccionarProveedor('${valEsc}',true)">
+        onmousedown="event.preventDefault();LS_UI.seleccionarProveedor('${valEsc}','',true)">
         <i class="ti ti-circle-plus" style="font-size:18px;flex-shrink:0"></i>
         <span style="font-size:13px">Usar <strong>"${val}"</strong> como proveedor nuevo</span>
       </div>`;
@@ -3617,13 +3627,15 @@ const LS_UI = (() => {
     _posicionarDropdown(input, dd);
   }
 
-  function seleccionarProveedor(nombre, esNuevo) {
+  function seleccionarProveedor(nombre, id, esNuevo) {
     const input = document.getElementById('fact-proveedor');
-    if (input) input.value = nombre;
+    if (input) {
+      input.value = nombre;
+      input.dataset.provId = id || '';       // código que se guardará en FACTURAS
+      input.dataset.nuevo  = esNuevo ? '1' : '';
+    }
     const dd = document.getElementById('prov-dd');
     if (dd) dd.style.display = 'none';
-    // Marcar si es nuevo (para guardarFactura)
-    if (input) input.dataset.nuevo = esNuevo ? '1' : '';
   }
 
   // ── BUSCADOR DE ARTÍCULOS (dropdown personalizado) ───────────────────────
@@ -3934,22 +3946,32 @@ const LS_UI = (() => {
   async function guardarFactura() {
     const s = id => document.getElementById(id)?.value || '';
 
-    // Proveedor — del buscador (texto libre)
-    let proveedor = s('fact-proveedor').trim();
-    if (!proveedor) {
+    // ── Proveedor: se MUESTRA el nombre pero se GUARDA el código (ID_PROVEEDOR) ──
+    const provInput = document.getElementById('fact-proveedor');
+    const proveedorNombre = (provInput?.value || '').trim();
+    if (!proveedorNombre) {
       typeof toast !== 'undefined' && toast('Falta proveedor', 'Escribe o selecciona un proveedor', 'err', 'ti-alert-circle');
       return;
     }
-    // Si el proveedor no existe en la lista, registrarlo como nuevo automáticamente
     const provs = window._proveedoresCache || [];
-    const existe = provs.some(p => _norm(p.nombre) === _norm(proveedor));
-    if (!existe) {
-      const resP = await LS_API.registrarProveedor({ nombre: proveedor });
+    // 1) ID guardado al seleccionar de la lista
+    let proveedorCodigo = provInput?.dataset.provId || '';
+    // 2) Si no, buscar por nombre exacto en la lista
+    if (!proveedorCodigo) {
+      const match = provs.find(p => _norm(p.nombre) === _norm(proveedorNombre));
+      if (match) proveedorCodigo = match.id;
+    }
+    // 3) Si sigue sin código, es proveedor nuevo → registrarlo y usar el ID devuelto
+    if (!proveedorCodigo) {
+      const resP = await LS_API.registrarProveedor({ nombre: proveedorNombre });
       if (resP?.status !== 'ok' && resP?.msg !== 'El proveedor ya existe') {
         typeof toast !== 'undefined' && toast('Error', 'No se pudo registrar el proveedor', 'err', 'ti-alert-circle');
         return;
       }
+      proveedorCodigo = resP?.idProveedor || proveedorNombre;
     }
+    // El valor que se escribe en FACTURAS es el código (consistente con históricos)
+    const proveedor = proveedorCodigo;
 
     // Recopilar artículos
     const lineas = [];
