@@ -148,6 +148,8 @@ function doGet(e) {
     getDATAINGRESOS:               HOJAS.DATA_INGRESOS,
   };
 
+  if (accion === 'getUSUARIOS') return _getUsuarios();
+
   if (map[accion]) {
     return _json(_hoja(map[accion]));
   }
@@ -218,6 +220,9 @@ function _registrarIngreso(b) {
 }
 
 // ── REGISTRAR FACTURA ──────────────────────────────────────────────────────
+// Estructura real del Sheet FACTURAS (7 cols, sin TIPO):
+// A=ID_FACTURA | B=FECHA | C=UNIDAD DE NEGOCIO | D=PROVEEDOR |
+// E=FOLIO/TICKET | F=FOTO COMPROBANTE | G=TOTAL FACTURA
 function _registrarFactura(b) {
   try {
     const sh = _getSheet(HOJAS.FACTURAS);
@@ -225,12 +230,11 @@ function _registrarFactura(b) {
 
     _escribirFila(sh, [
       id,
-      b.fecha    || _fechaHoy(),
-      b.unidad   || '',
-      b.proveedor|| '',
-      b.tipo     || '',
-      b.folio    || '',
-      b.foto     || '',
+      b.fecha     || _fechaHoy(),
+      b.unidad    || '',
+      b.proveedor || '',
+      b.folio     || '',   // col E (sin TIPO intermedio)
+      b.foto      || '',
       parseFloat(b.total || 0),
     ]);
 
@@ -241,36 +245,51 @@ function _registrarFactura(b) {
 }
 
 // ── REGISTRAR ARTÍCULO DETALLE ─────────────────────────────────────────────
+// Estructura real del Sheet ARTICULOS DETALLES (9 cols):
+// A=Z(auto) | B=ID_FACTURA | C=FECHA | D=ARTICULO | E=CANTIDAD |
+// F=PRECIO UNIT | G=¿APLICA IVA? | H=IVA MONTO | I=TOTAL
+// → Escribimos desde col B (dejamos col A para el contador automático del Sheet)
 function _registrarArticuloDetalle(b) {
   try {
     const sh = _getSheet(HOJAS.ART_DETALLES);
-    const id = _nextId(HOJAS.ART_DETALLES, 'ARTDET');
-    const qty   = parseFloat(b.cantidad  || 0);
-    const precio= parseFloat(b.precioUnit|| 0);
+    const qty   = parseFloat(b.cantidad   || 0);
+    const precio= parseFloat(b.precioUnit || 0);
     const sub   = qty * precio;
-    const iva   = b.aplicaIva ? sub * 0.16 : 0;
+    const aplica= !!(b.aplicaIva);
+    const iva   = aplica ? sub * 0.16 : 0;
     const total = sub + iva;
 
-    _escribirFila(sh, [
-      id,
-      b.idFactura  || '',
-      b.fecha      || _fechaHoy(),
-      b.articulo   || '',
-      qty,
-      b.unidadMed  || '',
-      precio,
-      sub,
-      b.aplicaIva  ? 'SI' : 'NO',
-      total,
-    ]);
+    // Encontrar primera fila vacía (buscando en col B, ya que col A es contador)
+    var fila = _primeraFilaVaciaDesdeCol(sh, 2);
+    sh.getRange(fila, 2, 1, 8).setValues([[
+      b.idFactura  || '',   // B
+      b.fecha      || _fechaHoy(), // C
+      b.articulo   || '',   // D
+      qty,                  // E
+      precio,               // F
+      aplica ? 'SI' : 'NO', // G
+      iva,                  // H
+      total,                // I
+    ]]);
 
     // Actualizar Costo Dinámico en Catálogo Maestro
     _actualizarCostoDinamico(b.articulo, precio);
 
-    return _json({ status: 'ok', idDetalle: id });
+    return _json({ status: 'ok', idDetalle: 'ARTDET-' + fila });
   } catch(e) {
     return _err(e.message);
   }
+}
+
+/** Variante de _primeraFilaVacia que busca en la columna indicada (base 1). */
+function _primeraFilaVaciaDesdeCol(sh, col) {
+  var vals = sh.getDataRange().getValues();
+  for (var i = 1; i < vals.length; i++) {
+    if (String(vals[i][col - 1]).trim() === '') {
+      return i + 1;
+    }
+  }
+  return vals.length + 1;
 }
 
 /** Actualiza la columna Costo Dinámico (col C) en Catálogo Maestro */
@@ -476,3 +495,74 @@ function _sincronizarParrotFallback() {
     return _json({ status: 'ok', msg: 'Parrot fallback falló: ' + e.message, registros: 0 });
   }
 }
+
+// ── AUTENTICACIÓN DESDE USUARIOS_APP ──────────────────────────────────────
+// Permite al frontend verificar credenciales contra la hoja USUARIOS_APP
+// Llamada: GET ?accion=getUSUARIOS (devuelve lista sin contraseñas)
+//          POST { accion:'login', email, password }
+// NOTA: por seguridad real implementar OAuth; esto es suficiente para uso interno.
+function _getUsuarios() {
+  try {
+    var sh = _getSheet('USUARIOS_APP');
+    var vals = sh.getDataRange().getValues();
+    // Devolver solo email, nombre, rol, sucursal (sin contraseñas)
+    var users = vals.slice(1).filter(function(r){ return r[0]; }).map(function(r){
+      return { email: r[0], nombre: r[1], rol: r[2], sucursal: r[3] };
+    });
+    return _json({ status: 'ok', data: users });
+  } catch(e) { return _err(e.message); }
+}
+
+// ── REORGANIZAR HOJAS ──────────────────────────────────────────────────────
+// Llamar una sola vez desde Apps Script editor: reorganizarHojas()
+// NO expuesto como endpoint web por seguridad.
+function reorganizarHojas() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+
+  // Orden deseado (22 hojas)
+  var orden = [
+    // 📊 OPERACIONES DIARIAS
+    'INGRESOS',
+    'CONCILIACION',
+    'FACTURAS',
+    'ARTICULOS DETALLES',
+    'INGRESOS DETALLES',
+    // 🍽️ MENÚ Y COSTOS
+    'Catálogo Maestro',
+    'Recetas',
+    'Costo de Producto',
+    'Simulador Cotizador',
+    'DATA_INGRESOS',
+    // 📦 INVENTARIO
+    'BD_INVENTARIO_GENERAL',
+    // 👥 MAESTROS
+    'DATOS_CLIENTES',
+    'DATOS_PROVEEDORES',
+    'DATOS_CATEGORIASSUBCATEGORIAS',
+    'USUARIOS_APP',
+    // 📈 ANÁLISIS Y REPORTES
+    'Dashboard Anual',
+    'Analisis Financiero 💰',
+    'Planificación de Gastos',
+    // 🗄️ SISTEMA / COTIZACIONES
+    'DATA_COTIZACIONES_MAESTRO',
+    'ID_COTIZACION_DETALLE',
+    'DATA_APP',
+    // 🗂️ ARCHIVO LEGADO
+    'ZEGRESOS:VIEJO',
+  ];
+
+  for (var i = 0; i < orden.length; i++) {
+    var sh = ss.getSheetByName(orden[i]);
+    if (sh) {
+      ss.setActiveSheet(sh);
+      ss.moveActiveSheet(i + 1);
+      Utilities.sleep(100); // evitar rate limit
+    }
+  }
+
+  Logger.log('✅ Hojas reorganizadas correctamente.');
+}
+
+// ── EXPONER getUSUARIOS en doGet ───────────────────────────────────────────
+// (ya incluido en el map de doGet de arriba — agregar manualmente si se necesita)
