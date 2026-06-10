@@ -3011,7 +3011,24 @@ const LS_UI = (() => {
   // ══════════════════════════════════════════════════════════
   // FORMULARIOS — NUEVO INGRESO
   // ══════════════════════════════════════════════════════════
-  function buildFormIngreso() {
+  async function buildFormIngreso() {
+    // Cargar clientes/turnos desde DATOS_CLIENTES (ids 00013-00015 = turnos)
+    let turnoOpts = `
+      <option value="TURNO MAÑANA">Turno Mañana</option>
+      <option value="TURNO TARDE">Turno Tarde</option>
+      <option value="TURNO MAÑANA &amp; TARDE">Mañana &amp; Tarde</option>`;
+    try {
+      const clientes = await LS_API.getClientes();
+      const turnos = clientes.filter(c =>
+        c.id === 'INGRESOS-00013' || c.id === 'INGRESOS-00014' || c.id === 'INGRESOS-00015'
+      );
+      if (turnos.length > 0) {
+        turnoOpts = turnos.map(c =>
+          `<option value="${c.nombre}">${c.nombre.replace('TURNO ', 'Turno ')}</option>`
+        ).join('');
+      }
+    } catch(_) {}
+
     openModal(`
     <div class="modal-overlay" id="modal-ingreso" onclick="if(event.target===this)_cerrarModal()">
       <div class="modal" style="max-width:620px">
@@ -3043,9 +3060,7 @@ const LS_UI = (() => {
             <div class="ff">
               <label>Turno</label>
               <select id="ing-turno">
-                <option value="INGRESOS-00013">Turno Mañana</option>
-                <option value="INGRESOS-00015">Turno Tarde</option>
-                <option value="INGRESOS-00014">Mañana & Tarde</option>
+                ${turnoOpts}
               </select>
             </div>
           </div>
@@ -3168,11 +3183,17 @@ const LS_UI = (() => {
   // FORMULARIO — NUEVA FACTURA
   // ══════════════════════════════════════════════════════════
   async function buildFormFactura() {
-    const [proveedores, catalogo] = await Promise.all([
+    const [proveedores, catalogo, dataIngresos] = await Promise.all([
       LS_API.getProveedores(),
       LS_API.getCatalogo(),
+      LS_API.leerHoja('DATA_INGRESOS'),
     ]);
     window._catalogoCache = catalogo;
+
+    // Artículos de DATA_INGRESOS (catálogo de productos vendibles)
+    window._dataIngresosCache = (dataIngresos || []).slice(1)
+      .filter(r => r[1])
+      .map(r => ({ articulo: r[1], categoria: r[2] || '', precio: r[3] || 0 }));
 
     const provOpts = proveedores.length > 0
       ? proveedores.map(p => `<option value="${p.nombre}">${p.nombre}</option>`).join('')
@@ -3183,7 +3204,7 @@ const LS_UI = (() => {
       <div class="modal" style="max-width:780px">
         <div class="modal-header">
           <div>
-            <div class="modal-title">Nueva factura de proveedor</div>
+            <div class="modal-title">Nueva factura / egreso</div>
             <div class="modal-sub">Registra el comprobante con desglose de artículos</div>
           </div>
           <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
@@ -3193,6 +3214,22 @@ const LS_UI = (() => {
 
           <!-- CABECERA: grid 3 columnas -->
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--line)">
+
+            <!-- TIPO DE EGRESO — controla el catálogo de artículos -->
+            <div class="ff" style="grid-column:1/-1">
+              <label>Tipo de egreso</label>
+              <div style="display:flex;gap:8px">
+                <button id="fact-tipo-prov" onclick="LS_UI.switchTipoFactura('proveedor')"
+                  style="flex:1;padding:10px;border-radius:var(--r);border:2px solid var(--terra);background:rgba(177,70,24,0.12);color:var(--terra-claro);font-weight:600;cursor:pointer;font-family:inherit;font-size:12.5px;transition:all .15s">
+                  <i class="ti ti-file-invoice"></i> Factura de proveedor
+                </button>
+                <button id="fact-tipo-tick" onclick="LS_UI.switchTipoFactura('ticket')"
+                  style="flex:1;padding:10px;border-radius:var(--r);border:1px solid var(--line-2);background:transparent;color:var(--tx-3);font-weight:500;cursor:pointer;font-family:inherit;font-size:12.5px;transition:all .15s">
+                  <i class="ti ti-receipt"></i> Ticket / compra manual
+                </button>
+              </div>
+              <input type="hidden" id="fact-tipo-val" value="proveedor">
+            </div>
 
             <div class="ff" style="grid-column:1/-1">
               <label>Proveedor</label>
@@ -3284,9 +3321,39 @@ const LS_UI = (() => {
     setTimeout(() => { LS_UI.agregarLineaFactura(); LS_UI.agregarLineaFactura(); }, 80);
   }
 
-    function onProveedorChange(sel) {
+  function onProveedorChange(sel) {
     const wrap = document.getElementById('fact-nuevo-prov-wrap');
     if (wrap) wrap.style.display = sel.value === '__nuevo__' ? '' : 'none';
+  }
+
+  /** Cambia entre "Factura de proveedor" (Catálogo Maestro) y "Ticket manual" (DATA_INGRESOS) */
+  function switchTipoFactura(tipo) {
+    document.getElementById('fact-tipo-val').value = tipo;
+    const btnProv = document.getElementById('fact-tipo-prov');
+    const btnTick = document.getElementById('fact-tipo-tick');
+    if (tipo === 'proveedor') {
+      btnProv.style.cssText += ';border:2px solid var(--terra);background:rgba(177,70,24,0.12);color:var(--terra-claro);font-weight:600';
+      btnTick.style.cssText += ';border:1px solid var(--line-2);background:transparent;color:var(--tx-3);font-weight:500';
+    } else {
+      btnTick.style.cssText += ';border:2px solid var(--dorado);background:rgba(201,168,76,0.12);color:var(--dorado);font-weight:600';
+      btnProv.style.cssText += ';border:1px solid var(--line-2);background:transparent;color:var(--tx-3);font-weight:500';
+    }
+    // Actualizar datalists en todas las líneas existentes
+    document.querySelectorAll('.fact-linea').forEach(linea => {
+      _actualizarDatalist(linea, tipo);
+    });
+  }
+
+  /** Regenera el datalist de una línea según el tipo de factura activo */
+  function _actualizarDatalist(linea, tipo) {
+    const dl = linea.querySelector('datalist');
+    if (!dl) return;
+    const fuente = tipo === 'ticket'
+      ? (window._dataIngresosCache || [])
+      : (window._catalogoCache || []);
+    dl.innerHTML = fuente.map(a =>
+      `<option value="${a.articulo}" data-unidad="${a.unidad || ''}" data-costo="${a.costoBase || a.precio || 0}">`
+    ).join('');
   }
 
   // Pasar al paso 2
@@ -3315,9 +3382,13 @@ const LS_UI = (() => {
   function agregarLineaFactura() {
     const container = document.getElementById('fact-lineas');
     if (!container) return;
-    const cat = window._catalogoCache || [];
-    const artOpts = cat.map(a =>
-      `<option value="${a.articulo}" data-unidad="${a.unidad || ''}" data-costo="${a.costoBase || 0}">`
+    // Usar el catálogo correcto según el tipo de egreso seleccionado
+    const tipo = document.getElementById('fact-tipo-val')?.value || 'proveedor';
+    const fuente = tipo === 'ticket'
+      ? (window._dataIngresosCache || [])
+      : (window._catalogoCache || []);
+    const artOpts = fuente.map(a =>
+      `<option value="${a.articulo}" data-unidad="${a.unidad || ''}" data-costo="${a.costoBase || a.precio || 0}">`
     ).join('');
 
     const div = document.createElement('div');
@@ -3522,9 +3593,10 @@ const LS_UI = (() => {
     calcIngreso, guardarIngreso, guardarFactura,
     closeModal,
     // Abrir modales
-    async abrirNuevoIngreso() { buildFormIngreso(); },
+    async abrirNuevoIngreso() { await buildFormIngreso(); },
     async abrirNuevaFactura() { await buildFormFactura(); },
     onProveedorChange,
+    switchTipoFactura,
     factPaso2,
     agregarLineaFactura,
     onArticuloInput,
