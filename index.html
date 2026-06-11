@@ -2563,17 +2563,39 @@ const LS_API = (() => {
   }
 
   // Gasto por categoría
+  // Unifica variantes de categoría (singular/plural, mayúsculas, tildes, espacios)
+  function _normCategoria(cat) {
+    let c = String(cat || '').trim().toUpperCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, ''); // quitar tildes
+    if (!c) return 'Sin categoría';
+    // Canonizar variantes conocidas
+    const CANON = {
+      'COSTO DE VENTA':        'COSTOS DE VENTA',
+      'COSTOS DE VENTA':       'COSTOS DE VENTA',
+      'GASTO OPERATIVO':       'GASTOS OPERATIVOS',
+      'GASTOS OPERATIVOS':     'GASTOS OPERATIVOS',
+      'ACTIVOS / EQUIPO':      'ACTIVOS Y EQUIPAMIENTO',
+      'ACTIVOS Y EQUIPAMIENTO':'ACTIVOS Y EQUIPAMIENTO',
+      'GASTO MANO DE OBRA':    'MANO DE OBRA',
+      'GASTOS MANO DE OBRA':   'MANO DE OBRA',
+      'MANO DE OBRA':          'MANO DE OBRA',
+      'GASTO ADMINISTRATIVO':  'GASTOS ADMINISTRATIVOS',
+      'GASTOS ADMINISTRATIVOS':'GASTOS ADMINISTRATIVOS',
+    };
+    return CANON[c] || c;
+  }
+
   async function getGastoPorCategoria(desde, hasta) {
     // Estructura de costos REAL: agrupa el gasto por la CATEGORÍA del artículo
-    // (del Catálogo Maestro), no por sucursal.
+    // (del Catálogo Maestro), unificando variantes/typos.
     const [detalles, catalogo] = await Promise.all([
       getArticulosDetalle(),
       getCatalogo(),
     ]);
-    // Mapa artículo (normalizado) → categoría
+    // Mapa artículo (normalizado) → categoría canónica
     const catMap = {};
     catalogo.forEach(a => {
-      if (a.articulo) catMap[String(a.articulo).trim().toLowerCase()] = a.categoria || 'Sin categoría';
+      if (a.articulo) catMap[String(a.articulo).trim().toLowerCase()] = _normCategoria(a.categoria);
     });
     const filtrados = (desde && hasta)
       ? detalles.filter(d => _enRango(d.fecha, desde, hasta))
