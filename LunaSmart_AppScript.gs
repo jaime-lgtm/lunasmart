@@ -650,5 +650,134 @@ function reorganizarHojas() {
   Logger.log('✅ Hojas reorganizadas correctamente.');
 }
 
-// ── EXPONER getUSUARIOS en doGet ───────────────────────────────────────────
-// (ya incluido en el map de doGet de arriba — agregar manualmente si se necesita)
+// ══════════════════════════════════════════════════════════════════════════
+// CATEGORIZACIÓN Y LISTAS DESPLEGABLES DEL CATÁLOGO MAESTRO
+// ══════════════════════════════════════════════════════════════════════════
+
+// ── 1) ASIGNAR CATEGORÍA/SUBCATEGORÍA A ARTÍCULOS SIN CLASIFICAR ───────────
+// Ejecuta esta función UNA VEZ desde el editor. Asigna las categorías a los
+// artículos que estaban vacíos (según clasificación revisada).
+function asignarCategoriasFaltantes() {
+  var sh = _getSheet(HOJAS.CATALOGO);
+  var datos = sh.getDataRange().getValues();
+
+  // Mapa ARTICULO → [CATEGORIA, SUBCATEGORIA]
+  var MAP = {
+    'ENDULZANTE NATURAL STEVIA':      ['COSTO DE VENTA', 'ABARROTES'],
+    'GARRAFÓN DE AGUA 19LTS':         ['COSTO DE VENTA', 'AGUAS Y REFRESCOS'],
+    'MANCHEGO DURANGUEÑO':            ['COSTO DE VENTA', 'LACTEOS'],
+    'TAPATÍO BOWL.':                  ['COSTO DE VENTA', 'ADEREZOS'],
+    'CARM SYRP':                      ['COSTO DE VENTA', 'CAFÉ E INSUMOS'],
+    'PIZZAS':                         ['COSTO DE VENTA', 'CONGELADOS'],
+    'ESPONJA CH':                     ['GASTO OPERATIVO', 'LIMPIEZA'],
+    'SALSA HUTS':                     ['COSTO DE VENTA', 'ADEREZOS'],
+    'CIABATTA RÚSTICA':               ['COSTO DE VENTA', 'PANADERIA Y REPOSTERIA'],
+    'ALITAS':                         ['COSTO DE VENTA', 'PROTEINAS'],
+    'PECHUGA C HUESO':                ['COSTO DE VENTA', 'PROTEINAS'],
+    'CIABATTA MULT':                  ['COSTO DE VENTA', 'PANADERIA Y REPOSTERIA'],
+    'QUESO AMERICANO':                ['COSTO DE VENTA', 'LACTEOS'],
+    'MANZANA GRANNY':                 ['COSTO DE VENTA', 'FRUTAS Y VERDURAS'],
+    'NUEX CORAZÓN':                   ['COSTO DE VENTA', 'ABARROTES'],
+    'HORNEADO ESP':                   ['COSTO DE VENTA', 'PANADERIA Y REPOSTERIA'],
+    'BAGUEL':                         ['COSTO DE VENTA', 'PANADERIA Y REPOSTERIA'],
+    'QUESO DURANG':                   ['COSTO DE VENTA', 'LACTEOS'],
+    'MEDIA BAGUETTE':                 ['COSTO DE VENTA', 'PANADERIA Y REPOSTERIA'],
+    'SERVICIO A DOMICILIO':           ['GASTO OPERATIVO', 'REPARTIDORES INDEPENDIENTES'],
+    // Estos 3 quedan a tu criterio (los dejo señalados en el log, NO se tocan):
+    // 'PIÑATAS CON DULCE PARA 24 PERSONAS', 'PREMIO PARA CONCURSO', 'Regular'
+  };
+
+  var asignados = 0, pendientes = [];
+  for (var i = 1; i < datos.length; i++) {
+    var art = String(datos[i][0]).trim();
+    if (!art) continue;
+    var catActual = String(datos[i][7] || '').trim();
+    if (catActual) continue; // ya tiene categoría
+    if (MAP[art]) {
+      sh.getRange(i + 1, 8).setValue(MAP[art][0]);  // col H = CATEGORIA
+      sh.getRange(i + 1, 9).setValue(MAP[art][1]);  // col I = SUBCATEGORIA
+      asignados++;
+    } else {
+      pendientes.push(art);
+    }
+  }
+  Logger.log('✅ Asignados automáticamente: ' + asignados);
+  Logger.log('⚠️ Quedan para revisar manualmente (' + pendientes.length + '): ' + pendientes.join(' | '));
+}
+
+// ── 2) PONER LISTAS DESPLEGABLES (validación) EN CATÁLOGO MAESTRO ──────────
+// Ejecuta una vez. Pone validación de lista en la columna CATEGORIA (H).
+// La SUBCATEGORIA (I) se llena en cascada con el trigger onEdit de abajo.
+function configurarValidacionCatalogo() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sh = _getSheet(HOJAS.CATALOGO);
+  var cats = _categoriasUnicas();
+  var ultima = Math.max(sh.getLastRow(), 2);
+
+  var regla = SpreadsheetApp.newDataValidation()
+    .requireValueInList(cats, true)
+    .setAllowInvalid(false)
+    .setHelpText('Elige una categoría de la lista')
+    .build();
+  // Aplicar a CATEGORIA (col 8) desde fila 2 hasta el final
+  sh.getRange(2, 8, ultima - 1, 1).setDataValidation(regla);
+  Logger.log('✅ Validación de CATEGORIA aplicada. Categorías: ' + cats.join(', '));
+  Logger.log('ℹ️ La SUBCATEGORIA se filtra sola al elegir categoría (trigger onEdit).');
+}
+
+// Devuelve las categorías únicas desde DATOS_CATEGORIASSUBCATEGORIAS
+function _categoriasUnicas() {
+  var sh = _getSheet(HOJAS.CATEGORIAS);
+  var vals = sh.getDataRange().getValues();
+  var set = {};
+  for (var i = 1; i < vals.length; i++) {
+    var c = String(vals[i][1] || '').trim();
+    if (c) set[c] = true;
+  }
+  return Object.keys(set).sort();
+}
+
+// Devuelve las subcategorías de una categoría dada
+function _subcategoriasDe(categoria) {
+  var sh = _getSheet(HOJAS.CATEGORIAS);
+  var vals = sh.getDataRange().getValues();
+  var subs = [];
+  for (var i = 1; i < vals.length; i++) {
+    if (String(vals[i][1] || '').trim() === categoria) {
+      var s = String(vals[i][2] || '').trim();
+      if (s) subs.push(s);
+    }
+  }
+  return subs;
+}
+
+// ── 3) CASCADA: al cambiar CATEGORIA, filtrar SUBCATEGORIA ─────────────────
+// Trigger simple onEdit — se ejecuta solo al editar el Sheet.
+function onEdit(e) {
+  try {
+    if (!e || !e.range) return;
+    var sh = e.range.getSheet();
+    if (sh.getName() !== HOJAS.CATALOGO) return;
+    var col = e.range.getColumn();
+    var row = e.range.getRow();
+    if (col !== 8 || row < 2) return; // solo columna CATEGORIA (H)
+
+    var categoria = String(e.range.getValue() || '').trim();
+    var celdaSub = sh.getRange(row, 9); // col I = SUBCATEGORIA
+    if (!categoria) { celdaSub.clearDataValidations(); return; }
+
+    var subs = _subcategoriasDe(categoria);
+    if (subs.length > 0) {
+      var regla = SpreadsheetApp.newDataValidation()
+        .requireValueInList(subs, true)
+        .setAllowInvalid(false)
+        .build();
+      celdaSub.setDataValidation(regla);
+      celdaSub.clearContent(); // limpiar subcategoría anterior (era de otra categoría)
+    } else {
+      celdaSub.clearDataValidations();
+    }
+  } catch(err) {
+    // Silencioso para no interrumpir la edición
+  }
+}
