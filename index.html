@@ -3771,11 +3771,20 @@ const LS_UI = (() => {
   // FORMULARIO — NUEVA FACTURA
   // ══════════════════════════════════════════════════════════
   async function buildFormFactura() {
-    const [proveedores, catalogo] = await Promise.all([
+    const [proveedores, catalogo, categorias] = await Promise.all([
       LS_API.getProveedores(),
       LS_API.getCatalogo(),
+      LS_API.getCategorias(),
     ]);
     window._catalogoCache = catalogo;
+    // Mapa categoría → [subcategorías] para los dropdowns en cascada
+    const catSub = {};
+    (categorias || []).forEach(c => {
+      if (!c.categoria) return;
+      if (!catSub[c.categoria]) catSub[c.categoria] = [];
+      if (c.subcategoria) catSub[c.categoria].push(c.subcategoria);
+    });
+    window._catSubMap = catSub;
 
     // Guardar lista de proveedores para el buscador
     window._proveedoresCache = proveedores || [];
@@ -4063,12 +4072,16 @@ const LS_UI = (() => {
               <input type="text" id="nart-unidad" placeholder="kg, lts, pzas, caja...">
             </div>
             <div class="ff">
-              <label>Categoría</label>
-              <input type="text" id="nart-categoria" placeholder="Ej: Lácteos, Carnes...">
+              <label>Categoría <span style="color:var(--terra)">*</span></label>
+              <select id="nart-categoria" onchange="LS_UI.onCategoriaChange(this.value)">
+                <option value="">Seleccionar...</option>
+              </select>
             </div>
             <div class="ff">
               <label>Subcategoría</label>
-              <input type="text" id="nart-subcategoria" placeholder="Opcional">
+              <select id="nart-subcategoria">
+                <option value="">Primero elige categoría</option>
+              </select>
             </div>
             <div class="ff">
               <label>% Merma</label>
@@ -4092,7 +4105,28 @@ const LS_UI = (() => {
         </div>
       </div>`);
 
+    // Llenar el dropdown de categorías (orden alfabético)
+    const catSel = document.getElementById('nart-categoria');
+    const catSub = window._catSubMap || {};
+    if (catSel) {
+      const cats = Object.keys(catSub).sort();
+      catSel.innerHTML = '<option value="">Seleccionar...</option>' +
+        cats.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
     setTimeout(() => document.getElementById('nart-costo')?.focus(), 120);
+  }
+
+  // Al elegir categoría, llenar subcategorías dependientes
+  function onCategoriaChange(categoria) {
+    const subSel = document.getElementById('nart-subcategoria');
+    if (!subSel) return;
+    const subs = (window._catSubMap || {})[categoria] || [];
+    if (subs.length === 0) {
+      subSel.innerHTML = '<option value="">Sin subcategorías</option>';
+    } else {
+      subSel.innerHTML = '<option value="">Seleccionar subcategoría...</option>' +
+        subs.slice().sort().map(s => `<option value="${s}">${s}</option>`).join('');
+    }
   }
 
   async function guardarNuevoArticulo() {
@@ -4100,9 +4134,14 @@ const LS_UI = (() => {
     const nombre = g('nart-nombre')?.value?.trim();
     const costo  = parseFloat(g('nart-costo')?.value || 0);
     const unidad = g('nart-unidad')?.value?.trim();
+    const categoria = g('nart-categoria')?.value?.trim();
 
     if (!nombre || !costo || !unidad) {
       toast('Faltan campos', 'Nombre, costo y unidad son requeridos', 'err', 'ti-alert-circle');
+      return;
+    }
+    if (!categoria) {
+      toast('Falta categoría', 'Selecciona la categoría del artículo para mantener los reportes limpios', 'err', 'ti-alert-circle');
       return;
     }
 
@@ -4405,6 +4444,7 @@ const LS_UI = (() => {
     filtrarArticulos,
     seleccionarArticulo,
     abrirNuevoArticulo,
+    onCategoriaChange,
     guardarNuevoArticulo,
     calcTotalFactura,
     guardarFactura,
