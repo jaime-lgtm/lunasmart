@@ -4612,13 +4612,13 @@ window.addEventListener('load', () => {
   if (s) {
     try {
       const u = JSON.parse(s);
-      // enterApp ya está sobreescrito, llamamos directamente
       document.getElementById('u-name').textContent   = u.name;
       document.getElementById('u-role').textContent   = u.role;
       document.getElementById('u-avatar').textContent = u.ini;
       document.getElementById('login').style.display  = 'none';
       document.getElementById('app').style.display    = 'block';
-      setTimeout(() => LS_UI.onPageChange('dashboard'), 200);
+      const perm = aplicarPermisos(u.role);   // aplicar permisos al restaurar sesión
+      setTimeout(() => { go(perm.inicio, document.querySelector('[data-page="'+perm.inicio+'"]')); }, 200);
     } catch(e) {}
   }
 });
@@ -4733,17 +4733,26 @@ async function _ejecutarSyncParrot(sucursal) {
         redirect: 'follow' }
     );
     const d = await resp.json().catch(() => ({}));
-    const regs = d.registros ?? '?';
+    // Mostrar el error REAL si la sincronización falló (no decir "éxito" si falló)
+    if (d.status === 'error') {
+      let msg = d.msg || 'Error desconocido';
+      if (/permission|external_request|UrlFetchApp/i.test(msg)) {
+        msg = 'Falta autorizar el script en Google (permiso de internet). Revisa appsscript.json.';
+      }
+      typeof toast !== 'undefined' && toast('Parrot no sincronizó', msg, 'err', 'ti-alert-circle');
+      return;
+    }
+    const regs = d.registros ?? 0;
     typeof toast !== 'undefined' && toast(
-      'Parrot sincronizado',
-      `${sucursal} · ${regs} registro(s) nuevos · ${desde} → ${hasta}`,
-      'ok', 'ti-refresh'
+      regs > 0 ? 'Parrot sincronizado' : 'Parrot: sin órdenes nuevas',
+      `${sucursal} · ${regs} registro(s) · ${desde} → ${hasta}`,
+      regs > 0 ? 'ok' : 'warn', 'ti-refresh'
     );
     LS_API.invalidarCache();
     LS_UI.reloadPage('dashboard');
     LS_UI.reloadPage('conciliacion');
   } catch(err) {
-    typeof toast !== 'undefined' && toast('Error', 'No se pudo conectar con Parrot', 'err', 'ti-alert-circle');
+    typeof toast !== 'undefined' && toast('Error', 'No se pudo conectar con el servidor de sincronización', 'err', 'ti-alert-circle');
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = orig; }
   }
