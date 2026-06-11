@@ -2464,6 +2464,20 @@ const LS_API = (() => {
     });
   }
 
+  // Registrar factura COMPLETA en una sola llamada (rápido)
+  async function registrarFacturaCompleta(datos) {
+    return escribirViaScript('registrarFacturaCompleta', {
+      datos: {
+        fecha:     datos.fecha,
+        unidad:    datos.unidad,
+        proveedor: datos.proveedor,
+        folio:     datos.folio,
+        total:     datos.total,
+        lineas:    datos.lineas || [],
+      }
+    });
+  }
+
   // Actualizar factura existente (cabecera + reemplaza artículos)
   async function actualizarFactura(datos) {
     return escribirViaScript('actualizarFactura', {
@@ -2841,7 +2855,7 @@ const LS_API = (() => {
     getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos,
     getVentasPorSucursal, aliasSucursal,
     // Escritura
-    registrarIngreso, registrarFactura, actualizarFactura, borrarFactura,
+    registrarIngreso, registrarFactura, registrarFacturaCompleta, actualizarFactura, borrarFactura,
     registrarProveedor, registrarCliente,
     registrarArticuloDetalle, registrarCatalogoArticulo,
     // Agregaciones
@@ -4592,27 +4606,32 @@ const LS_UI = (() => {
       return;
     }
 
-    // ── MODO NUEVO ────────────────────────────────────────────────────────
-    const resFact = await LS_API.registrarFactura({
-      fecha, unidad, proveedor, folio, tipo: '', total: totalFactura
+    // ── MODO NUEVO (una sola escritura por lote, rápido) ──────────────────
+    let resFact = await LS_API.registrarFacturaCompleta({
+      fecha, unidad, proveedor, folio, total: totalFactura,
+      lineas: lineas.map(l => ({ articulo: l.articulo, cantidad: l.cantidad, precioUnit: l.precioUnit })),
     });
+
+    // Fallback: si el Apps Script aún no tiene el endpoint nuevo, usar el método clásico
+    if (resFact?.status !== 'ok' && /desconocida/i.test(resFact?.msg || '')) {
+      const r2 = await LS_API.registrarFactura({ fecha, unidad, proveedor, folio, tipo: '', total: totalFactura });
+      if (r2?.status === 'ok') {
+        const idF = r2.idFactura || folio || fecha;
+        for (const linea of lineas) {
+          await LS_API.registrarArticuloDetalle({
+            idFactura: idF, fecha, proveedor, unidad,
+            articulo: linea.articulo, cantidad: linea.cantidad,
+            unidadMed: linea.unidad, precioUnit: linea.precioUnit, subtotal: linea.subtotal,
+          });
+        }
+        resFact = r2;
+      } else { resFact = r2; }
+    }
 
     if (resFact?.status !== 'ok') {
       typeof toast !== 'undefined' && toast('Error', resFact?.msg || 'No se pudo guardar la factura', 'err', 'ti-alert-circle');
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy"></i> Guardar factura'; }
       return;
-    }
-
-    const idFactura = resFact.idFactura || folio || fecha;
-    for (const linea of lineas) {
-      await LS_API.registrarArticuloDetalle({
-        idFactura, fecha, proveedor, unidad,
-        articulo:  linea.articulo,
-        cantidad:  linea.cantidad,
-        unidadMed: linea.unidad,
-        precioUnit:linea.precioUnit,
-        subtotal:  linea.subtotal,
-      });
     }
 
     _cerrarModal();
@@ -4623,6 +4642,8 @@ const LS_UI = (() => {
       'ok', 'ti-check'
     );
     await renderFacturas();
+    // Refrescar también el dashboard para que el gasto se actualice
+    LS_UI.reloadPage && LS_UI.reloadPage('dashboard');
 
   }
 
