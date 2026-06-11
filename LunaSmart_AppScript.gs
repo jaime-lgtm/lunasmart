@@ -182,6 +182,8 @@ function doPost(e) {
   switch (accion) {
     case 'registrarIngreso':           return _registrarIngreso(datos);
     case 'registrarFactura':           return _registrarFactura(datos);
+    case 'actualizarFactura':          return _actualizarFactura(datos);
+    case 'borrarFactura':              return _borrarFactura(datos);
     case 'registrarArticuloDetalle':   return _registrarArticuloDetalle(datos);
     case 'registrarProveedor':         return _registrarProveedor(datos);
     case 'registrarCliente':           return _registrarCliente(datos);
@@ -250,6 +252,77 @@ function _registrarFactura(b) {
     ]);
 
     return _json({ status: 'ok', idFactura: id });
+  } catch(e) {
+    return _err(e.message);
+  }
+}
+
+// ── ACTUALIZAR FACTURA (editar cabecera + reemplazar artículos) ────────────
+function _actualizarFactura(b) {
+  try {
+    var idF = String(b.id || '').trim();
+    if (!idF) return _err('Falta el ID de la factura');
+    var sh = _getSheet(HOJAS.FACTURAS);
+    var vals = sh.getDataRange().getValues();
+    var fila = -1;
+    for (var i = 1; i < vals.length; i++) {
+      if (String(vals[i][0]).trim() === idF) { fila = i + 1; break; }
+    }
+    if (fila === -1) return _err('Factura no encontrada: ' + idF);
+
+    // Actualizar cabecera (cols B..G)
+    sh.getRange(fila, 2, 1, 6).setValues([[
+      b.fecha     || vals[fila-1][1],
+      b.unidad    || '',
+      b.proveedor || '',
+      b.folio     || '',
+      vals[fila-1][5] || '',                 // FOTO (se conserva)
+      parseFloat(b.total || 0)
+    ]]);
+
+    // Reemplazar artículos: borrar los existentes de esta factura y reinsertar
+    if (b.lineas) {
+      var shD = _getSheet(HOJAS.ART_DETALLES);
+      var dvals = shD.getDataRange().getValues();
+      var aBorrar = [];
+      for (var j = 1; j < dvals.length; j++) {
+        if (String(dvals[j][1]).trim() === idF) aBorrar.push(j + 1);
+      }
+      aBorrar.sort(function(a,c){return c-a;}).forEach(function(f){ shD.deleteRow(f); });
+
+      b.lineas.forEach(function(l){
+        var qty = parseFloat(l.cantidad) || 0;
+        var precio = parseFloat(l.precioUnit) || 0;
+        var sub = qty * precio;
+        var f2 = _siguienteFilaLibre(shD, 2);
+        shD.getRange(f2, 2, 1, 8).setValues([[
+          idF, b.fecha || '', l.articulo || '', qty, precio, 'NO', 0, sub
+        ]]);
+        _actualizarCostoDinamico(l.articulo, precio);
+      });
+    }
+    return _json({ status: 'ok', idFactura: idF });
+  } catch(e) {
+    return _err(e.message);
+  }
+}
+
+// ── BORRAR FACTURA (cabecera + sus artículos) ──────────────────────────────
+function _borrarFactura(b) {
+  try {
+    var idF = String(b.id || '').trim();
+    if (!idF) return _err('Falta el ID de la factura');
+    var sh = _getSheet(HOJAS.FACTURAS);
+    var vals = sh.getDataRange().getValues();
+    for (var i = vals.length - 1; i >= 1; i--) {
+      if (String(vals[i][0]).trim() === idF) sh.deleteRow(i + 1);
+    }
+    var shD = _getSheet(HOJAS.ART_DETALLES);
+    var dvals = shD.getDataRange().getValues();
+    for (var j = dvals.length - 1; j >= 1; j--) {
+      if (String(dvals[j][1]).trim() === idF) shD.deleteRow(j + 1);
+    }
+    return _json({ status: 'ok' });
   } catch(e) {
     return _err(e.message);
   }
