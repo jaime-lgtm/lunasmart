@@ -503,7 +503,8 @@ function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
         var dif = (cm.differenceAmount != null) ? cm.differenceAmount : (declarado - ventaParrot);
         var estado = Math.abs(dif) < 1 ? 'CUADRA' : (dif < 0 ? 'FALTANTE $' + Math.abs(dif) : 'SOBRANTE $' + dif);
         var idIng = Utilities.getUuid().substring(0, 8);
-        var fecha = Utilities.formatDate(new Date(s.finishedAt || s.startedAt), tz, 'dd/MM/yyyy');
+        // ISO yyyy-MM-dd para que Google Sheets NO invierta día/mes
+        var fecha = Utilities.formatDate(new Date(s.finishedAt || s.startedAt), tz, 'yyyy-MM-dd');
         _escribirFila(shIng, [
           idIng, fecha, sucursal, turno,
           cm.startingAmount || 0, cm.withdrawals || 0, cm.deposits || 0,
@@ -532,7 +533,7 @@ function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
             if (it.uuid && itemVistos[it.uuid]) return;  // ya importado
             var t = new Date(it.createdAt);
             var idIng = corteDeTurno[turnoDe(t)] || unicoCorte;
-            var fecha = Utilities.formatDate(t, tz, 'dd/MM/yyyy');
+            var fecha = Utilities.formatDate(t, tz, 'yyyy-MM-dd');  // ISO (evita inversión)
             var total = parseFloat(it.total) || 0;
             _escribirFila(shDet, [
               it.uuid || Utilities.getUuid().substring(0,8),  // A=ID_CONCEPTO (dedup)
@@ -571,6 +572,35 @@ function sincronizarParrotDias(dias) {
   var iso = function(d){ return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd'); };
   var r = _sincronizarParrot('SUEÑO DE LUNA', iso(desde), iso(hasta));
   Logger.log(r.getContent());
+}
+
+// LIMPIEZA: borra TODOS los cortes importados de Parrot (INGRESOS con "PARROT:")
+// y sus productos en INGRESOS DETALLES. Útil para re-sincronizar limpio.
+function borrarCortesParrot() {
+  var shIng = _getSheet(HOJAS.INGRESOS);
+  var shDet = _getSheet(HOJAS.ING_DETALLES);
+
+  // 1) Identificar cortes de Parrot y sus ID_INGRESO
+  var ingVals = shIng.getDataRange().getValues();
+  var idsParrot = {};
+  var filasIng = [];
+  for (var i = 1; i < ingVals.length; i++) {
+    if (String(ingVals[i][14] || '').indexOf('PARROT:') !== -1) {
+      idsParrot[String(ingVals[i][0])] = true;  // ID_INGRESO
+      filasIng.push(i + 1);                      // fila (base 1)
+    }
+  }
+  // 2) Borrar detalles ligados a esos ID_INGRESO (col B)
+  var detVals = shDet.getDataRange().getValues();
+  var filasDet = [];
+  for (var j = 1; j < detVals.length; j++) {
+    if (idsParrot[String(detVals[j][1])]) filasDet.push(j + 1);
+  }
+  // Borrar de abajo hacia arriba (para no correr índices)
+  filasDet.sort(function(a,b){return b-a;}).forEach(function(f){ shDet.deleteRow(f); });
+  filasIng.sort(function(a,b){return b-a;}).forEach(function(f){ shIng.deleteRow(f); });
+
+  Logger.log('🗑️ Borrados ' + filasIng.length + ' cortes y ' + filasDet.length + ' productos de Parrot.');
 }
 
 // ── REGISTRAR ARTÍCULO EN CATÁLOGO MAESTRO ────────────────────────────────
