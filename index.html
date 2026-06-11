@@ -3042,39 +3042,46 @@ const LS_UI = (() => {
       const period = (typeof state !== 'undefined' && state.period) ? state.period : 'mes';
       const rango = LS_API.getRangoPeriodo(period);
       setTxt('conc-titulo-periodo', '— ' + rango.label);
-      const todos = await LS_API.getConciliacion();
-      const datos = todos.filter(c => LS_API._enRango(c.fecha, rango.desde, rango.hasta));
+      // La conciliación ahora vive en INGRESOS (venta vs declarado vs diferencia)
+      const todos = await LS_API.getIngresos();
+      const datos = todos
+        .filter(c => LS_API._enRango(c.fecha, rango.desde, rango.hasta))
+        .filter(c => c.sucursal && !['TEST','PRUEBA','VERIFICACION'].some(t => c.sucursal.toUpperCase().includes(t)))
+        .map(c => {
+          const delta = c.diferencia;
+          const estado = Math.abs(delta) < 1 ? 'CUADRA' : (delta < 0 ? 'FALTANTE' : 'SOBRANTE');
+          return { ...c, delta, estado };
+        })
+        .sort((a, b) => (LS_API._fechaISO(b.fecha)||'').localeCompare(LS_API._fechaISO(a.fecha)||''));
 
       if (datos.length === 0) {
-        setEl(containerId, '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--tx-3)">Sin conciliaciones en el período seleccionado</td></tr>');
-        // Limpiar KPIs
+        setEl(containerId, '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--tx-3)">Sin cortes en el período seleccionado</td></tr>');
         ['conc-total-turnos','conc-cuadrados','conc-total-faltantes','conc-total-sobrantes'].forEach(id=>setTxt(id, id.includes('total-f')||id.includes('total-s')?'$0':'0'));
         setTxt('conc-exactitud','0%');
         return;
       }
 
-      // KPIs de conciliación
-      const faltantes  = datos.filter(d => d.estado === 'FALTANTE');
-      const sobrantes  = datos.filter(d => d.estado === 'SOBRANTE');
-      const cuadran    = datos.filter(d => d.estado === 'CUADRA');
-      const totalFalt  = faltantes.reduce((s, d) => s + Math.abs(d.delta), 0);
-      const totalSobr  = sobrantes.reduce((s, d) => s + d.delta, 0);
-
+      // KPIs
+      const faltantes = datos.filter(d => d.estado === 'FALTANTE');
+      const sobrantes = datos.filter(d => d.estado === 'SOBRANTE');
+      const cuadran   = datos.filter(d => d.estado === 'CUADRA');
+      const totalFalt = faltantes.reduce((s, d) => s + Math.abs(d.delta), 0);
+      const totalSobr = sobrantes.reduce((s, d) => s + d.delta, 0);
       setTxt('conc-total-turnos',   datos.length);
       setTxt('conc-cuadrados',      cuadran.length);
-      setTxt('conc-exactitud',      datos.length > 0 ? fmtP(cuadran.length / datos.length * 100) : '0%');
+      setTxt('conc-exactitud',      fmtP(cuadran.length / datos.length * 100));
       setTxt('conc-total-faltantes', fmt(totalFalt));
       setTxt('conc-total-sobrantes', fmt(totalSobr));
 
       // Tabla
-      setEl(containerId, datos.map(c => `
-        <tr data-branch="coffee">
-          <td style="font-family:var(--mono);font-size:11px;color:var(--tx-3)">#${c.sesion}</td>
+      setEl(containerId, datos.slice(0, 100).map(c => `
+        <tr>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--tx-3)">${c.id || '—'}</td>
           <td>${c.fecha}</td>
-          <td>${turnoLabel(c.turno)}</td>
-          <td>${c.sucursal || 'Sueño de Luna'}</td>
-          <td style="font-family:var(--mono)">${fmt(c.ventaParrot)}</td>
-          <td style="font-family:var(--mono)">${fmt(c.declarado)}</td>
+          <td>${turnoLabel(c.cliente)}</td>
+          <td>${LS_API.aliasSucursal(c.sucursal)}</td>
+          <td style="font-family:var(--mono)">${fmt(c.ventaTotal)}</td>
+          <td style="font-family:var(--mono)">${fmt(c.totalDeclarado)}</td>
           <td style="font-family:var(--mono);color:${deltaColor(c.delta)};font-weight:600">
             ${c.delta >= 0 ? '+' : ''}${fmt(c.delta)}
           </td>
