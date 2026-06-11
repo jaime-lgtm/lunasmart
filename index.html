@@ -1261,7 +1261,7 @@
   </div>
   <div class="card">
     <div class="card-head">
-      <div><div class="card-title"><i class="ti ti-scale"></i>Detalle por turno — junio 2026</div><div class="card-sub">Parrot POS vs efectivo declarado en corte</div></div>
+      <div><div class="card-title"><i class="ti ti-scale"></i>Detalle por turno <span id="conc-titulo-periodo"></span></div><div class="card-sub">Parrot POS vs efectivo declarado en corte</div></div>
       <div class="card-actions"><span class="filter-note" id="fn-conciliacion"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><button class="btn btn-sm" onclick="toast('Exportación lista','Conciliación de junio en CSV','ok','ti-download')"><i class="ti ti-download"></i>Exportar</button></div>
     </div>
     <div class="tbl-wrap">
@@ -1491,7 +1491,7 @@
 <!-- ════════ INGRESOS ════════ -->
 <div id="p-ingresos" class="page" data-screen-label="Ingresos">
   <div class="card">
-    <div class="card-head"><div><div class="card-title"><i class="ti ti-cash"></i>Cortes registrados — junio 2026</div><div class="card-sub">Desglose de caja por turno</div></div><div class="card-actions"><span class="filter-note" id="fn-ingresos"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><button class="btn btn-primary btn-sm" onclick="openRegister('corte')"><i class="ti ti-plus"></i>Nuevo corte</button></div></div>
+    <div class="card-head"><div><div class="card-title"><i class="ti ti-cash"></i>Cortes registrados <span id="ing-titulo-periodo"></span></div><div class="card-sub">Desglose de caja por turno</div></div><div class="card-actions"><span class="filter-note" id="fn-ingresos"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><button class="btn btn-primary btn-sm" onclick="openRegister('corte')"><i class="ti ti-plus"></i>Nuevo corte</button></div></div>
     <div class="tbl-wrap">
       <table class="tbl" data-sortable data-filterable="ingresos">
         <thead><tr>
@@ -1713,11 +1713,20 @@ function doLogout() {
 }
 
 /* ─── NAVIGATION ─── */
+function periodoLabel() {
+  // Usa el label dinámico real (junio 2026, año 2026, etc.) si LS_API está listo
+  try {
+    if (typeof LS_API !== 'undefined' && LS_API.getRangoPeriodo) {
+      return LS_API.getRangoPeriodo(state.period).label;
+    }
+  } catch(e) {}
+  return PERIODS[state.period] || '';
+}
 function updateSubtitle() {
   const info = PAGES[state.page];
   const branchTxt = state.branch === 'all' ? '' : ' · ' + BRANCHES[state.branch].short;
   document.getElementById('tb-title').textContent = info.title;
-  document.getElementById('tb-sub').textContent = info.sub + branchTxt + ' — ' + PERIODS[state.period];
+  document.getElementById('tb-sub').textContent = info.sub + branchTxt + ' — ' + periodoLabel();
   document.getElementById('m-title').textContent = info.title;
 }
 function go(id, el) {
@@ -2226,22 +2235,34 @@ const LS_API = (() => {
       .sort((a, b) => b.sesion - a.sesion); // más reciente primero
   }
 
-  // Obtener facturas
+  // Obtener facturas (resuelve código de proveedor → nombre legible)
   async function getFacturas(filtros = {}) {
-    const rows = await leerHoja(SHEETS.FACTURAS);
+    const [rows, proveedores] = await Promise.all([
+      leerHoja(SHEETS.FACTURAS),
+      getProveedores(),
+    ]);
     if (!rows) return [];
+    // Mapa código (ID_PROVEEDOR) → Nombre Comercial
+    const mapaProv = {};
+    proveedores.forEach(p => { if (p.id) mapaProv[String(p.id).trim().toUpperCase()] = p.nombre; });
+
     return rows.slice(1)
       .filter(r => r.length > 1 && r[COLS.FACTURAS.FECHA])
-      .map(r => ({
-        id:        r[COLS.FACTURAS.ID]        || '',
-        fecha:     r[COLS.FACTURAS.FECHA]     || '',
-        unidad:    r[COLS.FACTURAS.UNIDAD]    || '',
-        proveedor: r[COLS.FACTURAS.PROVEEDOR] || '',
-        tipo:      r[COLS.FACTURAS.TIPO]      || '',
-        folio:     r[COLS.FACTURAS.FOLIO]     || '',
-        foto:      r[COLS.FACTURAS.FOTO]      || '',
-        total:     parseNum(r[COLS.FACTURAS.TOTAL]),
-      }));
+      .map(r => {
+        const provRaw = r[COLS.FACTURAS.PROVEEDOR] || '';
+        const provNombre = mapaProv[String(provRaw).trim().toUpperCase()] || provRaw;
+        return {
+          id:        r[COLS.FACTURAS.ID]        || '',
+          fecha:     r[COLS.FACTURAS.FECHA]     || '',
+          unidad:    r[COLS.FACTURAS.UNIDAD]    || '',
+          proveedor: provNombre,        // nombre legible (resuelto)
+          proveedorCodigo: provRaw,     // valor original (código o nombre)
+          tipo:      r[COLS.FACTURAS.TIPO]      || '',
+          folio:     r[COLS.FACTURAS.FOLIO]     || '',
+          foto:      r[COLS.FACTURAS.FOTO]      || '',
+          total:     parseNum(r[COLS.FACTURAS.TOTAL]),
+        };
+      });
   }
 
   // Obtener artículos detalle (ventas por artículo)
@@ -2463,7 +2484,9 @@ const LS_API = (() => {
 
   // KPIs del dashboard principal
   async function getKPIsDashboard(period) {
-    const { desde, hasta, label } = getRangoPeriodo(period || 'mes');
+    period = period || 'mes';
+    const { desde, hasta, label } = getRangoPeriodo(period);
+    const ant = getRangoPeriodoAnterior(period);
     const [ingresosAll, facturasAll] = await Promise.all([
       getIngresos(),
       getFacturas(),
@@ -2473,10 +2496,17 @@ const LS_API = (() => {
     const ingresos = ingresosAll.filter(r => _enRango(r.fecha, desde, hasta));
     const facturas = facturasAll.filter(f => _enRango(f.fecha, desde, hasta));
 
+    // Período anterior (para crecimiento)
+    const ventaAnterior = ingresosAll
+      .filter(r => _enRango(r.fecha, ant.desde, ant.hasta))
+      .reduce((s, r) => s + r.ventaTotal, 0);
+
     const ventaTotal   = ingresos.reduce((s, r) => s + r.ventaTotal, 0);
     const gastoTotal   = facturas.reduce((s, f) => s + f.total, 0);
     const utilidad     = ventaTotal - gastoTotal;
     const margen       = ventaTotal > 0 ? (utilidad / ventaTotal * 100) : 0;
+    // Crecimiento real vs período anterior
+    const crecimiento  = ventaAnterior > 0 ? ((ventaTotal - ventaAnterior) / ventaAnterior * 100) : null;
     const faltantes    = ingresos
       .filter(r => r.diferencia < 0)
       .reduce((s, r) => s + Math.abs(r.diferencia), 0);
@@ -2498,6 +2528,7 @@ const LS_API = (() => {
       efectivo, tarjeta, transferencia, rappi,
       totalIngresos: totalTurnos, totalFacturas: facturas.length,
       exactitud, turnosCuadran, turnosFaltante, periodoLabel: label,
+      crecimiento, ventaAnterior, labelAnterior: ant.label,
     };
   }
 
@@ -2533,18 +2564,28 @@ const LS_API = (() => {
 
   // Gasto por categoría
   async function getGastoPorCategoria(desde, hasta) {
-    const facturas = await getFacturas();
-    const filtradas = (desde && hasta)
-      ? facturas.filter(f => _enRango(f.fecha, desde, hasta))
-      : facturas;
-    // Agrupar por unidad de negocio (proxy de categoría hasta tener categorías por artículo)
+    // Estructura de costos REAL: agrupa el gasto por la CATEGORÍA del artículo
+    // (del Catálogo Maestro), no por sucursal.
+    const [detalles, catalogo] = await Promise.all([
+      getArticulosDetalle(),
+      getCatalogo(),
+    ]);
+    // Mapa artículo (normalizado) → categoría
+    const catMap = {};
+    catalogo.forEach(a => {
+      if (a.articulo) catMap[String(a.articulo).trim().toLowerCase()] = a.categoria || 'Sin categoría';
+    });
+    const filtrados = (desde && hasta)
+      ? detalles.filter(d => _enRango(d.fecha, desde, hasta))
+      : detalles;
     const agg = {};
-    filtradas.forEach(f => {
-      const cat = f.unidad || 'Sin clasificar';
-      agg[cat] = (agg[cat] || 0) + f.total;
+    filtrados.forEach(d => {
+      const cat = catMap[String(d.articulo).trim().toLowerCase()] || 'Sin categoría';
+      agg[cat] = (agg[cat] || 0) + (d.total || 0);
     });
     return Object.entries(agg)
       .map(([categoria, total]) => ({ categoria, total }))
+      .filter(c => c.total > 0)
       .sort((a, b) => b.total - a.total);
   }
 
@@ -2646,6 +2687,33 @@ const LS_API = (() => {
     const primero = new Date(anio, m, 1);
     const ultimo  = new Date(anio, m + 1, 0);
     return { desde: iso(primero), hasta: iso(ultimo), label: meses[m] + ' ' + anio };
+  }
+
+  // ── RANGO DEL PERÍODO ANTERIOR (para comparativos de crecimiento) ────────
+  function getRangoPeriodoAnterior(period) {
+    const hoyD = new Date();
+    const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    if (period === 'hoy') {
+      const ayer = new Date(hoyD); ayer.setDate(ayer.getDate() - 1);
+      return { desde: iso(ayer), hasta: iso(ayer), label: 'ayer' };
+    }
+    if (period === 'semana') {
+      const d13 = new Date(hoyD); d13.setDate(d13.getDate() - 13);
+      const d7  = new Date(hoyD); d7.setDate(d7.getDate() - 7);
+      return { desde: iso(d13), hasta: iso(d7), label: 'semana anterior' };
+    }
+    if (period === 'ano') {
+      const a = hoyD.getFullYear() - 1;
+      return { desde: `${a}-01-01`, hasta: `${a}-12-31`, label: a + '' };
+    }
+    // mes anterior
+    const m = hoyD.getMonth();
+    const anioPrev = m === 0 ? hoyD.getFullYear() - 1 : hoyD.getFullYear();
+    const mesPrev  = m === 0 ? 11 : m - 1;
+    const primero = new Date(anioPrev, mesPrev, 1);
+    const ultimo  = new Date(anioPrev, mesPrev + 1, 0);
+    return { desde: iso(primero), hasta: iso(ultimo), label: meses[mesPrev] };
   }
 
   // ¿La fecha (cualquier formato) cae dentro de [desde, hasta]? (ISO comparables)
@@ -2837,7 +2905,19 @@ const LS_UI = (() => {
       const lblPeriodo = period === 'mes' ? 'mes' : period === 'ano' ? 'año' : period === 'semana' ? 'semana' : 'hoy';
       setTxt('kpi-venta-label',   'Venta total · ' + lblPeriodo);
       setTxt('kpi-faltantes-label', 'Faltantes · ' + lblPeriodo);
-      setTxt('kpi-venta-sub',     kpis.totalIngresos + ' turno(s) registrados');
+      // Crecimiento real vs período anterior en la tarjeta de venta
+      const ventaSubEl = document.getElementById('kpi-venta-sub');
+      if (ventaSubEl) {
+        if (kpis.crecimiento === null || kpis.crecimiento === undefined) {
+          ventaSubEl.innerHTML = `<span style="color:var(--tx-3)">vs ${kpis.labelAnterior}: sin datos previos</span>`;
+        } else {
+          const c = kpis.crecimiento;
+          const up = c >= 0;
+          const col = up ? 'var(--verde)' : 'var(--rojo)';
+          const ico = up ? 'ti-trending-up' : 'ti-trending-down';
+          ventaSubEl.innerHTML = `<span class="delta" style="color:${col};font-weight:600"><i class="ti ${ico}"></i> ${up?'+':''}${c.toFixed(1)}%</span> <span style="color:var(--tx-3)">vs ${kpis.labelAnterior}</span>`;
+        }
+      }
       setTxt('kpi-gastos-sub',    kpis.totalFacturas + ' factura(s) registradas');
       setTxt('kpi-faltantes-sub', 'En ' + kpis.turnosFaltante + ' turno(s) de ' + kpis.totalIngresos);
       setTxt('kpi-exactitud-sub', kpis.turnosCuadran + ' turno(s) cuadrados');
@@ -2935,10 +3015,17 @@ const LS_UI = (() => {
     showLoading(containerId);
 
     try {
-      const datos = await LS_API.getConciliacion();
+      const period = (typeof state !== 'undefined' && state.period) ? state.period : 'mes';
+      const rango = LS_API.getRangoPeriodo(period);
+      setTxt('conc-titulo-periodo', '— ' + rango.label);
+      const todos = await LS_API.getConciliacion();
+      const datos = todos.filter(c => LS_API._enRango(c.fecha, rango.desde, rango.hasta));
 
       if (datos.length === 0) {
-        setEl(containerId, '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--tx-3)">Sin datos de conciliación</td></tr>');
+        setEl(containerId, '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--tx-3)">Sin conciliaciones en el período seleccionado</td></tr>');
+        // Limpiar KPIs
+        ['conc-total-turnos','conc-cuadrados','conc-total-faltantes','conc-total-sobrantes'].forEach(id=>setTxt(id, id.includes('total-f')||id.includes('total-s')?'$0':'0'));
+        setTxt('conc-exactitud','0%');
         return;
       }
 
@@ -2984,7 +3071,9 @@ const LS_UI = (() => {
 
     try {
       const period = (typeof state !== 'undefined' && state.period) ? state.period : 'mes';
-      const { desde, hasta } = LS_API.getRangoPeriodo(period);
+      const rango = LS_API.getRangoPeriodo(period);
+      const { desde, hasta } = rango;
+      setTxt('ing-titulo-periodo', '— ' + rango.label);
       const todos = await LS_API.getIngresos();
       // Filtrar por período y ordenar por fecha (más reciente primero)
       const datos = todos
