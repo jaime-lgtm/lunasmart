@@ -4469,11 +4469,67 @@ LS_API.setConfig({
 /* ── OVERRIDE: go() para carga lazy de datos ─────────────── */
 const _go_orig = go;
 go = function(id, el) {
+  // Guardia de permisos: bloquear páginas no permitidas para el rol
+  const perm = window._permActual;
+  if (perm && perm.pages !== 'ALL' && perm.pages.indexOf(id) === -1) {
+    if (typeof toast !== 'undefined') toast('Sin acceso', 'Tu rol no tiene permiso para ver esa sección', 'err', 'ti-lock');
+    return;
+  }
   _go_orig(id, el);
   LS_UI.onPageChange(id);
 };
 function mgo(id) { go(id, null); }
 function mdrawerGo(id) { go(id, null); toggleDrawer(); }
+
+/* ═══════════════════════════════════════════════════════════
+   PERMISOS POR ROL
+   - admin:   ve TODO (Administrador, Gerente General)
+   - gerente: operación + ventas, sin Balance/Rentabilidad ni utilidad
+   - cajero:  solo registra y ve su operación; sin números financieros
+═══════════════════════════════════════════════════════════ */
+const PERMISOS = {
+  admin:   { pages: 'ALL', verFinanzas: true,  verFacturas: true,  inicio: 'dashboard' },
+  gerente: { pages: ['dashboard','conciliacion','sucursales','articulos','canales','gastos','inventario','ingresos','facturas'],
+             verFinanzas: false, verFacturas: true,  inicio: 'dashboard' },
+  cajero:  { pages: ['conciliacion','inventario','ingresos'],
+             verFinanzas: false, verFacturas: false, inicio: 'ingresos' },
+};
+
+function _rolTier(role) {
+  const r = String(role || '').trim().toUpperCase();
+  if (r.indexOf('CAJER') === 0) return 'cajero';
+  if (r === 'GERENTE' || r === 'GERENTE SUCURSAL') return 'gerente';
+  // Administrador, Gerente General, ADMIN → admin
+  return 'admin';
+}
+
+function aplicarPermisos(role) {
+  const tier = _rolTier(role);
+  const perm = PERMISOS[tier];
+  window._permActual = perm;
+
+  // 1) Mostrar/ocultar items de navegación según páginas permitidas
+  const visible = id => perm.pages === 'ALL' || perm.pages.indexOf(id) !== -1;
+  document.querySelectorAll('.nav-item[data-page]').forEach(el => {
+    el.style.display = visible(el.dataset.page) ? '' : 'none';
+  });
+  document.querySelectorAll('.m-nav-item[data-mnav]').forEach(el => {
+    el.style.display = visible(el.dataset.mnav) ? '' : 'none';
+  });
+
+  // 2) Ocultar KPIs financieros sensibles (utilidad, gastos) si no puede verlos
+  const finIds = ['kpi-utilidad','kpi-gastos','kpi-margen'];
+  finIds.forEach(id => {
+    const el = document.getElementById(id);
+    const card = el && el.closest('.kpi');
+    if (card) card.style.display = perm.verFinanzas ? '' : 'none';
+  });
+
+  // 3) Botón "Registrar" → para cajero solo permite cortes (no facturas)
+  window._soloCorte = !perm.verFacturas;
+
+  return perm;
+}
 
 /* ── OVERRIDE: enterApp() para cargar dashboard al login ─── */
 const _enterApp_orig = enterApp;
@@ -4483,14 +4539,21 @@ enterApp = function(u) {
   document.getElementById('u-avatar').textContent = u.ini;
   document.getElementById('login').style.display  = 'none';
   document.getElementById('app').style.display    = 'block';
+  const perm = aplicarPermisos(u.role);
   setTimeout(() => {
     toast('Bienvenido, ' + u.name.split(' ')[0], 'Sesión iniciada como ' + u.role, 'ok', 'ti-confetti');
-    LS_UI.onPageChange('dashboard');
+    LS_UI.onPageChange(perm.inicio);
+    go(perm.inicio, document.querySelector('[data-page="'+perm.inicio+'"]'));
   }, 350);
 };
 
 /* ── OVERRIDE: openRegister() con modales reales ─────────── */
 openRegister = function(kind) {
+  // El cajero solo puede registrar cortes de caja, no facturas
+  if (window._soloCorte && (kind === 'factura' || !kind)) {
+    LS_UI.abrirNuevoIngreso();
+    return;
+  }
   if (kind === 'corte') {
     LS_UI.abrirNuevoIngreso();
   } else if (kind === 'factura') {
