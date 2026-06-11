@@ -585,7 +585,8 @@ function borrarCortesParrot() {
   var idsParrot = {};
   var filasIng = [];
   for (var i = 1; i < ingVals.length; i++) {
-    if (String(ingVals[i][14] || '').indexOf('PARROT:') !== -1) {
+    // Atrapa ambos formatos: "PARROT:uuid" (nuevo) y "PARROT-252" (viejo)
+    if (/PARROT[:\-]/i.test(String(ingVals[i][14] || ''))) {
       idsParrot[String(ingVals[i][0])] = true;  // ID_INGRESO
       filasIng.push(i + 1);                      // fila (base 1)
     }
