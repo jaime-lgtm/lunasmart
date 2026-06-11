@@ -18,7 +18,7 @@ const SHEET_ID = '1Dm5fcTs_URmtv8cwUDV6z_LxuGvdpJmf0ZkxszXzuCk';
 
 const PARROT_API_KEY   = 'pk_AFHobF97QSAeAk2LdsmoWYbY0aJNPngk_f343f0db581f4b17b644f101cb58e461';
 const PARROT_STORE_UUID = 'd6c9c246-8ff7-44a9-a641-e38793050097';
-const PARROT_BASE_URL  = 'https://api.parrotsoftware.io/v2';
+const PARROT_BASE_URL  = 'https://api.parrot.rest/external';
 
 // Nombres exactos de las hojas
 const HOJAS = {
@@ -368,51 +368,51 @@ function _registrarCliente(b) {
 // Sirve para ver qué devuelve la API de Parrot y si trae el detalle de productos
 // vendidos (para poder construir "Ventas por artículo / Artículos estrella").
 function diagnosticarParrot() {
+  // Ventana de 24h (la API exige máximo 48h entre start y end)
   var hoy = new Date();
-  var hace30 = new Date(hoy - 30 * 24 * 60 * 60 * 1000);
-  var desde = Utilities.formatDate(hace30, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
-  var hasta = Utilities.formatDate(hoy,   'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
+  var ayer = new Date(hoy - 24 * 60 * 60 * 1000);
+  var tz = 'America/Mexico_City';
+  var ini = Utilities.formatDate(ayer, tz, "yyyy-MM-dd'T'HH:mm:ssXXX");
+  var fin = Utilities.formatDate(hoy,  tz, "yyyy-MM-dd'T'HH:mm:ssXXX");
+  var qParams = '?startTimestamp=' + encodeURIComponent(ini) + '&endTimestamp=' + encodeURIComponent(fin) +
+                '&storeUUID=' + PARROT_STORE_UUID + '&pageSize=5';
 
-  // Probar varios endpoints comunes de Parrot
+  // Endpoints oficiales (base: api.parrot.rest/external)
   var endpoints = [
-    PARROT_BASE_URL + '/stores/' + PARROT_STORE_UUID + '/orders?created_after=' + desde + '&created_before=' + hasta + '&limit=5',
-    PARROT_BASE_URL + '/stores/' + PARROT_STORE_UUID + '/orders?limit=5',
-    'https://api.parrotsoftware.io/v1/stores/' + PARROT_STORE_UUID + '/orders?limit=5',
+    { nom: 'List Orders',           url: PARROT_BASE_URL + '/v1/orders' + qParams },
+    { nom: 'List Order Items v2',   url: PARROT_BASE_URL + '/v2/order-items' + qParams },
+    { nom: 'List Order Items v1',   url: PARROT_BASE_URL + '/v1/order-items' + qParams },
+    { nom: 'List Cashier Sessions', url: PARROT_BASE_URL + '/v1/cashier-sessions' + qParams },
   ];
-  var headers = { 'Authorization': 'Bearer ' + PARROT_API_KEY, 'Content-Type': 'application/json' };
+  var headers = { 'Authorization': 'Bearer ' + PARROT_API_KEY };
 
-  for (var i = 0; i < endpoints.length; i++) {
+  endpoints.forEach(function(ep) {
     Logger.log('═══════════════════════════════════════════');
-    Logger.log('PROBANDO: ' + endpoints[i]);
+    Logger.log('PROBANDO: ' + ep.nom);
+    Logger.log(ep.url);
     try {
-      var resp = UrlFetchApp.fetch(endpoints[i], { headers: headers, muteHttpExceptions: true });
+      var resp = UrlFetchApp.fetch(ep.url, { headers: headers, muteHttpExceptions: true });
       var code = resp.getResponseCode();
       Logger.log('HTTP ' + code);
       var body = resp.getContentText();
       if (code !== 200) {
-        Logger.log('Respuesta (error): ' + body.substring(0, 400));
-        continue;
+        Logger.log('Respuesta: ' + body.substring(0, 300));
+        return;
       }
       var data = JSON.parse(body);
-      var ordenes = data.results || data.orders || data.data || (Array.isArray(data) ? data : []);
-      Logger.log('✅ Órdenes recibidas: ' + ordenes.length);
-      if (ordenes.length > 0) {
-        Logger.log('───── ESTRUCTURA DE LA PRIMERA ORDEN (completa) ─────');
-        Logger.log(JSON.stringify(ordenes[0], null, 2).substring(0, 3500));
-        Logger.log('───── CAMPOS de nivel superior ─────');
-        Logger.log(Object.keys(ordenes[0]).join(', '));
-        // Buscar dónde están los productos/líneas
-        var o = ordenes[0];
-        ['items','products','order_items','line_items','details','articulos','lines'].forEach(function(k){
-          if (o[k]) Logger.log('🍽️ Encontrado detalle de productos en campo "' + k + '" (' + (o[k].length||'?') + ' items)');
-        });
+      var items = data.data || data.results || (Array.isArray(data) ? data : []);
+      Logger.log('✅ Registros: ' + items.length);
+      if (items.length > 0) {
+        Logger.log('── Campos: ' + Object.keys(items[0]).join(', '));
+        Logger.log('── PRIMER REGISTRO COMPLETO:');
+        Logger.log(JSON.stringify(items[0], null, 2).substring(0, 2500));
       }
-      return; // si uno funcionó, paramos
     } catch(e) {
       Logger.log('Error: ' + e.message);
     }
-  }
-  Logger.log('⚠️ Ningún endpoint funcionó. Verifica API Key / UUID con soporte Parrot.');
+  });
+  Logger.log('═══════════════════════════════════════════');
+  Logger.log('FIN. Cópiame TODO este registro.');
 }
 
 // ── SINCRONIZAR PARROT POS ─────────────────────────────────────────────────
