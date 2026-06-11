@@ -182,6 +182,7 @@ function doPost(e) {
   switch (accion) {
     case 'registrarIngreso':           return _registrarIngreso(datos);
     case 'registrarFactura':           return _registrarFactura(datos);
+    case 'registrarFacturaCompleta':   return _registrarFacturaCompleta(datos);
     case 'actualizarFactura':          return _actualizarFactura(datos);
     case 'borrarFactura':              return _borrarFactura(datos);
     case 'registrarArticuloDetalle':   return _registrarArticuloDetalle(datos);
@@ -255,6 +256,53 @@ function _registrarFactura(b) {
   } catch(e) {
     return _err(e.message);
   }
+}
+
+// ── REGISTRAR FACTURA COMPLETA (cabecera + todos los artículos en 1 escritura) ──
+// Mucho más rápido que registrar artículo por artículo.
+function _registrarFacturaCompleta(b) {
+  try {
+    var shF = _getSheet(HOJAS.FACTURAS);
+    var id = _nextId(HOJAS.FACTURAS, 'FACT');
+    _escribirFila(shF, [
+      id, b.fecha || _fechaHoy(), b.unidad || '', b.proveedor || '',
+      b.folio || '', '', parseFloat(b.total || 0)
+    ]);
+
+    var lineas = b.lineas || [];
+    if (lineas.length > 0) {
+      var shD = _getSheet(HOJAS.ART_DETALLES);
+      var filaInicio = _siguienteFilaLibre(shD, 2);
+      var filas = lineas.map(function(l){
+        var qty = parseFloat(l.cantidad) || 0;
+        var precio = parseFloat(l.precioUnit) || 0;
+        var sub = qty * precio;
+        return [ Utilities.getUuid().substring(0,8), id, b.fecha || '', l.articulo || '', qty, precio, 'NO', 0, sub ];
+      });
+      shD.getRange(filaInicio, 1, filas.length, 9).setValues(filas);  // UNA sola escritura
+      // Costos dinámicos en lote (lee el catálogo 1 vez)
+      var mapa = {};
+      lineas.forEach(function(l){ if (l.articulo) mapa[String(l.articulo).trim().toLowerCase()] = parseFloat(l.precioUnit) || 0; });
+      _actualizarCostosDinamicos(mapa);
+    }
+    return _json({ status: 'ok', idFactura: id });
+  } catch(e) {
+    return _err(e.message);
+  }
+}
+
+// Actualiza el costo dinámico de varios artículos leyendo el catálogo una sola vez
+function _actualizarCostosDinamicos(mapaArticuloPrecio) {
+  try {
+    var sh = _getSheet(HOJAS.CATALOGO);
+    var datos = sh.getDataRange().getValues();
+    for (var i = 1; i < datos.length; i++) {
+      var nombre = String(datos[i][0]).trim().toLowerCase();
+      if (mapaArticuloPrecio.hasOwnProperty(nombre) && mapaArticuloPrecio[nombre] > 0) {
+        sh.getRange(i + 1, 3).setValue(mapaArticuloPrecio[nombre]); // col C = Costo Dinámico
+      }
+    }
+  } catch(_) {}
 }
 
 // ── ACTUALIZAR FACTURA (editar cabecera + reemplazar artículos) ────────────
