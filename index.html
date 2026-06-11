@@ -1100,7 +1100,7 @@
         <div class="nav-item" data-page="inventario" onclick="go('inventario',this)"><i class="ti ti-packages"></i><span class="nav-lbl">Inventario</span></div>
         <div class="nav-sec">Registros</div>
         <div class="nav-item" data-page="ingresos" onclick="go('ingresos',this)"><i class="ti ti-cash"></i><span class="nav-lbl">Ingresos</span></div>
-        <div class="nav-item" data-page="facturas" onclick="go('facturas',this)"><i class="ti ti-file-invoice"></i><span class="nav-lbl">Facturas</span></div>
+        <div class="nav-item" data-page="facturas" onclick="go('facturas',this)"><i class="ti ti-file-invoice"></i><span class="nav-lbl">Egresos</span></div>
       </nav>
 
       <div class="sb-foot">
@@ -1524,14 +1524,24 @@
     <div class="kpi"><div class="kpi-top"><div class="kpi-label">Artículos comprados</div><div class="kpi-ico g"><i class="ti ti-package"></i></div></div><div class="kpi-val" id="fact-num-articulos">—</div><div class="kpi-sub">Líneas de detalle</div></div>
   </div>
   <div class="card">
-    <div class="card-head"><div><div class="card-title"><i class="ti ti-file-invoice"></i>Últimas facturas</div><div class="card-sub">Comprobantes registrados</div></div><div class="card-actions"><span class="filter-note" id="fn-facturas"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><button class="btn btn-primary btn-sm" onclick="openRegister('factura')"><i class="ti ti-plus"></i>Nueva factura</button></div></div>
+    <div class="card-head"><div><div class="card-title"><i class="ti ti-file-invoice"></i>Egresos registrados</div><div class="card-sub">Comprobantes y facturas de proveedores</div></div><div class="card-actions"><button class="btn btn-primary btn-sm" onclick="openRegister('factura')"><i class="ti ti-plus"></i>Nuevo egreso</button></div></div>
+    <!-- Buscador -->
+    <div style="padding:0 18px 12px">
+      <div style="position:relative;max-width:420px">
+        <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--tx-4);font-size:16px"></i>
+        <input type="text" id="fact-buscar" placeholder="Buscar por proveedor, folio o sucursal..."
+          oninput="LS_UI.buscarFacturas(this.value)"
+          style="width:100%;padding:9px 12px 9px 36px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none">
+      </div>
+    </div>
     <div class="tbl-wrap">
-      <table class="tbl" data-sortable data-filterable="facturas">
+      <table class="tbl" data-sortable>
         <thead><tr>
           <th class="sortable" data-type="text">Fecha<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
           <th class="sortable" data-type="text">Proveedor<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
-          <th>Sucursal</th><th>Categoría</th><th>Folio</th>
+          <th>Unidad de negocio</th><th>Folio</th>
           <th class="sortable num" data-type="num">Total<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th style="text-align:center">Acciones</th>
         </tr></thead>
         <tbody id="tabla-facturas">
           <tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr>
@@ -1572,7 +1582,7 @@
           <div class="d-item" onclick="mdrawerGo('gastos')"><i class="ti ti-receipt"></i><span>Gastos</span></div>
           <div class="d-item" onclick="mdrawerGo('balance')"><i class="ti ti-report-money"></i><span>Balance</span></div>
           <div class="d-item" onclick="mdrawerGo('inventario')"><i class="ti ti-packages"></i><span>Inventario</span></div>
-          <div class="d-item" onclick="mdrawerGo('facturas')"><i class="ti ti-file-invoice"></i><span>Facturas</span></div>
+          <div class="d-item" onclick="mdrawerGo('facturas')"><i class="ti ti-file-invoice"></i><span>Egresos</span></div>
           <div class="d-item" onclick="toggleDrawer();doLogout()"><i class="ti ti-logout"></i><span>Salir</span></div>
         </div>
       </div>
@@ -3182,20 +3192,12 @@ const LS_UI = (() => {
         setTxt('fact-top-proveedor', '—'); setTxt('fact-top-prov-monto', '$0');
       }
 
-      // Tabla facturas
-      if (facturas.length === 0) {
-        setEl(containerId, '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--tx-3)">Sin facturas en el período seleccionado</td></tr>');
-      } else {
-        setEl(containerId, facturas.slice(0, 100).map(f => `
-          <tr>
-            <td>${f.fecha}</td>
-            <td>${f.proveedor}</td>
-            <td>${f.unidad}</td>
-            <td>${f.tipo || '—'}</td>
-            <td style="font-family:var(--mono);font-size:11px;color:var(--tx-3)">${f.folio}</td>
-            <td style="font-family:var(--mono);font-weight:600">${fmt(f.total)}</td>
-          </tr>`).join(''));
-      }
+      // Guardar en caché para el buscador y el detalle
+      window._facturasVista = facturas;
+      window._artDetCache = artDet;
+      // Limpiar el buscador al recargar
+      const bq = document.getElementById('fact-buscar'); if (bq) bq.value = '';
+      _pintarFacturas(facturas);
 
       // Tabla top proveedores
       const topProvEl = document.getElementById('tabla-top-proveedores');
@@ -3213,6 +3215,95 @@ const LS_UI = (() => {
     } catch (err) {
       showError(containerId, 'Error cargando facturas');
     }
+  }
+
+  // Pinta las filas de la tabla de egresos (con botones ver/editar)
+  function _pintarFacturas(lista) {
+    const cont = document.getElementById('tabla-facturas');
+    if (!cont) return;
+    if (!lista || lista.length === 0) {
+      cont.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--tx-3)">Sin egresos para mostrar</td></tr>';
+      return;
+    }
+    cont.innerHTML = lista.slice(0, 200).map((f, idx) => `
+      <tr>
+        <td>${f.fecha}</td>
+        <td style="font-weight:500">${f.proveedor}</td>
+        <td style="font-size:11.5px;color:var(--tx-3)">${f.unidad}</td>
+        <td style="font-family:var(--mono);font-size:11px;color:var(--tx-3)">${f.folio || '—'}</td>
+        <td style="font-family:var(--mono);font-weight:600">${fmt(f.total)}</td>
+        <td style="text-align:center;white-space:nowrap">
+          <button onclick="LS_UI.verFactura('${(f.id||'').replace(/'/g,'')}')" title="Ver desglose"
+            style="border:none;background:transparent;cursor:pointer;color:var(--terra-claro);font-size:17px;padding:4px 7px;border-radius:var(--r-xs)"
+            onmouseover="this.style.background='rgba(177,70,24,0.1)'" onmouseout="this.style.background='transparent'">
+            <i class="ti ti-eye"></i></button>
+          <button onclick="LS_UI.editarFactura('${(f.id||'').replace(/'/g,'')}')" title="Editar"
+            style="border:none;background:transparent;cursor:pointer;color:var(--tx-3);font-size:17px;padding:4px 7px;border-radius:var(--r-xs)"
+            onmouseover="this.style.background='rgba(177,70,24,0.1)';this.style.color='var(--terra-claro)'" onmouseout="this.style.background='transparent';this.style.color='var(--tx-3)'">
+            <i class="ti ti-pencil"></i></button>
+        </td>
+      </tr>`).join('');
+  }
+
+  // Buscador de egresos (filtra la vista cacheada)
+  function buscarFacturas(q) {
+    const lista = window._facturasVista || [];
+    const t = _norm(q);
+    if (!t) { _pintarFacturas(lista); return; }
+    _pintarFacturas(lista.filter(f =>
+      _norm(f.proveedor).includes(t) ||
+      _norm(f.folio).includes(t) ||
+      _norm(f.unidad).includes(t)
+    ));
+  }
+
+  // Ver el desglose de una factura (cabecera + artículos)
+  function verFactura(idFactura) {
+    const f = (window._facturasVista || []).find(x => String(x.id) === String(idFactura));
+    if (!f) { toast('No encontrada', 'No se pudo abrir el egreso', 'err', 'ti-alert-circle'); return; }
+    const lineas = (window._artDetCache || []).filter(a => String(a.idFactura) === String(idFactura));
+    const filasHtml = lineas.length > 0 ? lineas.map(l => `
+      <tr>
+        <td style="padding:7px 12px">${l.articulo}</td>
+        <td style="padding:7px 12px;text-align:right;font-family:var(--mono)">${l.cantidad}</td>
+        <td style="padding:7px 12px;text-align:right;font-family:var(--mono)">${LS_API.formatMXNDec(l.precioUnit)}</td>
+        <td style="padding:7px 12px;text-align:right;font-family:var(--mono);font-weight:600">${LS_API.formatMXNDec(l.total)}</td>
+      </tr>`).join('')
+      : '<tr><td colspan="4" style="padding:16px;text-align:center;color:var(--tx-3)">Esta factura no tiene desglose de artículos</td></tr>';
+
+    _modal(`
+      <div class="modal" style="max-width:640px">
+        <div class="modal-header">
+          <div>
+            <div class="modal-title"><i class="ti ti-file-invoice" style="margin-right:6px;color:var(--terra-claro)"></i>${f.proveedor}</div>
+            <div class="modal-sub">${f.fecha} · ${f.unidad} · Folio ${f.folio || '—'}</div>
+          </div>
+          <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-body">
+          <div style="border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden">
+            <div style="display:grid;grid-template-columns:2.4fr 0.7fr 1fr 1fr;background:var(--cafe-card-hi);padding:8px 12px;font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.05em;font-weight:600">
+              <div>Artículo</div><div style="text-align:right">Cant.</div><div style="text-align:right">P. unit.</div><div style="text-align:right">Importe</div>
+            </div>
+            <div style="max-height:340px;overflow-y:auto">
+              <table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>${filasHtml}</tbody></table>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--cafe-card-hi);border-top:1px solid var(--line-2)">
+              <span style="font-weight:700;color:var(--tx)">TOTAL</span>
+              <span style="font-size:22px;font-weight:700;color:var(--terra-claro);font-family:'DM Mono',monospace">${LS_API.formatMXNDec(f.total)}</span>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="_cerrarModal()">Cerrar</button>
+          <button class="btn-save" onclick="_cerrarModal();LS_UI.editarFactura('${(f.id||'').replace(/'/g,'')}')"><i class="ti ti-pencil"></i> Editar</button>
+        </div>
+      </div>`);
+  }
+
+  // Editar factura (por ahora informa que requiere el endpoint de actualización)
+  function editarFactura(idFactura) {
+    toast('Edición en preparación', 'La edición de egresos estará lista en la próxima actualización del Apps Script', 'warn', 'ti-pencil');
   }
 
   // ══════════════════════════════════════════════════════════
@@ -3839,11 +3930,11 @@ const LS_UI = (() => {
             <div class="ff">
               <label>Unidad de negocio</label>
               <select id="fact-unidad">
-                <option value="Sueño de Luna Coffee">Sueño de Luna Coffee & Roasters</option>
-                <option value="Casa de la Cultura">Casa de la Cultura</option>
-                <option value="Helfy Fü">Helfy Fü</option>
-                <option value="Barbacoa y Menudo">Barbacoa y Menudo</option>
-                <option value="Sueño de Luna Eventos">Sueño de Luna Eventos</option>
+                <option value="SUEÑO DE LUNA SUC. CASA DE LA CULTURA">Sueño de Luna Suc. Casa de la Cultura</option>
+                <option value="SUEÑO DE LUNA COFFEE & ROASTERS">Sueño de Luna Coffee & Roasters</option>
+                <option value="SUEÑO DE LUNA SUC. HELFY FÜ">Sueño de Luna Suc. Helfy Fü</option>
+                <option value="BARBACOA & MENUDO">Barbacoa & Menudo</option>
+                <option value="SUEÑO DE LUNA EVENTOS">Sueño de Luna Eventos</option>
               </select>
             </div>
           </div>
@@ -4467,6 +4558,7 @@ const LS_UI = (() => {
     renderGastos, renderBalance, renderInventario,
     onPageChange, reloadPage, invalidarCacheYRecargar,
     filtrarRentabilidad: (f) => renderRentabilidad(f),
+    buscarFacturas, verFactura, editarFactura,
     calcIngreso, guardarIngreso, guardarFactura,
     closeModal,
     // Abrir modales
