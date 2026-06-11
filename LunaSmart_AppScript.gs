@@ -419,14 +419,18 @@ function diagnosticarParrot() {
 
 // ── PARROT POS — API api.parrot.rest/external ──────────────────────────────
 // Sucursales con Parrot: CASA DE LA CULTURA (principal), HELFY FÜ (multimarca).
-// Trae: ventas por artículo (order-items) y cortes (cashier-sessions).
+// Modelo (igual que AppSheet):
+//   cashier-session  → 1 fila en INGRESOS (corte: pagos + venta + diferencia)
+//   order-items      → filas en INGRESOS DETALLES con el ID_INGRESO del corte
 
-// GET autenticado a Parrot para una ventana [ini, fin] (máx 48h por API).
-function _parrotGet(path, ini, fin, pageSize) {
+// GET autenticado a Parrot. Ventana [ini, fin] máx 48h. pageSize máx 100.
+function _parrotGet(path, ini, fin, pageSize, page) {
   var tz = 'America/Mexico_City';
   var qs = '?startTimestamp=' + encodeURIComponent(Utilities.formatDate(ini, tz, "yyyy-MM-dd'T'HH:mm:ssXXX"))
          + '&endTimestamp='   + encodeURIComponent(Utilities.formatDate(fin, tz, "yyyy-MM-dd'T'HH:mm:ssXXX"))
-         + '&storeUUID=' + PARROT_STORE_UUID + '&pageSize=' + (pageSize || 200);
+         + '&storeUUID=' + PARROT_STORE_UUID
+         + '&pageSize=' + Math.min(pageSize || 100, 100)
+         + '&page=' + (page || 0);
   var resp = UrlFetchApp.fetch(PARROT_BASE_URL + path + qs, {
     headers: { 'Authorization': 'Bearer ' + PARROT_API_KEY },
     muteHttpExceptions: true
@@ -445,88 +449,108 @@ function _isoToDate(iso, finDelDia) {
                   finDelDia ? 23 : 0, finDelDia ? 59 : 0, 0);
 }
 
-function _getOrCreateVentasParrot() {
-  var ss = SpreadsheetApp.openById(SHEET_ID);
-  var sh = ss.getSheetByName(HOJAS.VENTAS_PARROT);
-  if (!sh) {
-    sh = ss.insertSheet(HOJAS.VENTAS_PARROT);
-    sh.appendRow(['FECHA','SUCURSAL','PROVIDER','ORDEN_REF','SKU','ARTICULO','CANTIDAD','PRECIO_UNIT','TOTAL','UUID']);
-  }
-  return sh;
-}
-
-// Sincroniza Parrot. sucursal + rango ISO (YYYY-MM-DD). Chunks de 24h.
+// Sincroniza Parrot al modelo INGRESOS + INGRESOS DETALLES. Chunks de 24h.
 function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
   sucursal = sucursal || 'CASA DE LA CULTURA';
   try {
     var fin = hastaISO ? _isoToDate(hastaISO, true)  : new Date();
     var ini = desdeISO ? _isoToDate(desdeISO, false) : new Date(fin - 2 * 24 * 60 * 60 * 1000);
 
-    var shV = _getOrCreateVentasParrot();
-    var shC = _getSheet(HOJAS.CONCILIACION);
+    var shIng = _getSheet(HOJAS.INGRESOS);
+    var shDet = _getSheet(HOJAS.ING_DETALLES);
+    var tz = Session.getScriptTimeZone();
 
-    // Evitar duplicados por UUID
-    var vistosItem = {};
-    shV.getDataRange().getValues().slice(1).forEach(function(r){ if (r[9]) vistosItem[r[9]] = true; });
-    var vistosSes = {};
-    shC.getDataRange().getValues().slice(1).forEach(function(r){ if (r[7]) vistosSes[String(r[7])] = true; });
+    // Dedup: sesiones ya importadas (UUID guardado en OBSERVACIONES como "PARROT:uuid")
+    var sesVistas = {};
+    shIng.getDataRange().getValues().slice(1).forEach(function(r){
+      var m = String(r[14] || '').match(/PARROT:([a-f0-9-]+)/i);
+      if (m) sesVistas[m[1]] = r[0];   // uuid → ID_INGRESO
+    });
+    // Dedup: items ya importados (UUID en ID_CONCEPTO = col A de INGRESOS DETALLES)
+    var itemVistos = {};
+    shDet.getDataRange().getValues().slice(1).forEach(function(r){ if (r[0]) itemVistos[String(r[0])] = true; });
 
-    var nItems = 0, nSes = 0;
+    var nCortes = 0, nItems = 0;
     var cursor = new Date(ini);
     while (cursor < fin) {
       var chunkFin = new Date(Math.min(cursor.getTime() + 24*60*60*1000, fin.getTime()));
 
-      // 1) VENTAS POR ARTÍCULO → VENTAS_PARROT
-      try {
-        var items = _parrotGet('/v2/order-items', cursor, chunkFin, 300);
-        for (var a = 0; a < items.length; a++) {
-          var it = items[a];
-          if (it.uuid && vistosItem[it.uuid]) continue;
-          var fI = Utilities.formatDate(new Date(it.createdAt), Session.getScriptTimeZone(), 'dd/MM/yyyy');
-          _escribirFila(shV, [
-            fI, sucursal, it.provider || '', it.orderReference || '',
-            it.sku || '', it.itemName || '', parseFloat(it.quantity) || 0,
-            parseFloat(it.unitPrice) || 0, parseFloat(it.total) || 0, it.uuid || ''
-          ]);
-          if (it.uuid) vistosItem[it.uuid] = true;
-          nItems++;
-        }
-      } catch (e1) { Logger.log('items: ' + e1.message); }
+      // 1) CORTES (cashier-sessions) → INGRESOS
+      var sesiones = [];
+      try { sesiones = _parrotGet('/v1/cashier-sessions', cursor, chunkFin, 50, 0); }
+      catch(e){ Logger.log('sesiones: ' + e.message); }
       Utilities.sleep(4500);
 
-      // 2) CORTES (cashier sessions) → CONCILIACION
-      try {
-        var sesiones = _parrotGet('/v1/cashier-sessions', cursor, chunkFin, 50);
-        for (var b = 0; b < sesiones.length; b++) {
-          var s = sesiones[b];
-          if (s.uuid && vistosSes[s.uuid]) continue;
-          var fS = Utilities.formatDate(new Date(s.finishedAt || s.startedAt), Session.getScriptTimeZone(), 'dd/MM/yyyy');
-          var cm = s.cashMovements || {};
-          var ventaParrot = (s.sales && s.sales.totalSales) || cm.expectedAmount || 0;
-          var declarado = cm.reportedAmount || 0;
-          var delta = (cm.differenceAmount != null) ? cm.differenceAmount : (declarado - ventaParrot);
-          var estado = Math.abs(delta) < 1 ? 'CUADRA' : (delta < 0 ? 'FALTANTE' : 'SOBRANTE');
-          _escribirFila(shC, [
-            fS, 'INGRESOS-00014', ventaParrot, ventaParrot, declarado, delta,
-            estado, s.uuid || ('PARROT-' + s.sessionNumber), new Date().toISOString()
-          ]);
-          if (s.uuid) vistosSes[s.uuid] = true;
-          nSes++;
-        }
-      } catch (e2) { Logger.log('sessions: ' + e2.message); }
-      Utilities.sleep(4500);
+      var idCorteDelDia = null;  // ID_INGRESO al que se enlazan los items del día
+      sesiones.forEach(function(s){
+        if (s.uuid && sesVistas[s.uuid]) { idCorteDelDia = idCorteDelDia || sesVistas[s.uuid]; return; }
+        var pay = {};
+        (s.sessionByPaymentType || []).forEach(function(p){ pay[p.paymentType] = (pay[p.paymentType]||0) + (p.reportedAmount||0); });
+        var cm = s.cashMovements || {};
+        var efectivo = pay['CASH'] || 0;
+        var tarjeta  = (pay['DEBIT_CARD']||0) + (pay['CREDIT_CARD']||0) + (pay['PAY']||0);
+        var transfer = pay['THIRD_PARTY'] || 0;
+        var ventaParrot = (s.sales && s.sales.totalSales) || cm.expectedAmount || 0;
+        var declarado = cm.reportedAmount || 0;
+        var dif = (cm.differenceAmount != null) ? cm.differenceAmount : (declarado - ventaParrot);
+        var estado = Math.abs(dif) < 1 ? 'CUADRA' : (dif < 0 ? 'FALTANTE $' + Math.abs(dif) : 'SOBRANTE $' + dif);
+        var idIng = Utilities.getUuid().substring(0, 8);
+        var fecha = Utilities.formatDate(new Date(s.finishedAt || s.startedAt), tz, 'dd/MM/yyyy');
+        _escribirFila(shIng, [
+          idIng, fecha, sucursal, 'INGRESOS-00014',
+          cm.startingAmount || 0, cm.withdrawals || 0, cm.deposits || 0,
+          efectivo, tarjeta, transfer, 0,
+          declarado, ventaParrot, dif,
+          estado + ' | PARROT:' + s.uuid
+        ]);
+        sesVistas[s.uuid] = idIng;
+        idCorteDelDia = idCorteDelDia || idIng;
+        nCortes++;
+      });
 
+      // 2) VENTAS POR ARTÍCULO (order-items) → INGRESOS DETALLES (paginado, máx 100)
+      if (idCorteDelDia) {
+        var page = 0, hayMas = true, guard = 0;
+        while (hayMas && guard < 25) {
+          var items = [];
+          try { items = _parrotGet('/v2/order-items', cursor, chunkFin, 100, page); }
+          catch(e){ Logger.log('items p' + page + ': ' + e.message); break; }
+          Utilities.sleep(4500);
+          items.forEach(function(it){
+            if (it.uuid && itemVistos[it.uuid]) return;  // ya importado
+            var t = new Date(it.createdAt);
+            var fecha = Utilities.formatDate(t, tz, 'dd/MM/yyyy');
+            var total = parseFloat(it.total) || 0;
+            _escribirFila(shDet, [
+              it.uuid || Utilities.getUuid().substring(0,8),  // A=ID_CONCEPTO (dedup)
+              idCorteDelDia,                                   // B=ID_INGRESOS
+              fecha,                                           // C=FECHA
+              it.itemName || '',                               // D=ARTICULO
+              parseFloat(it.quantity) || 0,                    // E=CANTIDAD
+              parseFloat(it.unitPrice) || 0,                   // F=PRECIO UNIT
+              total,                                           // G=SUBTOTAL
+              'NO',                                            // H=APLICA IVA
+              parseFloat(it.taxAmount) || 0,                   // I=IVA
+              total                                            // J=TOTAL
+            ]);
+            if (it.uuid) itemVistos[it.uuid] = true;
+            nItems++;
+          });
+          hayMas = items.length === 100;
+          page++;
+        }
+      }
       cursor = chunkFin;
     }
 
     return _json({ status: 'ok', msg: 'Parrot sincronizado',
-                   registros: nItems + nSes, articulos: nItems, cortes: nSes });
+                   registros: nCortes + nItems, cortes: nCortes, articulos: nItems });
   } catch (e) {
     return _err('Parrot: ' + e.message);
   }
 }
 
-// Función manual para backfill desde el editor (ej. sincronizarParrotDias(7))
+// Backfill manual desde el editor. Ej: sincronizarParrotDias(2)
 function sincronizarParrotDias(dias) {
   dias = dias || 2;
   var hasta = new Date();
