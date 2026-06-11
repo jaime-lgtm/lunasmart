@@ -2464,6 +2464,26 @@ const LS_API = (() => {
     });
   }
 
+  // Actualizar factura existente (cabecera + reemplaza artículos)
+  async function actualizarFactura(datos) {
+    return escribirViaScript('actualizarFactura', {
+      datos: {
+        id:        datos.id,
+        fecha:     datos.fecha,
+        unidad:    datos.unidad,
+        proveedor: datos.proveedor,
+        folio:     datos.folio,
+        total:     datos.total,
+        lineas:    datos.lineas || [],
+      }
+    });
+  }
+
+  // Borrar factura (cabecera + artículos)
+  async function borrarFactura(id) {
+    return escribirViaScript('borrarFactura', { datos: { id } });
+  }
+
   // Registrar nuevo proveedor
   async function registrarProveedor(datos) {
     return escribirViaScript('registrarProveedor', {
@@ -2821,7 +2841,7 @@ const LS_API = (() => {
     getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos,
     getVentasPorSucursal, aliasSucursal,
     // Escritura
-    registrarIngreso, registrarFactura,
+    registrarIngreso, registrarFactura, actualizarFactura, borrarFactura,
     registrarProveedor, registrarCliente,
     registrarArticuloDetalle, registrarCatalogoArticulo,
     // Agregaciones
@@ -3301,9 +3321,57 @@ const LS_UI = (() => {
       </div>`);
   }
 
-  // Editar factura (por ahora informa que requiere el endpoint de actualización)
-  function editarFactura(idFactura) {
-    toast('Edición en preparación', 'La edición de egresos estará lista en la próxima actualización del Apps Script', 'warn', 'ti-pencil');
+  // Editar factura: abre el modal pre-llenado con la factura y sus artículos
+  async function editarFactura(idFactura) {
+    const f = (window._facturasVista || []).find(x => String(x.id) === String(idFactura));
+    if (!f) { toast('No encontrada', 'No se pudo abrir el egreso', 'err', 'ti-alert-circle'); return; }
+    const lineas = (window._artDetCache || [])
+      .filter(a => String(a.idFactura) === String(idFactura))
+      .map(a => ({ articulo: a.articulo, cantidad: a.cantidad, unidad: '', precio: a.precioUnit }));
+    await buildFormFactura({
+      id: f.id, fecha: f.fecha, proveedor: f.proveedor,
+      folio: f.folio, unidad: f.unidad, lineas,
+    });
+  }
+
+  // Confirmar y borrar factura
+  async function confirmarBorrarFactura(idFactura) {
+    const f = (window._facturasVista || []).find(x => String(x.id) === String(idFactura));
+    if (!f) return;
+    _modal(`
+      <div class="modal" style="max-width:400px">
+        <div class="modal-header">
+          <div><div class="modal-title" style="color:var(--rojo)"><i class="ti ti-trash" style="margin-right:6px"></i>Borrar egreso</div></div>
+        </div>
+        <div class="modal-body">
+          <p style="font-size:13.5px;color:var(--tx-2);line-height:1.6">
+            ¿Seguro que quieres borrar este egreso?<br>
+            <strong>${f.proveedor}</strong> · ${f.fecha} · ${LS_API.formatMXN(f.total)}<br>
+            <span style="color:var(--tx-3);font-size:12px">Se borrará la factura y todos sus artículos. No se puede deshacer.</span>
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
+          <button class="btn-save" style="background:var(--rojo)" id="btn-del-fact" onclick="LS_UI.ejecutarBorrarFactura('${(f.id||'').replace(/'/g,'')}')">
+            <i class="ti ti-trash"></i> Sí, borrar
+          </button>
+        </div>
+      </div>`);
+  }
+
+  async function ejecutarBorrarFactura(idFactura) {
+    const btn = document.getElementById('btn-del-fact');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 spin"></i> Borrando...'; }
+    const res = await LS_API.borrarFactura(idFactura);
+    if (res?.status === 'ok') {
+      _cerrarModal();
+      LS_API.invalidarCache();
+      toast('Egreso borrado', 'La factura y sus artículos se eliminaron', 'ok', 'ti-check');
+      await renderFacturas();
+    } else {
+      toast('Error', res?.msg || 'No se pudo borrar', 'err', 'ti-alert-circle');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-trash"></i> Sí, borrar'; }
+    }
   }
 
   // ══════════════════════════════════════════════════════════
@@ -3874,7 +3942,10 @@ const LS_UI = (() => {
   // ══════════════════════════════════════════════════════════
   // FORMULARIO — NUEVA FACTURA
   // ══════════════════════════════════════════════════════════
-  async function buildFormFactura() {
+  async function buildFormFactura(editData) {
+    // editData = { id, fecha, proveedor, folio, unidad, lineas:[{articulo,cantidad,unidad,precio}] }
+    window._editandoFacturaId = editData ? editData.id : null;
+    const esEdicion = !!editData;
     const [proveedores, catalogo, categorias] = await Promise.all([
       LS_API.getProveedores(),
       LS_API.getCatalogo(),
@@ -3898,7 +3969,7 @@ const LS_UI = (() => {
       <div class="modal" style="max-width:920px">
         <div class="modal-header">
           <div>
-            <div class="modal-title">Nueva factura / egreso</div>
+            <div class="modal-title">${esEdicion ? 'Editar egreso' : 'Nueva factura / egreso'}</div>
             <div class="modal-sub">Artículos del Catálogo Maestro — escribe para buscar y filtrar</div>
           </div>
           <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
@@ -3981,16 +4052,41 @@ const LS_UI = (() => {
         </div>
 
         <div class="modal-footer">
+          ${esEdicion ? `<button class="btn-cancel" style="color:var(--rojo);border-color:rgba(212,104,94,0.4)" onclick="LS_UI.confirmarBorrarFactura('${(editData.id||'').replace(/'/g,'')}')"><i class="ti ti-trash"></i> Borrar</button>` : ''}
           <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
           <button id="fact-btn-guardar" class="btn-save" onclick="LS_UI.guardarFactura()">
-            <i class="ti ti-device-floppy"></i> Guardar factura
+            <i class="ti ti-device-floppy"></i> ${esEdicion ? 'Guardar cambios' : 'Guardar factura'}
           </button>
         </div>
       </div>
     </div>`);
 
-    // Primera línea al abrir
-    setTimeout(() => { LS_UI.agregarLineaFactura(); LS_UI.agregarLineaFactura(); }, 80);
+    // Pre-llenar en modo edición, o líneas vacías en modo nuevo
+    setTimeout(() => {
+      if (esEdicion) {
+        const pi = document.getElementById('fact-proveedor');
+        if (pi) { pi.value = editData.proveedor || ''; pi.dataset.provId = ''; }
+        const ff = document.getElementById('fact-fecha');
+        if (ff) ff.value = _fechaParaInput(editData.fecha);
+        const fol = document.getElementById('fact-folio');
+        if (fol) fol.value = editData.folio || '';
+        const un = document.getElementById('fact-unidad');
+        if (un && editData.unidad) {
+          // seleccionar la opción que coincida (o dejar la primera)
+          for (const o of un.options) { if (o.value === editData.unidad) { un.value = editData.unidad; break; } }
+        }
+        (editData.lineas && editData.lineas.length ? editData.lineas : [null]).forEach(l => LS_UI.agregarLineaFactura(l));
+        LS_UI.calcTotalFactura();
+      } else {
+        LS_UI.agregarLineaFactura(); LS_UI.agregarLineaFactura();
+      }
+    }, 80);
+  }
+
+  // Convierte dd/MM/yyyy (o ISO) a yyyy-MM-dd para <input type=date>
+  function _fechaParaInput(fecha) {
+    const iso = LS_API._fechaISO(fecha);
+    return iso || new Date().toISOString().split('T')[0];
   }
 
   // ── NORMALIZAR texto para búsqueda sin tildes ni mayúsculas ──────────────
@@ -4319,7 +4415,7 @@ const LS_UI = (() => {
   // Artículos disponibles para las líneas (se llenan al construir el form)
   let _artOptsCache = '';
 
-  function agregarLineaFactura() {
+  function agregarLineaFactura(prefill) {
     const container = document.getElementById('fact-lineas');
     if (!container) return;
     const div = document.createElement('div');
@@ -4360,7 +4456,15 @@ const LS_UI = (() => {
         </button>
       </div>`;
     container.appendChild(div);
-    setTimeout(() => div.querySelector('.fl-art-input')?.focus(), 30);
+    // Pre-llenar la línea (modo edición)
+    if (prefill) {
+      const a = div.querySelector('.fl-art-input'); if (a) a.value = prefill.articulo || '';
+      const q = div.querySelector('.fl-qty');       if (q) q.value = prefill.cantidad != null ? prefill.cantidad : 1;
+      const u = div.querySelector('.fl-uni');        if (u) u.value = prefill.unidad || '';
+      const p = div.querySelector('.fl-precio');     if (p) p.value = prefill.precio != null ? prefill.precio : (prefill.precioUnit || '');
+    } else {
+      setTimeout(() => div.querySelector('.fl-art-input')?.focus(), 30);
+    }
   }
 
   
@@ -4443,11 +4547,15 @@ const LS_UI = (() => {
     const unidad       = s('fact-unidad');
     const folio        = s('fact-folio').trim();
 
+    const editandoId = window._editandoFacturaId || null;
+
     // ── PROTECCIÓN ANTI-DUPLICADOS: mismo folio + mismo proveedor ──────────
+    // (en edición se excluye la propia factura)
     if (folio) {
       try {
         const facturas = await LS_API.getFacturas();
         const dup = facturas.find(f =>
+          String(f.id) !== String(editandoId) &&
           String(f.folio).trim().toLowerCase() === folio.toLowerCase() &&
           _norm(f.proveedor) === _norm(proveedorNombre)
         );
@@ -4465,7 +4573,26 @@ const LS_UI = (() => {
     const btn = document.getElementById('fact-btn-guardar');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 spin"></i> Guardando...'; }
 
-    // 1. Registrar cabecera de factura
+    // ── MODO EDICIÓN ──────────────────────────────────────────────────────
+    if (editandoId) {
+      const res = await LS_API.actualizarFactura({
+        id: editandoId, fecha, unidad, proveedor, folio, total: totalFactura,
+        lineas: lineas.map(l => ({ articulo: l.articulo, cantidad: l.cantidad, precioUnit: l.precioUnit })),
+      });
+      if (res?.status !== 'ok') {
+        typeof toast !== 'undefined' && toast('Error', res?.msg || 'No se pudo actualizar', 'err', 'ti-alert-circle');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy"></i> Guardar cambios'; }
+        return;
+      }
+      window._editandoFacturaId = null;
+      _cerrarModal();
+      LS_API.invalidarCache();
+      typeof toast !== 'undefined' && toast('Egreso actualizado', proveedor + ' · ' + LS_API.formatMXN(totalFactura), 'ok', 'ti-check');
+      await renderFacturas();
+      return;
+    }
+
+    // ── MODO NUEVO ────────────────────────────────────────────────────────
     const resFact = await LS_API.registrarFactura({
       fecha, unidad, proveedor, folio, tipo: '', total: totalFactura
     });
@@ -4476,7 +4603,6 @@ const LS_UI = (() => {
       return;
     }
 
-    // 2. Registrar cada artículo en ARTICULOS DETALLES
     const idFactura = resFact.idFactura || folio || fecha;
     for (const linea of lineas) {
       await LS_API.registrarArticuloDetalle({
@@ -4558,7 +4684,7 @@ const LS_UI = (() => {
     renderGastos, renderBalance, renderInventario,
     onPageChange, reloadPage, invalidarCacheYRecargar,
     filtrarRentabilidad: (f) => renderRentabilidad(f),
-    buscarFacturas, verFactura, editarFactura,
+    buscarFacturas, verFactura, editarFactura, confirmarBorrarFactura, ejecutarBorrarFactura,
     calcIngreso, guardarIngreso, guardarFactura,
     closeModal,
     // Abrir modales
