@@ -34,6 +34,7 @@ const HOJAS = {
   INVENTARIO:     'BD_INVENTARIO_GENERAL',
   CONCILIACION:   'CONCILIACION',
   DATA_INGRESOS:  'DATA_INGRESOS',
+  VENTAS_PARROT:  'VENTAS_PARROT',        // ventas por artículo (de Parrot)
 };
 
 // ── JSON OUTPUT ─────────────────────────────────────────────────────────────
@@ -151,6 +152,7 @@ function doGet(e) {
     getBDINVENTARIOGENERAL:        HOJAS.INVENTARIO,
     getCONCILIACION:               HOJAS.CONCILIACION,
     getDATAINGRESOS:               HOJAS.DATA_INGRESOS,
+    getVENTASPARROT:               HOJAS.VENTAS_PARROT,
   };
 
   if (accion === 'getUSUARIOS') return _getUsuarios();
@@ -183,7 +185,7 @@ function doPost(e) {
     case 'registrarArticuloDetalle':   return _registrarArticuloDetalle(datos);
     case 'registrarProveedor':         return _registrarProveedor(datos);
     case 'registrarCliente':           return _registrarCliente(datos);
-    case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || datos.sucursal || 'CASA DE LA CULTURA');
+    case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || datos.sucursal || 'CASA DE LA CULTURA', body.desde || datos.desde, body.hasta || datos.hasta);
     case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(datos);
     default: return _err('Acción desconocida: ' + accion);
   }
@@ -415,146 +417,123 @@ function diagnosticarParrot() {
   Logger.log('FIN. Cópiame TODO este registro.');
 }
 
-// ── SINCRONIZAR PARROT POS ─────────────────────────────────────────────────
-// Sucursales con Parrot POS (UUID compartido):
-//   CASA DE LA CULTURA → sucursal principal (punto de venta físico)
-//   HELFY FÜ          → multi-marca Parrot (Rappi/Uber)
-// Sucursales SIN Parrot (manuales):
-//   SUEÑO DE LUNA     → Coffee & Roasters (expos, mercados, redes sociales)
-//   BARBACOA Y MENUDO → solo domingos, desde casa
-//   EVENTOS           → bar móvil y eventos
-function _sincronizarParrot(sucursal) {
+// ── PARROT POS — API api.parrot.rest/external ──────────────────────────────
+// Sucursales con Parrot: CASA DE LA CULTURA (principal), HELFY FÜ (multimarca).
+// Trae: ventas por artículo (order-items) y cortes (cashier-sessions).
+
+// GET autenticado a Parrot para una ventana [ini, fin] (máx 48h por API).
+function _parrotGet(path, ini, fin, pageSize) {
+  var tz = 'America/Mexico_City';
+  var qs = '?startTimestamp=' + encodeURIComponent(Utilities.formatDate(ini, tz, "yyyy-MM-dd'T'HH:mm:ssXXX"))
+         + '&endTimestamp='   + encodeURIComponent(Utilities.formatDate(fin, tz, "yyyy-MM-dd'T'HH:mm:ssXXX"))
+         + '&storeUUID=' + PARROT_STORE_UUID + '&pageSize=' + (pageSize || 200);
+  var resp = UrlFetchApp.fetch(PARROT_BASE_URL + path + qs, {
+    headers: { 'Authorization': 'Bearer ' + PARROT_API_KEY },
+    muteHttpExceptions: true
+  });
+  var code = resp.getResponseCode();
+  if (code !== 200) {
+    throw new Error('Parrot ' + path + ' HTTP ' + code + ': ' + resp.getContentText().substring(0, 150));
+  }
+  var d = JSON.parse(resp.getContentText());
+  return d.data || d.results || [];
+}
+
+function _isoToDate(iso, finDelDia) {
+  var p = String(iso).split('-');
+  return new Date(parseInt(p[0],10), parseInt(p[1],10) - 1, parseInt(p[2],10),
+                  finDelDia ? 23 : 0, finDelDia ? 59 : 0, 0);
+}
+
+function _getOrCreateVentasParrot() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sh = ss.getSheetByName(HOJAS.VENTAS_PARROT);
+  if (!sh) {
+    sh = ss.insertSheet(HOJAS.VENTAS_PARROT);
+    sh.appendRow(['FECHA','SUCURSAL','PROVIDER','ORDEN_REF','SKU','ARTICULO','CANTIDAD','PRECIO_UNIT','TOTAL','UUID']);
+  }
+  return sh;
+}
+
+// Sincroniza Parrot. sucursal + rango ISO (YYYY-MM-DD). Chunks de 24h.
+function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
   sucursal = sucursal || 'CASA DE LA CULTURA';
   try {
-    const hoy = new Date();
-    const hace7 = new Date(hoy - 7 * 24 * 60 * 60 * 1000);
+    var fin = hastaISO ? _isoToDate(hastaISO, true)  : new Date();
+    var ini = desdeISO ? _isoToDate(desdeISO, false) : new Date(fin - 2 * 24 * 60 * 60 * 1000);
 
-    const fechaDesde = Utilities.formatDate(hace7, 'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
-    const fechaHasta = Utilities.formatDate(hoy,   'UTC', "yyyy-MM-dd'T'HH:mm:ss'Z'");
+    var shV = _getOrCreateVentasParrot();
+    var shC = _getSheet(HOJAS.CONCILIACION);
 
-    // Llamar a la API de Parrot para obtener órdenes
-    const url = `${PARROT_BASE_URL}/stores/${PARROT_STORE_UUID}/orders?created_after=${fechaDesde}&created_before=${fechaHasta}&limit=500`;
-    const resp = UrlFetchApp.fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': 'Bearer ' + PARROT_API_KEY,
-        'Content-Type':  'application/json',
-      },
-      muteHttpExceptions: true,
-    });
+    // Evitar duplicados por UUID
+    var vistosItem = {};
+    shV.getDataRange().getValues().slice(1).forEach(function(r){ if (r[9]) vistosItem[r[9]] = true; });
+    var vistosSes = {};
+    shC.getDataRange().getValues().slice(1).forEach(function(r){ if (r[7]) vistosSes[String(r[7])] = true; });
 
-    const code = resp.getResponseCode();
-    if (code !== 200) {
-      // Parrot devuelve error — intentar con endpoint alternativo
-      return _sincronizarParrotFallback();
+    var nItems = 0, nSes = 0;
+    var cursor = new Date(ini);
+    while (cursor < fin) {
+      var chunkFin = new Date(Math.min(cursor.getTime() + 24*60*60*1000, fin.getTime()));
+
+      // 1) VENTAS POR ARTÍCULO → VENTAS_PARROT
+      try {
+        var items = _parrotGet('/v2/order-items', cursor, chunkFin, 300);
+        for (var a = 0; a < items.length; a++) {
+          var it = items[a];
+          if (it.uuid && vistosItem[it.uuid]) continue;
+          var fI = Utilities.formatDate(new Date(it.createdAt), Session.getScriptTimeZone(), 'dd/MM/yyyy');
+          _escribirFila(shV, [
+            fI, sucursal, it.provider || '', it.orderReference || '',
+            it.sku || '', it.itemName || '', parseFloat(it.quantity) || 0,
+            parseFloat(it.unitPrice) || 0, parseFloat(it.total) || 0, it.uuid || ''
+          ]);
+          if (it.uuid) vistosItem[it.uuid] = true;
+          nItems++;
+        }
+      } catch (e1) { Logger.log('items: ' + e1.message); }
+      Utilities.sleep(4500);
+
+      // 2) CORTES (cashier sessions) → CONCILIACION
+      try {
+        var sesiones = _parrotGet('/v1/cashier-sessions', cursor, chunkFin, 50);
+        for (var b = 0; b < sesiones.length; b++) {
+          var s = sesiones[b];
+          if (s.uuid && vistosSes[s.uuid]) continue;
+          var fS = Utilities.formatDate(new Date(s.finishedAt || s.startedAt), Session.getScriptTimeZone(), 'dd/MM/yyyy');
+          var cm = s.cashMovements || {};
+          var ventaParrot = (s.sales && s.sales.totalSales) || cm.expectedAmount || 0;
+          var declarado = cm.reportedAmount || 0;
+          var delta = (cm.differenceAmount != null) ? cm.differenceAmount : (declarado - ventaParrot);
+          var estado = Math.abs(delta) < 1 ? 'CUADRA' : (delta < 0 ? 'FALTANTE' : 'SOBRANTE');
+          _escribirFila(shC, [
+            fS, 'INGRESOS-00014', ventaParrot, ventaParrot, declarado, delta,
+            estado, s.uuid || ('PARROT-' + s.sessionNumber), new Date().toISOString()
+          ]);
+          if (s.uuid) vistosSes[s.uuid] = true;
+          nSes++;
+        }
+      } catch (e2) { Logger.log('sessions: ' + e2.message); }
+      Utilities.sleep(4500);
+
+      cursor = chunkFin;
     }
 
-    const json = JSON.parse(resp.getContentText());
-    const ordenes = json.results || json.orders || json.data || [];
-
-    if (ordenes.length === 0) {
-      return _json({ status: 'ok', msg: 'Sin órdenes nuevas en los últimos 7 días', registros: 0 });
-    }
-
-    // Agrupar por fecha y turno
-    const turnos = {};
-    ordenes.forEach(orden => {
-      const fechaRaw = orden.created_at || orden.date || '';
-      const fecha = Utilities.formatDate(new Date(fechaRaw), Session.getScriptTimeZone(), 'dd/MM/yyyy');
-      const hora  = new Date(fechaRaw).getHours();
-      const turno = hora < 13 ? 'INGRESOS-00013' : 'INGRESOS-00015';
-      const key   = fecha + '|' + turno;
-      if (!turnos[key]) turnos[key] = { fecha, turno, total: 0, count: 0 };
-      const monto = parseFloat(orden.total || orden.subtotal || 0);
-      turnos[key].total += monto;
-      turnos[key].count++;
-    });
-
-    // Escribir en CONCILIACION
-    const shConc = _getSheet(HOJAS.CONCILIACION);
-    const existentes = shConc.getDataRange().getValues().slice(1)
-      .map(r => r[0] + '|' + r[1]);
-
-    let registros = 0;
-    Object.values(turnos).forEach(t => {
-      const key = t.fecha + '|' + t.turno;
-      if (!existentes.includes(key)) {
-        _escribirFila(shConc, [
-          t.fecha,
-          t.turno,
-          t.total,   // VENTA_PARROT
-          0,          // VENTA_TOTAL (se llena con el corte manual)
-          0,          // DECLARADO
-          0,          // DELTA
-          'PENDIENTE',
-          'PARROT-AUTO',
-          new Date().toISOString(),
-        ]);
-        registros++;
-      }
-    });
-
-    // También escribir en INGRESOS como registros de tipo Parrot
-    const shIng = _getSheet(HOJAS.INGRESOS);
-    const existIngIDs = shIng.getDataRange().getValues().slice(1)
-      .map(r => String(r[14])); // col O = OBSERVACIONES
-
-    Object.values(turnos).forEach(t => {
-      const sesionId = 'PARROT-' + t.fecha.replace(/\//g, '') + '-' + t.turno;
-      if (!existIngIDs.includes(sesionId)) {
-        const id = _nextId(HOJAS.INGRESOS, 'INGRESOS');
-        _escribirFila(shIng, [
-          id, t.fecha,
-          sucursal, t.turno,
-          0, 0, 0,
-          0, t.total, 0, 0,  // efectivo=0, tarjeta=total (aproximado Parrot), transf=0, rappi=0
-          t.total, t.total, 0,
-          sesionId,
-        ]);
-      }
-    });
-
-    return _json({ status: 'ok', msg: 'Parrot sincronizado', registros });
-  } catch(e) {
-    return _err('Error Parrot: ' + e.message);
+    return _json({ status: 'ok', msg: 'Parrot sincronizado',
+                   registros: nItems + nSes, articulos: nItems, cortes: nSes });
+  } catch (e) {
+    return _err('Parrot: ' + e.message);
   }
 }
 
-/** Fallback: intenta con reportes diarios de Parrot */
-function _sincronizarParrotFallback() {
-  try {
-    const hoy = new Date();
-    const fechaStr = Utilities.formatDate(hoy, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-
-    const url = `${PARROT_BASE_URL}/stores/${PARROT_STORE_UUID}/sales-summary?date=${fechaStr}`;
-    const resp = UrlFetchApp.fetch(url, {
-      method: 'GET',
-      headers: { 'Authorization': 'Bearer ' + PARROT_API_KEY },
-      muteHttpExceptions: true,
-    });
-
-    const code = resp.getResponseCode();
-    if (code !== 200) {
-      return _json({ status: 'ok', msg: 'Parrot no disponible (code ' + code + '). Reintenta más tarde.', registros: 0 });
-    }
-
-    const json = JSON.parse(resp.getContentText());
-    const total = parseFloat(json.total || json.net_sales || 0);
-
-    if (total > 0) {
-      const shConc = _getSheet(HOJAS.CONCILIACION);
-      const fecha  = Utilities.formatDate(hoy, Session.getScriptTimeZone(), 'dd/MM/yyyy');
-      _escribirFila(shConc, [
-        fecha, 'INGRESOS-00013',
-        total, 0, 0, 0, 'PENDIENTE', 'PARROT-RESUMEN',
-        new Date().toISOString(),
-      ]);
-    }
-
-    return _json({ status: 'ok', msg: 'Resumen Parrot del día importado', registros: total > 0 ? 1 : 0 });
-  } catch(e) {
-    return _json({ status: 'ok', msg: 'Parrot fallback falló: ' + e.message, registros: 0 });
-  }
+// Función manual para backfill desde el editor (ej. sincronizarParrotDias(7))
+function sincronizarParrotDias(dias) {
+  dias = dias || 2;
+  var hasta = new Date();
+  var desde = new Date(hasta - dias * 24 * 60 * 60 * 1000);
+  var iso = function(d){ return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd'); };
+  var r = _sincronizarParrot('CASA DE LA CULTURA', iso(desde), iso(hasta));
+  Logger.log(r.getContent());
 }
 
 // ── REGISTRAR ARTÍCULO EN CATÁLOGO MAESTRO ────────────────────────────────
