@@ -864,6 +864,10 @@
       font-size: 14px;
       border-radius: var(--r-lg) !important;
       z-index: 1200 !important;
+      background: var(--cafe-750);          /* fondo SÓLIDO (faltaba en #prov-dd) */
+      border: 1px solid var(--line-2);
+      overflow-y: auto;
+      box-shadow: var(--sh-pop);
     }
     .art-dd::-webkit-scrollbar { width: 10px; }
     .art-opt {
@@ -4098,7 +4102,10 @@ const LS_UI = (() => {
             </div>
             <div class="ff" style="grid-column:1/-1">
               <label>Proveedor habitual</label>
-              <input type="text" id="nart-proveedor" placeholder="Ej: BODEGA AURRERA">
+              <select id="nart-proveedor">
+                <option value="">Seleccionar proveedor...</option>
+                ${(window._proveedoresCache || []).slice().sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(p => `<option value="${p.nombre.replace(/"/g,'&quot;')}">${p.nombre}</option>`).join('')}
+              </select>
             </div>
           </div>
           <div style="margin-top:12px;padding:10px 14px;background:var(--ambar-bg);border-radius:var(--r-sm);border:1px solid rgba(201,154,60,0.25);font-size:12px;color:var(--ambar);display:flex;gap:8px;align-items:flex-start">
@@ -4343,7 +4350,26 @@ const LS_UI = (() => {
     // malinterprete como mes/día. El Sheet la guarda y muestra como dd/MM/yyyy.
     const fecha        = s('fact-fecha');
     const unidad       = s('fact-unidad');
-    const folio        = s('fact-folio');
+    const folio        = s('fact-folio').trim();
+
+    // ── PROTECCIÓN ANTI-DUPLICADOS: mismo folio + mismo proveedor ──────────
+    if (folio) {
+      try {
+        const facturas = await LS_API.getFacturas();
+        const dup = facturas.find(f =>
+          String(f.folio).trim().toLowerCase() === folio.toLowerCase() &&
+          _norm(f.proveedor) === _norm(proveedorNombre)
+        );
+        if (dup) {
+          typeof toast !== 'undefined' && toast(
+            'Factura duplicada',
+            `Ya existe el folio "${folio}" de ${proveedorNombre} (${dup.fecha}, ${LS_API.formatMXN(dup.total)}). No se guardó.`,
+            'err', 'ti-copy'
+          );
+          return;
+        }
+      } catch(_) {}
+    }
 
     const btn = document.getElementById('fact-btn-guardar');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 spin"></i> Guardando...'; }
