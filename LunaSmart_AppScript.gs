@@ -185,7 +185,7 @@ function doPost(e) {
     case 'registrarArticuloDetalle':   return _registrarArticuloDetalle(datos);
     case 'registrarProveedor':         return _registrarProveedor(datos);
     case 'registrarCliente':           return _registrarCliente(datos);
-    case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || datos.sucursal || 'CASA DE LA CULTURA', body.desde || datos.desde, body.hasta || datos.hasta);
+    case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || datos.sucursal || 'SUEÑO DE LUNA', body.desde || datos.desde, body.hasta || datos.hasta);
     case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(datos);
     default: return _err('Acción desconocida: ' + accion);
   }
@@ -451,7 +451,7 @@ function _isoToDate(iso, finDelDia) {
 
 // Sincroniza Parrot al modelo INGRESOS + INGRESOS DETALLES. Chunks de 24h.
 function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
-  sucursal = sucursal || 'CASA DE LA CULTURA';
+  sucursal = sucursal || 'SUEÑO DE LUNA';
   try {
     var fin = hastaISO ? _isoToDate(hastaISO, true)  : new Date();
     var ini = desdeISO ? _isoToDate(desdeISO, false) : new Date(fin - 2 * 24 * 60 * 60 * 1000);
@@ -460,13 +460,19 @@ function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
     var shDet = _getSheet(HOJAS.ING_DETALLES);
     var tz = Session.getScriptTimeZone();
 
-    // Dedup: sesiones ya importadas (UUID guardado en OBSERVACIONES como "PARROT:uuid")
+    // Turno por horario MX: 8:00–13:59 = MAÑANA, 14:00+ = TARDE
+    var turnoDe = function(d){
+      var h = parseInt(Utilities.formatDate(d, 'America/Mexico_City', 'HH'), 10);
+      return h < 14 ? 'TURNO MAÑANA' : 'TURNO TARDE';
+    };
+
+    // Dedup: sesiones ya importadas (UUID en OBSERVACIONES como "PARROT:uuid")
     var sesVistas = {};
     shIng.getDataRange().getValues().slice(1).forEach(function(r){
       var m = String(r[14] || '').match(/PARROT:([a-f0-9-]+)/i);
       if (m) sesVistas[m[1]] = r[0];   // uuid → ID_INGRESO
     });
-    // Dedup: items ya importados (UUID en ID_CONCEPTO = col A de INGRESOS DETALLES)
+    // Dedup: items ya importados (UUID en ID_CONCEPTO = col A)
     var itemVistos = {};
     shDet.getDataRange().getValues().slice(1).forEach(function(r){ if (r[0]) itemVistos[String(r[0])] = true; });
 
@@ -475,15 +481,17 @@ function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
     while (cursor < fin) {
       var chunkFin = new Date(Math.min(cursor.getTime() + 24*60*60*1000, fin.getTime()));
 
-      // 1) CORTES (cashier-sessions) → INGRESOS
+      // 1) CORTES (cashier-sessions) → INGRESOS. Mapa turno → ID_INGRESO del día.
       var sesiones = [];
       try { sesiones = _parrotGet('/v1/cashier-sessions', cursor, chunkFin, 50, 0); }
       catch(e){ Logger.log('sesiones: ' + e.message); }
       Utilities.sleep(4500);
 
-      var idCorteDelDia = null;  // ID_INGRESO al que se enlazan los items del día
+      var corteDeTurno = {};   // 'TURNO MAÑANA' → ID_INGRESO, 'TURNO TARDE' → ID_INGRESO
       sesiones.forEach(function(s){
-        if (s.uuid && sesVistas[s.uuid]) { idCorteDelDia = idCorteDelDia || sesVistas[s.uuid]; return; }
+        var inicioSes = new Date(s.startedAt || s.finishedAt);
+        var turno = turnoDe(inicioSes);
+        if (s.uuid && sesVistas[s.uuid]) { if (!corteDeTurno[turno]) corteDeTurno[turno] = sesVistas[s.uuid]; return; }
         var pay = {};
         (s.sessionByPaymentType || []).forEach(function(p){ pay[p.paymentType] = (pay[p.paymentType]||0) + (p.reportedAmount||0); });
         var cm = s.cashMovements || {};
@@ -497,19 +505,23 @@ function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
         var idIng = Utilities.getUuid().substring(0, 8);
         var fecha = Utilities.formatDate(new Date(s.finishedAt || s.startedAt), tz, 'dd/MM/yyyy');
         _escribirFila(shIng, [
-          idIng, fecha, sucursal, 'INGRESOS-00014',
+          idIng, fecha, sucursal, turno,
           cm.startingAmount || 0, cm.withdrawals || 0, cm.deposits || 0,
           efectivo, tarjeta, transfer, 0,
           declarado, ventaParrot, dif,
           estado + ' | PARROT:' + s.uuid
         ]);
         sesVistas[s.uuid] = idIng;
-        idCorteDelDia = idCorteDelDia || idIng;
+        if (!corteDeTurno[turno]) corteDeTurno[turno] = idIng;
         nCortes++;
       });
 
-      // 2) VENTAS POR ARTÍCULO (order-items) → INGRESOS DETALLES (paginado, máx 100)
-      if (idCorteDelDia) {
+      // Fallback: si solo hay un corte en el día, sirve para cualquier turno
+      var unicoCorte = null;
+      for (var k in corteDeTurno) { unicoCorte = unicoCorte || corteDeTurno[k]; }
+
+      // 2) VENTAS POR ARTÍCULO → INGRESOS DETALLES (ligado al corte del MISMO turno)
+      if (unicoCorte) {
         var page = 0, hayMas = true, guard = 0;
         while (hayMas && guard < 25) {
           var items = [];
@@ -519,11 +531,12 @@ function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
           items.forEach(function(it){
             if (it.uuid && itemVistos[it.uuid]) return;  // ya importado
             var t = new Date(it.createdAt);
+            var idIng = corteDeTurno[turnoDe(t)] || unicoCorte;
             var fecha = Utilities.formatDate(t, tz, 'dd/MM/yyyy');
             var total = parseFloat(it.total) || 0;
             _escribirFila(shDet, [
               it.uuid || Utilities.getUuid().substring(0,8),  // A=ID_CONCEPTO (dedup)
-              idCorteDelDia,                                   // B=ID_INGRESOS
+              idIng,                                           // B=ID_INGRESOS (corte del turno)
               fecha,                                           // C=FECHA
               it.itemName || '',                               // D=ARTICULO
               parseFloat(it.quantity) || 0,                    // E=CANTIDAD
@@ -556,7 +569,7 @@ function sincronizarParrotDias(dias) {
   var hasta = new Date();
   var desde = new Date(hasta - dias * 24 * 60 * 60 * 1000);
   var iso = function(d){ return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd'); };
-  var r = _sincronizarParrot('CASA DE LA CULTURA', iso(desde), iso(hasta));
+  var r = _sincronizarParrot('SUEÑO DE LUNA', iso(desde), iso(hasta));
   Logger.log(r.getContent());
 }
 
