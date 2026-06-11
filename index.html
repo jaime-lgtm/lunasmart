@@ -2568,19 +2568,21 @@ const LS_API = (() => {
     let c = String(cat || '').trim().toUpperCase()
       .normalize('NFD').replace(/[̀-ͯ]/g, ''); // quitar tildes
     if (!c) return 'Sin categoría';
-    // Canonizar variantes conocidas
+    // Canonizar a los nombres OFICIALES de DATOS_CATEGORIASSUBCATEGORIAS
     const CANON = {
-      'COSTO DE VENTA':        'COSTOS DE VENTA',
-      'COSTOS DE VENTA':       'COSTOS DE VENTA',
-      'GASTO OPERATIVO':       'GASTOS OPERATIVOS',
-      'GASTOS OPERATIVOS':     'GASTOS OPERATIVOS',
-      'ACTIVOS / EQUIPO':      'ACTIVOS Y EQUIPAMIENTO',
-      'ACTIVOS Y EQUIPAMIENTO':'ACTIVOS Y EQUIPAMIENTO',
-      'GASTO MANO DE OBRA':    'MANO DE OBRA',
-      'GASTOS MANO DE OBRA':   'MANO DE OBRA',
-      'MANO DE OBRA':          'MANO DE OBRA',
-      'GASTO ADMINISTRATIVO':  'GASTOS ADMINISTRATIVOS',
-      'GASTOS ADMINISTRATIVOS':'GASTOS ADMINISTRATIVOS',
+      'COSTO DE VENTA':         'COSTO DE VENTA',
+      'COSTOS DE VENTA':        'COSTO DE VENTA',
+      'GASTO OPERATIVO':        'GASTO OPERATIVO',
+      'GASTOS OPERATIVOS':      'GASTO OPERATIVO',
+      'ACTIVOS / EQUIPO':       'ACTIVOS / EQUIPO',
+      'ACTIVOS Y EQUIPAMIENTO': 'ACTIVOS / EQUIPO',
+      'GASTO MANO DE OBRA':     'GASTO MANO DE OBRA',
+      'GASTOS MANO DE OBRA':    'GASTO MANO DE OBRA',
+      'MANO DE OBRA':           'GASTO MANO DE OBRA',
+      'GASTO ADMINISTRATIVO':   'GASTOS ADMINISTRATIVOS',
+      'GASTOS ADMINISTRATIVOS': 'GASTOS ADMINISTRATIVOS',
+      'IMPUESTOS':              'IMPUESTOS',
+      'RETIROS / UTILIDADES':   'RETIROS / UTILIDADES',
     };
     return CANON[c] || c;
   }
