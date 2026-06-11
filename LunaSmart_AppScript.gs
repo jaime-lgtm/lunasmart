@@ -587,15 +587,17 @@ function borrarCortesParrot() {
   for (var i = 1; i < ingVals.length; i++) {
     // Atrapa ambos formatos: "PARROT:uuid" (nuevo) y "PARROT-252" (viejo)
     if (/PARROT[:\-]/i.test(String(ingVals[i][14] || ''))) {
-      idsParrot[String(ingVals[i][0])] = true;  // ID_INGRESO
-      filasIng.push(i + 1);                      // fila (base 1)
+      var idC = String(ingVals[i][0]).trim();
+      if (idC) idsParrot[idC] = true;   // solo IDs no vacíos (evita borrar detalles ajenos)
+      filasIng.push(i + 1);             // la fila del corte se borra igual
     }
   }
-  // 2) Borrar detalles ligados a esos ID_INGRESO (col B)
+  // 2) Borrar detalles ligados a esos ID_INGRESO (col B), nunca con ID vacío
   var detVals = shDet.getDataRange().getValues();
   var filasDet = [];
   for (var j = 1; j < detVals.length; j++) {
-    if (idsParrot[String(detVals[j][1])]) filasDet.push(j + 1);
+    var ref = String(detVals[j][1]).trim();
+    if (ref && idsParrot[ref]) filasDet.push(j + 1);
   }
   // Borrar de abajo hacia arriba (para no correr índices)
   filasDet.sort(function(a,b){return b-a;}).forEach(function(f){ shDet.deleteRow(f); });
