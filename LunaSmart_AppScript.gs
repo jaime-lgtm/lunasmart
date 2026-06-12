@@ -602,6 +602,13 @@ function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
     while (cursor < fin) {
       var chunkFin = new Date(Math.min(cursor.getTime() + 24*60*60*1000, fin.getTime()));
 
+      // Negocio cerrado los DOMINGOS → saltar (no hay ventas, evita llamadas)
+      // 'u' = día ISO de la semana (1=Lun ... 7=Dom) en hora de México
+      if (Utilities.formatDate(cursor, 'America/Mexico_City', 'u') === '7') {
+        cursor = chunkFin;
+        continue;
+      }
+
       // 1) CORTES (cashier-sessions) → INGRESOS. Mapa turno → ID_INGRESO del día.
       var sesiones = [];
       try { sesiones = _parrotGet('/v1/cashier-sessions', cursor, chunkFin, 50, 0); }
