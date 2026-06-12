@@ -695,6 +695,15 @@ function sincronizarParrotDias(dias) {
   Logger.log(r.getContent());
 }
 
+// BACKFILL: jala un rango de fechas completo. EDITA DESDE/HASTA y ejecuta.
+// Máximo ~3 semanas por corrida (límite de 6 min de Apps Script).
+function backfillParrot() {
+  var DESDE = '2026-06-01';   // ← edita: primer día a sincronizar
+  var HASTA = '2026-06-11';   // ← edita: último día (o el día de hoy)
+  var r = _sincronizarParrot('SUEÑO DE LUNA', DESDE, HASTA);
+  Logger.log(r.getContent());
+}
+
 // LIMPIEZA: borra TODOS los cortes importados de Parrot (INGRESOS con "PARROT:")
 // y sus productos en INGRESOS DETALLES. Útil para re-sincronizar limpio.
 function borrarCortesParrot() {
