@@ -692,6 +692,35 @@ function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
   }
 }
 
+// ════════════════════════════════════════════════════════════════
+// FECHAS: normaliza el FORMATO de las columnas de fecha a ISO yyyy-mm-dd
+// Soluciona que Google las devuelva en formato gringo M/D/YYYY (que el
+// sistema malinterpretaba: 6/12 = 12-jun se leía como 6-dic).
+// Solo cambia el FORMATO de despliegue, NO reescribe los valores → 100% seguro.
+// Ejecuta esta función UNA VEZ desde el editor.
+// ════════════════════════════════════════════════════════════════
+function formatearFechasISO() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  // [nombreHoja, columna 1-based de la FECHA]
+  var cols = [
+    ['INGRESOS', 2],
+    ['FACTURAS', 2],
+    ['ARTICULOS DETALLES', 3],
+    ['INGRESOS DETALLES', 3],
+    ['CONCILIACION', 1]
+  ];
+  var hechas = [];
+  cols.forEach(function(c){
+    var sh = ss.getSheetByName(c[0]);
+    if (!sh) return;
+    var n = sh.getLastRow() - 1;
+    if (n < 1) return;
+    sh.getRange(2, c[1], n, 1).setNumberFormat('yyyy-mm-dd');
+    hechas.push(c[0] + ' (col ' + c[1] + ', ' + n + ' filas)');
+  });
+  Logger.log('✅ Fechas formateadas a ISO yyyy-mm-dd en:\n  ' + hechas.join('\n  '));
+}
+
 // Backfill manual desde el editor. Ej: sincronizarParrotDias(2)
 function sincronizarParrotDias(dias) {
   dias = dias || 2;
