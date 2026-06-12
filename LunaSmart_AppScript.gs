@@ -734,7 +734,9 @@ function formatearFechasISO() {
         conv++;
         return [Utilities.formatDate(d, tz, 'yyyy-MM-dd')];
       });
-      rng.setNumberFormat('@');   // texto plano: evita que Sheets la reinterprete a formato US
+      // Formato texto a TODA la columna (incluye filas futuras) para que
+      // las facturas/ingresos nuevos también se guarden como ISO sin reinterpretar.
+      sh.getRange(2, c[1], sh.getMaxRows() - 1, 1).setNumberFormat('@');
       rng.setValues(out);
       log.push(c[0] + ': ' + conv + '/' + n + ' fechas → ISO texto ✅');
     } catch (e) {
