@@ -701,6 +701,7 @@ function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
 // ════════════════════════════════════════════════════════════════
 function formatearFechasISO() {
   var ss = SpreadsheetApp.openById(SHEET_ID);
+  var tz = ss.getSpreadsheetTimeZone();
   // [nombreHoja, columna 1-based de la FECHA]
   var cols = [
     ['INGRESOS', 2],
@@ -709,16 +710,38 @@ function formatearFechasISO() {
     ['INGRESOS DETALLES', 3],
     ['CONCILIACION', 1]
   ];
-  var hechas = [];
+  var log = [];
   cols.forEach(function(c){
-    var sh = ss.getSheetByName(c[0]);
-    if (!sh) return;
-    var n = sh.getLastRow() - 1;
-    if (n < 1) return;
-    sh.getRange(2, c[1], n, 1).setNumberFormat('yyyy-mm-dd');
-    hechas.push(c[0] + ' (col ' + c[1] + ', ' + n + ' filas)');
+    try {
+      var sh = ss.getSheetByName(c[0]);
+      if (!sh) { log.push(c[0] + ': (no existe)'); return; }
+      var n = sh.getLastRow() - 1;
+      if (n < 1) { log.push(c[0] + ': vacía'); return; }
+      var rng = sh.getRange(2, c[1], n, 1);
+      var vals = rng.getValues();
+      var conv = 0;
+      var out = vals.map(function(r){
+        var v = r[0];
+        if (v === '' || v == null) return [''];
+        // El serial (Date real) es la verdad — lo convertimos a ISO sin ambigüedad
+        var d = (Object.prototype.toString.call(v) === '[object Date]') ? v : null;
+        if (!d) {
+          // por si alguna quedó como texto: intentar parsear
+          var s = String(v).trim();
+          if (/^\d{4}-\d{2}-\d{2}/.test(s)) return [s.substring(0,10)]; // ya ISO
+          return [v]; // se queda igual, no la tocamos
+        }
+        conv++;
+        return [Utilities.formatDate(d, tz, 'yyyy-MM-dd')];
+      });
+      rng.setNumberFormat('@');   // texto plano: evita que Sheets la reinterprete a formato US
+      rng.setValues(out);
+      log.push(c[0] + ': ' + conv + '/' + n + ' fechas → ISO texto ✅');
+    } catch (e) {
+      log.push(c[0] + ': ERROR ' + e.message);
+    }
   });
-  Logger.log('✅ Fechas formateadas a ISO yyyy-mm-dd en:\n  ' + hechas.join('\n  '));
+  Logger.log('Resultado formatearFechasISO:\n  ' + log.join('\n  '));
 }
 
 // Backfill manual desde el editor. Ej: sincronizarParrotDias(2)
