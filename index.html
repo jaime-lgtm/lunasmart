@@ -4158,7 +4158,7 @@ const LS_UI = (() => {
     _posicionarDropdown(input, dd);
   }
 
-  function seleccionarProveedor(nombre, id, esNuevo) {
+  async function seleccionarProveedor(nombre, id, esNuevo) {
     const input = document.getElementById('fact-proveedor');
     if (input) {
       input.value = nombre;
@@ -4167,6 +4167,27 @@ const LS_UI = (() => {
     }
     const dd = document.getElementById('prov-dd');
     if (dd) dd.style.display = 'none';
+
+    // Si es proveedor NUEVO, registrarlo de inmediato (con confirmación visible)
+    if (esNuevo && nombre) {
+      const yaExiste = (window._proveedoresCache || []).some(p => _norm(p.nombre) === _norm(nombre));
+      if (yaExiste) return;
+      try {
+        const res = await LS_API.registrarProveedor({ nombre });
+        if (res && (res.status === 'ok' || res.msg === 'El proveedor ya existe')) {
+          const newId = res.idProveedor || '';
+          if (input) input.dataset.provId = newId;
+          window._proveedoresCache = window._proveedoresCache || [];
+          if (!window._proveedoresCache.some(p => _norm(p.nombre) === _norm(nombre)))
+            window._proveedoresCache.push({ id: newId, nombre });
+          typeof toast !== 'undefined' && toast('Proveedor agregado', nombre + ' · registrado en DATOS_PROVEEDORES', 'ok', 'ti-check');
+        } else {
+          typeof toast !== 'undefined' && toast('Error', 'No se pudo registrar el proveedor', 'err', 'ti-alert-circle');
+        }
+      } catch (e) {
+        typeof toast !== 'undefined' && toast('Error', 'No se pudo registrar el proveedor', 'err', 'ti-alert-circle');
+      }
+    }
   }
 
   // ── BUSCADOR DE ARTÍCULOS (dropdown personalizado) ───────────────────────
