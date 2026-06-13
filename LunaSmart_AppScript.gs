@@ -816,7 +816,8 @@ function sincronizarParrotDias(dias) {
 // Máximo ~3 semanas por corrida (límite de 6 min de Apps Script).
 function backfillParrot() {
   var DESDE = '2026-06-01';   // ← edita: primer día a sincronizar
-  var HASTA = '2026-06-11';   // ← edita: último día (o el día de hoy)
+  // HASTA = hoy automáticamente (cubre todos los días hasta la fecha actual)
+  var HASTA = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   var r = _sincronizarParrot('SUEÑO DE LUNA', DESDE, HASTA);
   Logger.log(r.getContent());
 }
