@@ -1817,6 +1817,10 @@ function selectBranch(b) {
   buildBranchMenu();
   applyBranchFilter();
   updateSubtitle();
+  // Aplicar el filtro a los DATOS y re-renderizar la página activa
+  if (typeof LS_API !== 'undefined' && LS_API.setBranch) LS_API.setBranch(b);
+  const paginaActual = (typeof state !== 'undefined' && state.page) ? state.page : 'dashboard';
+  if (typeof LS_UI !== 'undefined' && LS_UI.recargarPagina) LS_UI.recargarPagina(paginaActual);
   if (b !== 'all') toast('Filtro de sucursal', 'Mostrando: ' + BRANCHES[b].name, 'ok', BRANCHES[b].icon);
 }
 function clearBranch() { selectBranch('all'); }
@@ -2284,6 +2288,26 @@ const LS_API = (() => {
     return '';
   }
 
+  // ── FILTRO POR SUCURSAL (global) ──────────────────────────
+  let _branchActivo = 'all';
+  function setBranch(b) { _branchActivo = b || 'all'; }
+  // Clasifica un texto de sucursal/unidad en una clave de sucursal.
+  // Orden importa: cultura antes que coffee (cultura contiene "SUEÑO DE LUNA").
+  function _branchOf(texto) {
+    const t = String(texto || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    if (!t) return 'otro';
+    if (/CULTURA/.test(t)) return 'cultura';
+    if (/HELFY/.test(t)) return 'helfy';
+    if (/BARBACOA|MENUDO|BENJAMIN JAIME/.test(t)) return 'barbacoa';
+    if (/EVENTO/.test(t)) return 'eventos';
+    if (/COFFEE|ROASTER|SUENO DE LUNA/.test(t)) return 'coffee';
+    return 'otro';
+  }
+  // ¿pasa el filtro de sucursal activo? (texto = sucursal o unidad de negocio)
+  function _pasaBranch(texto) {
+    return _branchActivo === 'all' || _branchOf(texto) === _branchActivo;
+  }
+
   // Obtener todos los ingresos
   async function getIngresos(filtros = {}) {
     const rows = await leerHoja(SHEETS.INGRESOS);
@@ -2309,6 +2333,8 @@ const LS_API = (() => {
         esParrot:       (r[COLS.INGRESOS.OBSERVACIONES] || '').startsWith('PARROT-'),
       }))
       .filter(r => {
+        // Filtro de sucursal activo (global)
+        if (!_pasaBranch(r.sucursal)) return false;
         if (filtros.sucursal && filtros.sucursal !== 'all') {
           if (!r.sucursal.toLowerCase().includes(filtros.sucursal.toLowerCase())) return false;
         }
@@ -2358,6 +2384,7 @@ const LS_API = (() => {
 
     return rows.slice(1)
       .filter(r => r.length > 1 && r[COLS.FACTURAS.FECHA])
+      .filter(r => _pasaBranch(r[COLS.FACTURAS.UNIDAD] || ''))
       .map(r => {
         const provRaw = r[COLS.FACTURAS.PROVEEDOR] || '';
         const provNombre = mapaProv[String(provRaw).trim().toUpperCase()] || provRaw;
@@ -3074,8 +3101,8 @@ const LS_API = (() => {
     getGastoPorCategoria, getGastoPorSubcategoria, getResumenMensual, getAlertasInventario,
     // Utilidades
     parseNum, formatMXN, formatMXNDec, formatPct, hoy, mesFiltro, getRangoPeriodo,
-    _enRango, _fechaISO, _mesDeDate,
-    invalidarCache,
+    _enRango, _fechaISO, _mesDeDate, _branchOf,
+    setBranch, invalidarCache,
     // Configurar
     setConfig(cfg) { Object.assign(CONFIG, cfg); },
   };
@@ -5126,13 +5153,19 @@ const LS_UI = (() => {
     _loaded.delete(pageId);
     onPageChange(pageId);
   }
+  // Re-renderiza sin re-descargar de Sheets (los datos ya están en caché;
+  // solo cambia el filtro en JS). Útil para el filtro de sucursal.
+  function recargarPagina(pageId) {
+    _loaded.delete(pageId);
+    onPageChange(pageId);
+  }
 
   // API pública del módulo UI
   return {
     renderDashboard, renderConciliacion, renderIngresos,
     renderFacturas, renderArticulos, renderRentabilidad,
     renderGastos, renderBalance, renderInventario,
-    onPageChange, reloadPage, invalidarCacheYRecargar,
+    onPageChange, reloadPage, invalidarCacheYRecargar, recargarPagina,
     filtrarRentabilidad: (f) => renderRentabilidad(f),
     buscarFacturas, verFactura, editarFactura, confirmarBorrarFactura, ejecutarBorrarFactura,
     calcIngreso, guardarIngreso, guardarFactura,
