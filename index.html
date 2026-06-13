@@ -1231,6 +1231,12 @@
     </div>
   </div>
   <div class="card">
+    <div class="card-head"><div><div class="card-title"><i class="ti ti-chart-donut"></i>Gasto por subcategoría</div><div class="card-sub" id="dash-subcat-sub">Nómina, alquiler, servicios, desechables...</div></div><button class="btn btn-sm btn-ghost" onclick="go('gastos',document.querySelector('[data-page=gastos]'))">Ver gastos<i class="ti ti-chevron-right"></i></button></div>
+    <div class="card-pad" id="dash-subcat-chart">
+      <div style="padding:20px;text-align:center;color:var(--tx-4);font-size:12px"><i class="ti ti-loader-2"></i> Cargando...</div>
+    </div>
+  </div>
+  <div class="card">
     <div class="card-head"><div><div class="card-title"><i class="ti ti-calendar-stats"></i>Resumen mensual 2026</div><div class="card-sub">Ventas, gastos y utilidad por mes</div></div><button class="btn btn-sm" onclick="go('balance',document.querySelector('[data-page=balance]'))"><i class="ti ti-report-money"></i>Balance completo</button></div>
     <div class="tbl-wrap">
       <table class="tbl" data-sortable>
@@ -2661,6 +2667,34 @@ const LS_API = (() => {
       .sort((a, b) => b.total - a.total);
   }
 
+  async function getGastoPorSubcategoria(desde, hasta) {
+    // Agrupa el gasto por la SUBCATEGORÍA del artículo (nómina, alquiler,
+    // servicios, desechables, etc.) usando el Catálogo Maestro.
+    const [detalles, catalogo] = await Promise.all([
+      getArticulosDetalle(),
+      getCatalogo(),
+    ]);
+    const subMap = {};
+    catalogo.forEach(a => {
+      if (a.articulo) {
+        const sub = String(a.subcategoria || '').trim() || 'Sin subcategoría';
+        subMap[String(a.articulo).trim().toLowerCase()] = sub;
+      }
+    });
+    const filtrados = (desde && hasta)
+      ? detalles.filter(d => _enRango(d.fecha, desde, hasta))
+      : detalles;
+    const agg = {};
+    filtrados.forEach(d => {
+      const sub = subMap[String(d.articulo).trim().toLowerCase()] || 'Sin subcategoría';
+      agg[sub] = (agg[sub] || 0) + (d.total || 0);
+    });
+    return Object.entries(agg)
+      .map(([subcategoria, total]) => ({ subcategoria, total }))
+      .filter(c => c.total > 0)
+      .sort((a, b) => b.total - a.total);
+  }
+
   // Resumen mensual para balance
   async function getResumenMensual(anio = 2026) {
     const [ingresos, facturas] = await Promise.all([
@@ -2860,7 +2894,7 @@ const LS_API = (() => {
     registrarArticuloDetalle, registrarCatalogoArticulo,
     // Agregaciones
     getKPIsDashboard, getTopArticulos, getTopProveedores,
-    getGastoPorCategoria, getResumenMensual, getAlertasInventario,
+    getGastoPorCategoria, getGastoPorSubcategoria, getResumenMensual, getAlertasInventario,
     // Utilidades
     parseNum, formatMXN, formatMXNDec, formatPct, hoy, mesFiltro, getRangoPeriodo,
     _enRango, _fechaISO, _mesDeDate,
@@ -2949,6 +2983,41 @@ const LS_UI = (() => {
     const pct = max > 0 ? Math.min(100, (valor / max) * 100) : 0;
     return `<div class="bar-track" style="height:5px;background:var(--track);border-radius:3px;overflow:hidden">
       <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;transition:width 0.8s var(--ease)"></div>
+    </div>`;
+  }
+
+  // Paleta y constructor de gráfica de dona (SVG) reutilizable
+  const DONUT_COLORS = ['#b14618','#c9a84c','#d4685e','#8a5a2e','#6f8f6a','#7a6a9c','#cf8a3b','#5a8a8a'];
+  function _donutHTML(items, opts) {
+    opts = opts || {};
+    const circ = 81.68; // circunferencia para r=13
+    const total = items.reduce((s, i) => s + i.total, 0);
+    if (!total) return '<div style="padding:24px;text-align:center;color:var(--tx-4);font-size:12px">Sin gastos en el período</div>';
+    // Top 7 + agrupar el resto como "Otros"
+    const N = 7;
+    let top = items.slice(0, N);
+    const resto = items.slice(N);
+    if (resto.length) top = top.concat([{ label: 'Otros', total: resto.reduce((s, i) => s + i.total, 0) }]);
+    let off = 0;
+    const circles = top.map((it, idx) => {
+      const len = (it.total / total) * circ;
+      const c = `<circle cx="18" cy="18" r="13" fill="none" stroke="${DONUT_COLORS[idx % DONUT_COLORS.length]}" stroke-width="4.2" stroke-dasharray="${len.toFixed(2)} ${(circ - len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}"/>`;
+      off += len;
+      return c;
+    }).join('');
+    const legend = top.map((it, idx) => {
+      const pct = Math.round(it.total / total * 100);
+      return `<div class="leg"><span class="leg-dot" style="background:${DONUT_COLORS[idx % DONUT_COLORS.length]}"></span>${it.label}<span class="leg-pct">${pct}%</span><span class="leg-val">${fmt(it.total)}</span></div>`;
+    }).join('');
+    return `<div class="donut-wrap">
+      <div class="donut-rel">
+        <svg width="118" height="118" viewBox="0 0 36 36" style="transform:rotate(-90deg)">
+          <circle cx="18" cy="18" r="13" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="4.2"/>
+          ${circles}
+        </svg>
+        <div class="donut-center"><span class="dc-val">${opts.totalTxt || fmt(total)}</span><span class="dc-lbl">${opts.totalLbl || 'total'}</span></div>
+      </div>
+      <div class="legend">${legend}</div>
     </div>`;
   }
 
@@ -3072,6 +3141,18 @@ const LS_UI = (() => {
             <td style="min-width:80px">${barHtml(a.total, maxTotal)}</td>
           </tr>`).join('');
       }
+
+      // ── Gasto por SUBCATEGORÍA (gráfica de dona) ──────────────
+      try {
+        const rango = LS_API.getRangoPeriodo(period);
+        const subcats = await LS_API.getGastoPorSubcategoria(rango.desde, rango.hasta);
+        const elSub = document.getElementById('dash-subcat-chart');
+        if (elSub) elSub.innerHTML = _donutHTML(subcats.map(s => ({ label: s.subcategoria, total: s.total })));
+        const subSubEl = document.getElementById('dash-subcat-sub');
+        if (subSubEl) subSubEl.textContent = subcats.length
+          ? `${subcats.length} subcategoría(s) · ${rango.label}`
+          : 'Sin gastos en el período';
+      } catch (e) { console.error('Error subcategorías:', e); }
 
     } catch (err) {
       console.error('Error dashboard:', err);
