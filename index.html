@@ -1222,26 +1222,9 @@
       </div>
     </div>
     <div class="card">
-      <div class="card-head"><div><div class="card-title"><i class="ti ti-wallet"></i>Métodos de pago</div><div class="card-sub">Participación mensual</div></div></div>
-      <div class="card-pad">
-        <div class="donut-wrap">
-          <div class="donut-rel">
-            <svg width="118" height="118" viewBox="0 0 36 36" style="transform:rotate(-90deg)" aria-label="Métodos de pago">
-              <circle cx="18" cy="18" r="13" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="4.2"/>
-              <circle cx="18" cy="18" r="13" fill="none" stroke="#b14618" stroke-width="4.2" stroke-dasharray="27.8 53.8" stroke-dashoffset="0" stroke-linecap="round"/>
-              <circle cx="18" cy="18" r="13" fill="none" stroke="#c9a84c" stroke-width="4.2" stroke-dasharray="22 59.6" stroke-dashoffset="-28.6" stroke-linecap="round"/>
-              <circle cx="18" cy="18" r="13" fill="none" stroke="#d4685e" stroke-width="4.2" stroke-dasharray="16.3 65.3" stroke-dashoffset="-51.4" stroke-linecap="round"/>
-              <circle cx="18" cy="18" r="13" fill="none" stroke="#8a5a2e" stroke-width="4.2" stroke-dasharray="7.3 74.3" stroke-dashoffset="-68.5" stroke-linecap="round"/>
-            </svg>
-            <div class="donut-center"><span class="dc-val">$84k</span><span class="dc-lbl">total</span></div>
-          </div>
-          <div class="legend">
-            <div class="leg"><span class="leg-dot" style="background:#b14618"></span>Efectivo<span class="leg-pct">34%</span><span class="leg-val">$28,448</span></div>
-            <div class="leg"><span class="leg-dot" style="background:#c9a84c"></span>Tarjeta / MP<span class="leg-pct">27%</span><span class="leg-val">$22,837</span></div>
-            <div class="leg"><span class="leg-dot" style="background:#d4685e"></span>Rappi / Uber<span class="leg-pct">20%</span><span class="leg-val">$16,916</span></div>
-            <div class="leg"><span class="leg-dot" style="background:#8a5a2e"></span>Transferencia<span class="leg-pct">9%</span><span class="leg-val">$7,612</span></div>
-          </div>
-        </div>
+      <div class="card-head"><div><div class="card-title"><i class="ti ti-wallet"></i>Métodos de pago</div><div class="card-sub" id="dash-pago-sub">Participación del período</div></div></div>
+      <div class="card-pad" id="dash-pago-chart">
+        <div style="padding:20px;text-align:center;color:var(--tx-4);font-size:12px"><i class="ti ti-loader-2"></i> Cargando...</div>
       </div>
     </div>
   </div>
@@ -1841,12 +1824,17 @@ function exportarActual(fmt) {
 function exportarMenu(btn) {
   const existing = document.getElementById('export-menu');
   if (existing) { existing.remove(); return; }
+  // ¿La página activa tiene una tabla con datos reales para CSV?
+  const page = document.querySelector('.page.active');
+  const tablasReales = page ? [...page.querySelectorAll('table')].filter(t => t.offsetParent !== null && t.querySelector('tbody tr')) : [];
+  const hayCSV = tablasReales.length > 0 && (typeof state === 'undefined' || state.page !== 'dashboard');
   const m = document.createElement('div');
   m.id = 'export-menu';
   m.style.cssText = 'position:fixed;z-index:3000;background:var(--cafe-750);border:1px solid var(--line-2);border-radius:var(--r);box-shadow:var(--sh-pop);overflow:hidden;min-width:184px';
-  m.innerHTML = `
-    <div onclick="exportarActual('csv');var e=document.getElementById('export-menu');if(e)e.remove()" style="padding:11px 15px;font-size:13px;color:var(--tx);cursor:pointer;display:flex;align-items:center;gap:9px" onmouseover="this.style.background='rgba(177,70,24,0.10)'" onmouseout="this.style.background='transparent'"><i class="ti ti-file-spreadsheet" style="color:var(--verde);font-size:16px"></i>Descargar CSV</div>
-    <div onclick="exportarActual('pdf');var e=document.getElementById('export-menu');if(e)e.remove()" style="padding:11px 15px;font-size:13px;color:var(--tx);cursor:pointer;border-top:1px solid var(--line);display:flex;align-items:center;gap:9px" onmouseover="this.style.background='rgba(177,70,24,0.10)'" onmouseout="this.style.background='transparent'"><i class="ti ti-printer" style="color:var(--terra-claro);font-size:16px"></i>Imprimir / Guardar PDF</div>`;
+  const optCSV = hayCSV ? `
+    <div onclick="exportarActual('csv');var e=document.getElementById('export-menu');if(e)e.remove()" style="padding:11px 15px;font-size:13px;color:var(--tx);cursor:pointer;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--line)" onmouseover="this.style.background='rgba(177,70,24,0.10)'" onmouseout="this.style.background='transparent'"><i class="ti ti-file-spreadsheet" style="color:var(--verde);font-size:16px"></i>Descargar CSV (Excel)</div>` : '';
+  m.innerHTML = optCSV + `
+    <div onclick="exportarActual('pdf');var e=document.getElementById('export-menu');if(e)e.remove()" style="padding:11px 15px;font-size:13px;color:var(--tx);cursor:pointer;display:flex;align-items:center;gap:9px" onmouseover="this.style.background='rgba(177,70,24,0.10)'" onmouseout="this.style.background='transparent'"><i class="ti ti-printer" style="color:var(--terra-claro);font-size:16px"></i>Imprimir / Guardar PDF</div>`;
   document.body.appendChild(m);
   const r = btn.getBoundingClientRect();
   m.style.top = (r.bottom + 5) + 'px';
@@ -3136,11 +3124,18 @@ const LS_UI = (() => {
       const dashSub = document.querySelector('#p-dashboard .tb-sub, .topbar .tb-sub');
       // (el subtítulo del topbar se actualiza con updateSubtitle; aquí solo KPIs)
 
-      // Métodos de pago (actualizar texto en los elementos existentes)
-      setTxt('dash-efectivo',      fmt(kpis.efectivo));
-      setTxt('dash-tarjeta',       fmt(kpis.tarjeta));
-      setTxt('dash-transferencia', fmt(kpis.transferencia));
-      setTxt('dash-rappi',         fmt(kpis.rappi));
+      // Métodos de pago — gráfica de dona DINÁMICA (respeta el período)
+      const pagoEl = document.getElementById('dash-pago-chart');
+      if (pagoEl) {
+        const items = [
+          { label: 'Efectivo',      total: kpis.efectivo || 0 },
+          { label: 'Tarjeta / MP',  total: kpis.tarjeta || 0 },
+          { label: 'Rappi / Uber',  total: kpis.rappi || 0 },
+          { label: 'Transferencia', total: kpis.transferencia || 0 },
+        ].filter(i => i.total > 0);
+        pagoEl.innerHTML = _donutHTML(items);
+      }
+      setTxt('dash-pago-sub', 'Participación · ' + (kpis.periodoLabel || lblPeriodo));
 
       // ── TOP SUCURSALES con datos reales ──────────────────────
       try {
