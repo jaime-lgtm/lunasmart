@@ -627,6 +627,22 @@
     .donut-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
     .dc-val { font-family: 'DM Mono', monospace; font-size: 16px; font-weight: 500; color: var(--tx); display: block; }
     .dc-lbl { font-size: 8.5px; color: var(--tx-3); text-transform: uppercase; letter-spacing: 0.08em; }
+    /* Mini gráfica de barras (tendencia) */
+    .trend { display: flex; align-items: flex-end; gap: 10px; height: 150px; padding: 8px 4px 0; }
+    .trend-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
+    .trend-bar { width: 100%; max-width: 38px; background: linear-gradient(180deg, var(--terra), var(--terra-claro, #c9683f)); border-radius: 6px 6px 3px 3px; min-height: 3px; transition: height 0.7s var(--ease); position: relative; }
+    .trend-bar.cur { background: linear-gradient(180deg, #c9a84c, #d9bd66); }
+    .trend-val { font-family: 'DM Mono', monospace; font-size: 9.5px; color: var(--tx-2); white-space: nowrap; }
+    .trend-lbl { font-size: 10px; color: var(--tx-3); text-transform: uppercase; letter-spacing: 0.04em; }
+    /* Barra de meta */
+    .meta-bar-track { height: 14px; background: var(--track, rgba(255,255,255,0.06)); border-radius: 8px; overflow: hidden; margin: 10px 0 6px; }
+    .meta-bar-fill { height: 100%; border-radius: 8px; transition: width 0.8s var(--ease); }
+    /* Turno split */
+    .turno-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .turno-box { padding: 16px; border: 1px solid var(--line); border-radius: var(--r); display: flex; flex-direction: column; gap: 5px; }
+    .turno-box .tb-ico { font-size: 22px; }
+    .turno-box .tb-val { font-family: 'DM Mono', monospace; font-size: 22px; font-weight: 600; color: var(--tx); }
+
     .legend { display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 180px; }
     .leg { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--tx-2); }
     .leg-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
@@ -1252,6 +1268,26 @@
           <tbody id="dash-top-comprados"><tr><td colspan="4" style="text-align:center;padding:24px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
         </table>
       </div>
+    </div>
+  </div>
+  <div class="grid-21">
+    <div class="card">
+      <div class="card-head"><div><div class="card-title"><i class="ti ti-chart-bar"></i>Tendencia de ventas</div><div class="card-sub" id="dash-tend-sub">Últimos 6 meses</div></div></div>
+      <div class="card-pad" id="dash-tendencia">
+        <div style="padding:20px;text-align:center;color:var(--tx-4);font-size:12px"><i class="ti ti-loader-2"></i> Cargando...</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><div class="card-title"><i class="ti ti-target-arrow"></i>Meta del mes</div><div class="card-sub" id="dash-meta-sub">Meta automática · prom. 3 meses</div></div></div>
+      <div class="card-pad" id="dash-meta">
+        <div style="padding:20px;text-align:center;color:var(--tx-4);font-size:12px"><i class="ti ti-loader-2"></i> Cargando...</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-head"><div><div class="card-title"><i class="ti ti-clock-hour-9"></i>Turno mañana vs tarde</div><div class="card-sub" id="dash-turno-sub">Venta por turno del período</div></div></div>
+    <div class="card-pad" id="dash-turno">
+      <div style="padding:20px;text-align:center;color:var(--tx-4);font-size:12px"><i class="ti ti-loader-2"></i> Cargando...</div>
     </div>
   </div>
 </div>
@@ -2791,6 +2827,49 @@ const LS_API = (() => {
       .sort((a, b) => b.total - a.total);
   }
 
+  // Tendencia de ventas: últimos N meses (reales, de INGRESOS por mes)
+  async function getTendenciaVentas(n = 6, anio = new Date().getFullYear()) {
+    const resumen = await getResumenMensual(anio);
+    const mesActual = new Date().getMonth(); // 0-11
+    // Meses desde (mesActual-n+1) hasta mesActual
+    const out = [];
+    for (let i = n - 1; i >= 0; i--) {
+      const idx = mesActual - i;
+      if (idx < 0) continue;
+      out.push(resumen[idx]);
+    }
+    return out; // [{mes, num, ventas, gastos, utilidad, margen}]
+  }
+
+  // Meta del mes = promedio de los últimos 3 meses CON datos (antes del actual)
+  async function getMetaMes(anio = new Date().getFullYear()) {
+    const resumen = await getResumenMensual(anio);
+    const mesActual = new Date().getMonth();
+    const real = resumen[mesActual] ? resumen[mesActual].ventas : 0;
+    // tomar hasta 3 meses previos con ventas > 0
+    const previos = [];
+    for (let i = mesActual - 1; i >= 0 && previos.length < 3; i--) {
+      if (resumen[i] && resumen[i].ventas > 0) previos.push(resumen[i].ventas);
+    }
+    const meta = previos.length ? previos.reduce((s, v) => s + v, 0) / previos.length : 0;
+    const pct = meta > 0 ? real / meta * 100 : 0;
+    return { meta, real, pct, mesLabel: resumen[mesActual] ? resumen[mesActual].mes : '', baseMeses: previos.length };
+  }
+
+  // Venta por turno (mañana vs tarde) en un rango — del campo OBSERVACIONES
+  async function getVentaPorTurno(desde, hasta) {
+    const ingresos = await getIngresos();
+    const r = { manana: { total: 0, n: 0 }, tarde: { total: 0, n: 0 }, otro: { total: 0, n: 0 } };
+    ingresos.forEach(g => {
+      if (desde && hasta && !_enRango(g.fecha, desde, hasta)) return;
+      const obs = String(g.observaciones || '').toUpperCase();
+      const key = /MA[ÑN]ANA/.test(obs) ? 'manana' : /TARDE/.test(obs) ? 'tarde' : 'otro';
+      r[key].total += g.ventaTotal;
+      r[key].n += 1;
+    });
+    return r;
+  }
+
   // Resumen mensual para balance
   async function getResumenMensual(anio = 2026) {
     const [ingresos, facturas] = await Promise.all([
@@ -2991,6 +3070,7 @@ const LS_API = (() => {
     // Agregaciones
     getKPIsDashboard, getTopArticulos, getTopProveedores,
     getTopComprados, getProductosVendidos,
+    getTendenciaVentas, getMetaMes, getVentaPorTurno,
     getGastoPorCategoria, getGastoPorSubcategoria, getResumenMensual, getAlertasInventario,
     // Utilidades
     parseNum, formatMXN, formatMXNDec, formatPct, hoy, mesFiltro, getRangoPeriodo,
@@ -3270,6 +3350,81 @@ const LS_UI = (() => {
         setTxt('dash-vendidos-sub', 'Más vendidos · ' + rg.label);
         setTxt('dash-comprados-sub', 'Mayor gasto · ' + rg.label);
       } catch (e) { console.error('Error top art:', e); }
+
+      // ── Tendencia de ventas (6 meses) ─────────────────────────
+      try {
+        const tend = await LS_API.getTendenciaVentas(6);
+        const tEl = document.getElementById('dash-tendencia');
+        if (tEl) {
+          const max = Math.max(...tend.map(m => m.ventas), 1);
+          const mesActualNum = String(new Date().getMonth() + 1).padStart(2, '0');
+          tEl.innerHTML = tend.length ? `<div class="trend">` + tend.map(m => {
+            const h = Math.max(3, Math.round(m.ventas / max * 130));
+            const cur = m.num === mesActualNum ? ' cur' : '';
+            const vtxt = m.ventas >= 1000 ? '$' + Math.round(m.ventas / 1000) + 'k' : '$' + Math.round(m.ventas);
+            return `<div class="trend-col">
+              <span class="trend-val">${m.ventas > 0 ? vtxt : ''}</span>
+              <div class="trend-bar${cur}" style="height:${h}px" title="${m.mes}: ${fmt(m.ventas)}"></div>
+              <span class="trend-lbl">${m.mes.substring(0,3)}</span>
+            </div>`;
+          }).join('') + `</div>` : '<div style="padding:24px;text-align:center;color:var(--tx-3);font-size:12px">Sin datos</div>';
+        }
+      } catch (e) { console.error('Error tendencia:', e); }
+
+      // ── Meta del mes (prom. 3 meses) ──────────────────────────
+      try {
+        const meta = await LS_API.getMetaMes();
+        const mEl = document.getElementById('dash-meta');
+        if (mEl) {
+          if (meta.meta <= 0) {
+            mEl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--tx-3);font-size:12px">Aún no hay suficientes meses con datos para calcular la meta</div>';
+          } else {
+            const pct = Math.round(meta.pct);
+            const col = pct >= 100 ? 'var(--verde)' : pct >= 70 ? 'var(--ambar)' : 'var(--rojo)';
+            const w = Math.min(100, pct);
+            mEl.innerHTML = `
+              <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:2px">
+                <div><div style="font-size:11px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.05em">Real ${meta.mesLabel}</div>
+                <div style="font-family:var(--mono);font-size:26px;font-weight:600;color:var(--tx)">${fmt(meta.real)}</div></div>
+                <div style="text-align:right"><div style="font-size:11px;color:var(--tx-3)">de meta ${fmt(meta.meta)}</div>
+                <div style="font-family:var(--mono);font-size:18px;font-weight:600;color:${col}">${pct}%</div></div>
+              </div>
+              <div class="meta-bar-track"><div class="meta-bar-fill" style="width:${w}%;background:${col}"></div></div>
+              <div style="font-size:11px;color:var(--tx-3)">${pct >= 100 ? '🎉 ¡Meta alcanzada!' : 'Faltan ' + fmt(Math.max(0, meta.meta - meta.real)) + ' para la meta'}</div>`;
+          }
+        }
+      } catch (e) { console.error('Error meta:', e); }
+
+      // ── Turno mañana vs tarde (período) ───────────────────────
+      try {
+        const rgT = LS_API.getRangoPeriodo(period);
+        const turno = await LS_API.getVentaPorTurno(rgT.desde, rgT.hasta);
+        const tuEl = document.getElementById('dash-turno');
+        if (tuEl) {
+          const totM = turno.manana.total, totT = turno.tarde.total;
+          const suma = totM + totT;
+          const pM = suma > 0 ? Math.round(totM / suma * 100) : 0;
+          const pT = suma > 0 ? Math.round(totT / suma * 100) : 0;
+          const ganador = totM === totT ? '' : (totM > totT ? 'mañana' : 'tarde');
+          tuEl.innerHTML = `
+            <div class="turno-grid">
+              <div class="turno-box" style="${ganador==='mañana'?'border-color:var(--terra);background:rgba(177,70,24,0.05)':''}">
+                <span class="tb-ico">🌅</span>
+                <div style="font-size:12px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.05em">Mañana</div>
+                <div class="tb-val">${fmt(totM)}</div>
+                <div style="font-size:12px;color:var(--tx-2)">${pM}% · ${turno.manana.n} turno(s)</div>
+              </div>
+              <div class="turno-box" style="${ganador==='tarde'?'border-color:var(--terra);background:rgba(177,70,24,0.05)':''}">
+                <span class="tb-ico">🌆</span>
+                <div style="font-size:12px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.05em">Tarde</div>
+                <div class="tb-val">${fmt(totT)}</div>
+                <div style="font-size:12px;color:var(--tx-2)">${pT}% · ${turno.tarde.n} turno(s)</div>
+              </div>
+            </div>
+            ${suma > 0 ? `<div style="font-size:12px;color:var(--tx-2);margin-top:12px;text-align:center">Turno más productivo: <strong style="color:var(--tx)">${ganador ? (ganador==='mañana'?'🌅 Mañana':'🌆 Tarde') : 'empate'}</strong></div>` : '<div style="font-size:12px;color:var(--tx-3);margin-top:12px;text-align:center">Sin ventas con turno en el período</div>'}`;
+          setTxt('dash-turno-sub', 'Venta por turno · ' + rgT.label);
+        }
+      } catch (e) { console.error('Error turno:', e); }
 
       // ── Gasto por SUBCATEGORÍA (gráfica de dona) ──────────────
       try {
