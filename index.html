@@ -705,6 +705,21 @@
     .toast .t-x:hover { color: var(--tx); }
 
     /* ═══════════════════════════════════════════════════════
+       IMPRESIÓN / PDF
+    ═══════════════════════════════════════════════════════ */
+    @media print {
+      .sidebar, .m-topbar, .m-nav, .m-drawer, .topbar .tb-spacer,
+      #period-seg, .btn, button, .filter-note, #export-menu { display: none !important; }
+      .main { margin: 0 !important; }
+      .scroll-area { overflow: visible !important; height: auto !important; }
+      .page { display: none !important; }
+      .page.active { display: block !important; }
+      .card, .tbl-wrap { break-inside: avoid; box-shadow: none !important; }
+      body { background: #fff !important; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+
+    /* ═══════════════════════════════════════════════════════
        MOBILE CHROME
     ═══════════════════════════════════════════════════════ */
     .m-topbar { display: none; }
@@ -1151,7 +1166,7 @@
           </button>
           <div class="theme-menu" id="theme-menu"></div>
         </div>
-        <button class="btn" onclick="toast('Exportación lista','Se descargó el reporte en CSV','ok','ti-download')"><i class="ti ti-download"></i>Exportar</button>
+        <button class="btn" onclick="exportarMenu(this)"><i class="ti ti-download"></i>Exportar</button>
         <button id="btn-sync-parrot" onclick="sincronizarParrotManual()"
           style="display:flex;align-items:center;gap:6px;font-size:12px;padding:7px 13px;border-radius:8px;border:1px solid rgba(125,184,138,0.3);background:rgba(125,184,138,0.08);cursor:pointer;color:#7db88a;font-family:inherit;font-weight:500"
           onmouseover="this.style.background='rgba(125,184,138,0.18)'" onmouseout="this.style.background='rgba(125,184,138,0.08)'">
@@ -1272,7 +1287,7 @@
   <div class="card">
     <div class="card-head">
       <div><div class="card-title"><i class="ti ti-scale"></i>Detalle por turno <span id="conc-titulo-periodo"></span></div><div class="card-sub">Parrot POS vs efectivo declarado en corte</div></div>
-      <div class="card-actions"><span class="filter-note" id="fn-conciliacion"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><button class="btn btn-sm" onclick="toast('Exportación lista','Conciliación de junio en CSV','ok','ti-download')"><i class="ti ti-download"></i>Exportar</button></div>
+      <div class="card-actions"><span class="filter-note" id="fn-conciliacion"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><button class="btn btn-sm" onclick="exportarMenu(this)"><i class="ti ti-download"></i>Exportar</button></div>
     </div>
     <div class="tbl-wrap">
       <table class="tbl" data-sortable data-filterable="conciliacion">
@@ -1789,6 +1804,60 @@ function selectBranch(b) {
   if (b !== 'all') toast('Filtro de sucursal', 'Mostrando: ' + BRANCHES[b].name, 'ok', BRANCHES[b].icon);
 }
 function clearBranch() { selectBranch('all'); }
+
+/* ─── EXPORTAR (CSV / PDF) ─── */
+function exportarActual(fmt) {
+  const page = document.querySelector('.page.active');
+  if (!page) return;
+  const label = page.getAttribute('data-screen-label') || (typeof state !== 'undefined' ? state.page : 'reporte') || 'reporte';
+  if (fmt === 'pdf') { window.print(); return; }
+  // CSV: exporta la(s) tabla(s) visibles de la página activa
+  const tablas = [...page.querySelectorAll('table')].filter(t => t.offsetParent !== null);
+  if (!tablas.length) {
+    typeof toast !== 'undefined' && toast('Sin tabla', 'Esta vista no tiene una tabla para exportar', 'err', 'ti-alert-circle');
+    return;
+  }
+  const csv = [];
+  tablas.forEach(t => {
+    t.querySelectorAll('tr').forEach(tr => {
+      const cells = [...tr.querySelectorAll('th,td')].map(c => {
+        const txt = (c.textContent || '').replace(/\s+/g, ' ').trim();
+        return '"' + txt.replace(/"/g, '""') + '"';
+      });
+      if (cells.length) csv.push(cells.join(','));
+    });
+    csv.push('');
+  });
+  const blob = new Blob(['﻿' + csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const hoy = new Date().toISOString().split('T')[0];
+  a.href = url;
+  a.download = 'LunaSmart_' + String(label).replace(/\s+/g, '_') + '_' + hoy + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  typeof toast !== 'undefined' && toast('Exportado', label + ' · descargado en CSV', 'ok', 'ti-download');
+}
+function exportarMenu(btn) {
+  const existing = document.getElementById('export-menu');
+  if (existing) { existing.remove(); return; }
+  const m = document.createElement('div');
+  m.id = 'export-menu';
+  m.style.cssText = 'position:fixed;z-index:3000;background:var(--cafe-750);border:1px solid var(--line-2);border-radius:var(--r);box-shadow:var(--sh-pop);overflow:hidden;min-width:184px';
+  m.innerHTML = `
+    <div onclick="exportarActual('csv');var e=document.getElementById('export-menu');if(e)e.remove()" style="padding:11px 15px;font-size:13px;color:var(--tx);cursor:pointer;display:flex;align-items:center;gap:9px" onmouseover="this.style.background='rgba(177,70,24,0.10)'" onmouseout="this.style.background='transparent'"><i class="ti ti-file-spreadsheet" style="color:var(--verde);font-size:16px"></i>Descargar CSV</div>
+    <div onclick="exportarActual('pdf');var e=document.getElementById('export-menu');if(e)e.remove()" style="padding:11px 15px;font-size:13px;color:var(--tx);cursor:pointer;border-top:1px solid var(--line);display:flex;align-items:center;gap:9px" onmouseover="this.style.background='rgba(177,70,24,0.10)'" onmouseout="this.style.background='transparent'"><i class="ti ti-printer" style="color:var(--terra-claro);font-size:16px"></i>Imprimir / Guardar PDF</div>`;
+  document.body.appendChild(m);
+  const r = btn.getBoundingClientRect();
+  m.style.top = (r.bottom + 5) + 'px';
+  m.style.left = Math.max(8, r.right - 184) + 'px';
+  setTimeout(() => {
+    document.addEventListener('click', function h(e) {
+      const mm = document.getElementById('export-menu');
+      if (mm && !mm.contains(e.target) && e.target !== btn) { mm.remove(); document.removeEventListener('click', h); }
+    });
+  }, 60);
+}
 function applyBranchFilter() {
   const b = state.branch;
   document.querySelectorAll('[data-branch]').forEach(el => {
