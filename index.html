@@ -1234,27 +1234,24 @@
       <div style="padding:20px;text-align:center;color:var(--tx-4);font-size:12px"><i class="ti ti-loader-2"></i> Cargando...</div>
     </div>
   </div>
-  <div class="card">
-    <div class="card-head"><div><div class="card-title"><i class="ti ti-calendar-stats"></i>Resumen mensual 2026</div><div class="card-sub">Ventas, gastos y utilidad por mes</div></div><button class="btn btn-sm" onclick="go('balance',document.querySelector('[data-page=balance]'))"><i class="ti ti-report-money"></i>Balance completo</button></div>
-    <div class="tbl-wrap">
-      <table class="tbl" data-sortable>
-        <thead><tr>
-          <th class="sortable" data-type="text">Mes<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
-          <th class="sortable num" data-type="num">Ventas<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
-          <th class="sortable num" data-type="num">Gastos<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
-          <th class="sortable num" data-type="num">Utilidad<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
-          <th class="sortable num" data-type="num">Margen<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
-          <th>Estado</th>
-        </tr></thead>
-        <tbody>
-          <tr><td>Enero</td><td class="num" data-v="55944">$55,944</td><td class="num" data-v="16288">$16,288</td><td class="num up" data-v="39655">$39,655</td><td class="num" data-v="70.9">70.9%</td><td><span class="badge b-s"><span class="bdot"></span>Excelente</span></td></tr>
-          <tr><td>Febrero</td><td class="num" data-v="95468">$95,468</td><td class="num" data-v="74162">$74,162</td><td class="num am" data-v="21305">$21,305</td><td class="num" data-v="22.3">22.3%</td><td><span class="badge b-w"><span class="bdot"></span>Regular</span></td></tr>
-          <tr><td>Marzo</td><td class="num" data-v="138030">$138,030</td><td class="num" data-v="72946">$72,946</td><td class="num up" data-v="65084">$65,084</td><td class="num" data-v="47.1">47.1%</td><td><span class="badge b-s"><span class="bdot"></span>Muy bien</span></td></tr>
-          <tr><td>Abril</td><td class="num" data-v="111620">$111,620</td><td class="num" data-v="76067">$76,067</td><td class="num up" data-v="35553">$35,553</td><td class="num" data-v="31.9">31.9%</td><td><span class="badge b-s"><span class="bdot"></span>Bien</span></td></tr>
-          <tr><td>Mayo</td><td class="num" data-v="84581">$84,581</td><td class="num" data-v="43913">$43,913</td><td class="num up" data-v="40667">$40,667</td><td class="num" data-v="48.1">48.1%</td><td><span class="badge b-s"><span class="bdot"></span>Muy bien</span></td></tr>
-          <tr><td>Junio</td><td class="num" data-v="12450">$12,450</td><td class="num" data-v="6820">$6,820</td><td class="num up" data-v="5630">$5,630</td><td class="num" data-v="45.2">45.2%</td><td><span class="badge b-i"><span class="bdot"></span>En curso</span></td></tr>
-        </tbody>
-      </table>
+  <div class="grid-21">
+    <div class="card">
+      <div class="card-head"><div><div class="card-title"><i class="ti ti-star"></i>Top 5 vendidos</div><div class="card-sub" id="dash-vendidos-sub">Más vendidos del período</div></div><button class="btn btn-sm btn-ghost" onclick="go('articulos',document.querySelector('[data-page=articulos]'))">Ver todos<i class="ti ti-chevron-right"></i></button></div>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th style="width:28px">#</th><th>Artículo</th><th class="num">Cant.</th><th class="num">Venta</th></tr></thead>
+          <tbody id="dash-top-vendidos"><tr><td colspan="4" style="text-align:center;padding:24px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><div class="card-title"><i class="ti ti-shopping-cart"></i>Top 5 comprados</div><div class="card-sub" id="dash-comprados-sub">Mayor gasto del período</div></div><button class="btn btn-sm btn-ghost" onclick="go('gastos',document.querySelector('[data-page=gastos]'))">Ver gastos<i class="ti ti-chevron-right"></i></button></div>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th style="width:28px">#</th><th>Artículo</th><th class="num">Cant.</th><th class="num">Gasto</th></tr></thead>
+          <tbody id="dash-top-comprados"><tr><td colspan="4" style="text-align:center;padding:24px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
@@ -2659,6 +2656,48 @@ const LS_API = (() => {
       .slice(0, top);
   }
 
+  // Top artículos COMPRADOS (de facturas/egresos · ARTICULOS DETALLES), por período
+  async function getTopComprados(desde, hasta, top = 5) {
+    const detalles = await getArticulosDetalle();
+    const filtrados = (desde && hasta) ? detalles.filter(d => _enRango(d.fecha, desde, hasta)) : detalles;
+    const agg = {};
+    filtrados.forEach(d => {
+      if (!d.articulo) return;
+      if (!agg[d.articulo]) agg[d.articulo] = { cantidad: 0, total: 0 };
+      agg[d.articulo].cantidad += d.cantidad;
+      agg[d.articulo].total    += d.total;
+    });
+    return Object.entries(agg)
+      .map(([nombre, v]) => ({ nombre, ...v }))
+      .filter(a => a.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, top);
+  }
+
+  // Top productos VENDIDOS (de Parrot · INGRESOS DETALLES), por período
+  // Cols reales: C=fecha(2), D=articulo(3), E=cantidad(4), G=subtotal_linea(6)
+  async function getProductosVendidos(desde, hasta, top = 5) {
+    const rows = await leerHoja(SHEETS.ING_DETALLES);
+    if (!rows) return [];
+    const agg = {};
+    rows.slice(1).forEach(r => {
+      const articulo = String(r[3] || '').trim();
+      if (!articulo) return;
+      const fecha = r[2];
+      if (desde && hasta && !_enRango(fecha, desde, hasta)) return;
+      const cant = parseNum(r[4]);
+      const monto = parseNum(r[6]);
+      if (!agg[articulo]) agg[articulo] = { cantidad: 0, total: 0 };
+      agg[articulo].cantidad += cant;
+      agg[articulo].total    += monto;
+    });
+    return Object.entries(agg)
+      .map(([nombre, v]) => ({ nombre, ...v }))
+      .filter(a => a.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, top);
+  }
+
   // Top proveedores por gasto
   async function getTopProveedores(top = 10) {
     const facturas = await getFacturas();
@@ -2951,6 +2990,7 @@ const LS_API = (() => {
     registrarArticuloDetalle, registrarCatalogoArticulo,
     // Agregaciones
     getKPIsDashboard, getTopArticulos, getTopProveedores,
+    getTopComprados, getProductosVendidos,
     getGastoPorCategoria, getGastoPorSubcategoria, getResumenMensual, getAlertasInventario,
     // Utilidades
     parseNum, formatMXN, formatMXNDec, formatPct, hoy, mesFiltro, getRangoPeriodo,
@@ -3205,6 +3245,31 @@ const LS_UI = (() => {
             <td style="min-width:80px">${barHtml(a.total, maxTotal)}</td>
           </tr>`).join('');
       }
+
+      // ── Top 5 vendidos / comprados (período activo) ───────────
+      try {
+        const rg = LS_API.getRangoPeriodo(period);
+        const [vendidos, comprados] = await Promise.all([
+          LS_API.getProductosVendidos(rg.desde, rg.hasta, 5),
+          LS_API.getTopComprados(rg.desde, rg.hasta, 5),
+        ]);
+        const venEl = document.getElementById('dash-top-vendidos');
+        if (venEl) venEl.innerHTML = vendidos.length ? vendidos.map((a, i) => `
+          <tr><td style="color:var(--tx-3);font-size:11px">${i + 1}</td>
+          <td>${a.nombre}</td>
+          <td class="num" style="font-family:var(--mono)">${Math.round(a.cantidad)}</td>
+          <td class="num" style="font-family:var(--mono);font-weight:600">${fmt(a.total)}</td></tr>`).join('')
+          : '<tr><td colspan="4" style="text-align:center;padding:22px;color:var(--tx-3)">Sin ventas en el período</td></tr>';
+        const comEl = document.getElementById('dash-top-comprados');
+        if (comEl) comEl.innerHTML = comprados.length ? comprados.map((a, i) => `
+          <tr><td style="color:var(--tx-3);font-size:11px">${i + 1}</td>
+          <td>${a.nombre}</td>
+          <td class="num" style="font-family:var(--mono)">${Math.round(a.cantidad)}</td>
+          <td class="num" style="font-family:var(--mono);font-weight:600">${fmt(a.total)}</td></tr>`).join('')
+          : '<tr><td colspan="4" style="text-align:center;padding:22px;color:var(--tx-3)">Sin compras en el período</td></tr>';
+        setTxt('dash-vendidos-sub', 'Más vendidos · ' + rg.label);
+        setTxt('dash-comprados-sub', 'Mayor gasto · ' + rg.label);
+      } catch (e) { console.error('Error top art:', e); }
 
       // ── Gasto por SUBCATEGORÍA (gráfica de dona) ──────────────
       try {
