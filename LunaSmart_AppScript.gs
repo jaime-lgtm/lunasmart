@@ -693,6 +693,62 @@ function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
 }
 
 // ════════════════════════════════════════════════════════════════
+// FACTURAS rechaza setNumberFormat por un formato pegado en la columna.
+// Esta función: (1) pone el spreadsheet en es_MX para que las fechas NUEVAS
+// salgan dd/mm, (2) limpia el formato de la columna y reescribe las fechas
+// reales (serial) como texto ISO yyyy-mm-dd. Ejecútala UNA VEZ.
+// ════════════════════════════════════════════════════════════════
+function arreglarFechasFacturas() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var tz = ss.getSpreadsheetTimeZone();
+  var log = [];
+
+  // 1) Locale a México (las fechas NUEVAS saldrán dd/mm en vez de m/d)
+  try { ss.setSpreadsheetLocale('es_MX'); log.push('locale → es_MX ✅'); }
+  catch (e) { log.push('locale ERROR: ' + e.message); }
+
+  var sh = ss.getSheetByName('FACTURAS');
+  var n = sh.getLastRow() - 1;
+  var rng = sh.getRange(2, 2, n, 1);
+  var vals = rng.getValues();   // fechas reales como Date objects
+
+  var out = vals.map(function(r){
+    var v = r[0];
+    if (v === '' || v == null) return [''];
+    var d = (Object.prototype.toString.call(v) === '[object Date]') ? v : new Date(v);
+    if (isNaN(d.getTime())) return [v];
+    return [Utilities.formatDate(d, tz, 'yyyy-MM-dd')];
+  });
+
+  // 2) Limpiar el formato pegado y reescribir como texto ISO
+  var ok = false;
+  try {
+    rng.clearFormat();
+    SpreadsheetApp.flush();
+    rng.setNumberFormat('@');
+    rng.setValues(out);
+    ok = true;
+    log.push('FACTURAS → ' + n + ' fechas a ISO texto ✅');
+  } catch (e) {
+    log.push('estrategia texto falló: ' + e.message);
+  }
+
+  // 3) Fallback: dejarlas como fechas reales con formato dd/mm/yyyy
+  if (!ok) {
+    try {
+      rng.clearFormat();
+      SpreadsheetApp.flush();
+      rng.setNumberFormat('dd/mm/yyyy');
+      log.push('FACTURAS → formato dd/mm/yyyy (fallback) ✅');
+    } catch (e2) {
+      log.push('fallback dd/mm falló: ' + e2.message);
+    }
+  }
+
+  Logger.log('Resultado arreglarFechasFacturas:\n  ' + log.join('\n  '));
+}
+
+// ════════════════════════════════════════════════════════════════
 // FECHAS: normaliza el FORMATO de las columnas de fecha a ISO yyyy-mm-dd
 // Soluciona que Google las devuelva en formato gringo M/D/YYYY (que el
 // sistema malinterpretaba: 6/12 = 12-jun se leía como 6-dic).
