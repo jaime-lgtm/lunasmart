@@ -625,7 +625,7 @@
     .donut-rel { position: relative; flex-shrink: 0; }
     .donut-rel svg circle:first-of-type { stroke: var(--track); }
     .donut-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
-    .dc-val { font-family: 'DM Mono', monospace; font-size: 16px; font-weight: 500; color: var(--tx); display: block; }
+    .dc-val { font-family: 'DM Mono', monospace; font-size: 15px; font-weight: 500; color: var(--tx); display: block; max-width: 64px; }
     .dc-lbl { font-size: 8.5px; color: var(--tx-3); text-transform: uppercase; letter-spacing: 0.08em; }
     /* Mini gráfica de barras (tendencia) */
     .trend { display: flex; align-items: flex-end; gap: 10px; height: 150px; padding: 8px 4px 0; }
@@ -3165,6 +3165,13 @@ const LS_UI = (() => {
 
   // Paleta y constructor de gráfica de dona (SVG) reutilizable
   const DONUT_COLORS = ['#b14618','#c9a84c','#d4685e','#8a5a2e','#6f8f6a','#7a6a9c','#cf8a3b','#5a8a8a'];
+  // Formato compacto para el centro de la dona ($289k, $1.2M) — evita desbordes
+  function _fmtCompact(n) {
+    n = Number(n) || 0;
+    if (n >= 1e6) return '$' + (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M';
+    if (n >= 1e3) return '$' + Math.round(n / 1e3) + 'k';
+    return '$' + Math.round(n);
+  }
   function _donutHTML(items, opts) {
     opts = opts || {};
     const circ = 81.68; // circunferencia para r=13
@@ -3192,7 +3199,7 @@ const LS_UI = (() => {
           <circle cx="18" cy="18" r="13" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="4.2"/>
           ${circles}
         </svg>
-        <div class="donut-center"><span class="dc-val">${opts.totalTxt || fmt(total)}</span><span class="dc-lbl">${opts.totalLbl || 'total'}</span></div>
+        <div class="donut-center"><span class="dc-val" title="${fmt(total)}">${opts.totalTxt || _fmtCompact(total)}</span><span class="dc-lbl">${opts.totalLbl || 'total'}</span></div>
       </div>
       <div class="legend">${legend}</div>
     </div>`;
