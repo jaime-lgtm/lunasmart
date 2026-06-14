@@ -836,6 +836,18 @@ function _canonSucursal(v, vaciaDefault) {
   return v; // desconocido: dejar igual
 }
 
+// Renombra el encabezado de FACTURAS: "UNIDAD DE NEGOCIO" → "SUCURSAL"
+function renombrarEncabezadoSucursal() {
+  var sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName('FACTURAS');
+  try {
+    sh.getRange('C1').setValue('SUCURSAL');
+    Logger.log('✅ FACTURAS!C1 renombrado a "SUCURSAL"');
+  } catch (e) {
+    Logger.log('❌ No se pudo por script: ' + e.message +
+               '\n→ Hazlo a mano: doble clic en la celda C1 de FACTURAS y escribe SUCURSAL.');
+  }
+}
+
 function estandarizarSucursales() {
   var ss = SpreadsheetApp.openById(SHEET_ID);
   var log = [];
