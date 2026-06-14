@@ -188,7 +188,7 @@ function doPost(e) {
     case 'registrarArticuloDetalle':   return _registrarArticuloDetalle(datos);
     case 'registrarProveedor':         return _registrarProveedor(datos);
     case 'registrarCliente':           return _registrarCliente(datos);
-    case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || datos.sucursal || 'SUEÑO DE LUNA', body.desde || datos.desde, body.hasta || datos.hasta);
+    case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || datos.sucursal || 'CASA DE LA CULTURA', body.desde || datos.desde, body.hasta || datos.hasta);
     case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(datos);
     default: return _err('Acción desconocida: ' + accion);
   }
@@ -572,7 +572,7 @@ function _isoToDate(iso, finDelDia) {
 
 // Sincroniza Parrot al modelo INGRESOS + INGRESOS DETALLES. Chunks de 24h.
 function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
-  sucursal = sucursal || 'SUEÑO DE LUNA';
+  sucursal = sucursal || 'CASA DE LA CULTURA';
   try {
     var fin = hastaISO ? _isoToDate(hastaISO, true)  : new Date();
     var ini = desdeISO ? _isoToDate(desdeISO, false) : new Date(fin - 2 * 24 * 60 * 60 * 1000);
@@ -808,17 +808,81 @@ function sincronizarParrotDias(dias) {
   var hasta = new Date();
   var desde = new Date(hasta - dias * 24 * 60 * 60 * 1000);
   var iso = function(d){ return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd'); };
-  var r = _sincronizarParrot('SUEÑO DE LUNA', iso(desde), iso(hasta));
+  var r = _sincronizarParrot('CASA DE LA CULTURA', iso(desde), iso(hasta));
   Logger.log(r.getContent());
 }
 
 // BACKFILL: jala un rango de fechas completo. EDITA DESDE/HASTA y ejecuta.
 // Máximo ~3 semanas por corrida (límite de 6 min de Apps Script).
+// ════════════════════════════════════════════════════════════════
+// ESTANDARIZAR SUCURSALES — deja UN solo nombre por sucursal y pone
+// menús desplegables en INGRESOS.SUCURSAL y FACTURAS.UNIDAD.
+// - Cortes de Parrot (OBS contiene PARROT) → CASA DE LA CULTURA
+// - Facturas con unidad vacía → CASA DE LA CULTURA
+// - Estandariza variantes/typos a los 5 nombres oficiales
+// Ejecútala UNA VEZ.
+// ════════════════════════════════════════════════════════════════
+var SUCURSALES_OFICIALES = ['COFFEE & ROASTERS','CASA DE LA CULTURA','HELFY FÜ','BARBACOA Y MENUDO','EVENTOS'];
+
+function _canonSucursal(v, vaciaDefault) {
+  var t = String(v == null ? '' : v).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  if (!t) return vaciaDefault || '';
+  if (/CULTURA/.test(t)) return 'CASA DE LA CULTURA';
+  if (/HELFY/.test(t)) return 'HELFY FÜ';
+  if (/BARBACOA|MENUDO|BENJAMIN|JAIME/.test(t)) return 'BARBACOA Y MENUDO';
+  if (/EVENTO/.test(t)) return 'EVENTOS';
+  if (/COFFEE|COOFFEE|ROASTER/.test(t)) return 'COFFEE & ROASTERS';
+  if (/SUENO DE LUNA/.test(t)) return 'COFFEE & ROASTERS';
+  return v; // desconocido: dejar igual
+}
+
+function estandarizarSucursales() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var log = [];
+
+  // ── INGRESOS: cortes de Parrot → CASA DE LA CULTURA (col C=3, OBS col O=15) ──
+  var shI = ss.getSheetByName('INGRESOS');
+  var nI = shI.getLastRow() - 1;
+  if (nI > 0) {
+    var rngS = shI.getRange(2, 3, nI, 1);
+    var suc = rngS.getValues();
+    var obs = shI.getRange(2, 15, nI, 1).getValues();
+    var ch = 0;
+    for (var i = 0; i < suc.length; i++) {
+      var o = String(obs[i][0] || '').toUpperCase();
+      if (/PARROT/.test(o) && suc[i][0] !== 'CASA DE LA CULTURA') { suc[i][0] = 'CASA DE LA CULTURA'; ch++; }
+    }
+    rngS.setValues(suc);
+    shI.getRange(2, 3, shI.getMaxRows() - 1, 1).setDataValidation(
+      SpreadsheetApp.newDataValidation().requireValueInList(SUCURSALES_OFICIALES, true).setAllowInvalid(true).build());
+    log.push('INGRESOS: ' + ch + ' cortes Parrot → CASA DE LA CULTURA (+ dropdown)');
+  }
+
+  // ── FACTURAS: estandarizar UNIDAD (col C=3), vacías → CASA DE LA CULTURA ──
+  var shF = ss.getSheetByName('FACTURAS');
+  var nF = shF.getLastRow() - 1;
+  if (nF > 0) {
+    var rngU = shF.getRange(2, 3, nF, 1);
+    var uni = rngU.getValues();
+    var ch2 = 0;
+    for (var j = 0; j < uni.length; j++) {
+      var canon = _canonSucursal(uni[j][0], 'CASA DE LA CULTURA');
+      if (uni[j][0] !== canon) { uni[j][0] = canon; ch2++; }
+    }
+    rngU.setValues(uni);
+    shF.getRange(2, 3, shF.getMaxRows() - 1, 1).setDataValidation(
+      SpreadsheetApp.newDataValidation().requireValueInList(SUCURSALES_OFICIALES, true).setAllowInvalid(true).build());
+    log.push('FACTURAS: ' + ch2 + ' unidades estandarizadas (+ dropdown)');
+  }
+
+  Logger.log('Resultado estandarizarSucursales:\n  ' + log.join('\n  '));
+}
+
 function backfillParrot() {
   var DESDE = '2026-06-01';   // ← edita: primer día a sincronizar
   // HASTA = hoy automáticamente (cubre todos los días hasta la fecha actual)
   var HASTA = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  var r = _sincronizarParrot('SUEÑO DE LUNA', DESDE, HASTA);
+  var r = _sincronizarParrot('CASA DE LA CULTURA', DESDE, HASTA);
   Logger.log(r.getContent());
 }
 
