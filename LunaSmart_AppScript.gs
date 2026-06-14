@@ -839,41 +839,50 @@ function _canonSucursal(v, vaciaDefault) {
 function estandarizarSucursales() {
   var ss = SpreadsheetApp.openById(SHEET_ID);
   var log = [];
+  var rule = SpreadsheetApp.newDataValidation().requireValueInList(SUCURSALES_OFICIALES, true).setAllowInvalid(true).build();
 
   // ── INGRESOS: cortes de Parrot → CASA DE LA CULTURA (col C=3, OBS col O=15) ──
-  var shI = ss.getSheetByName('INGRESOS');
-  var nI = shI.getLastRow() - 1;
-  if (nI > 0) {
-    var rngS = shI.getRange(2, 3, nI, 1);
-    var suc = rngS.getValues();
-    var obs = shI.getRange(2, 15, nI, 1).getValues();
-    var ch = 0;
-    for (var i = 0; i < suc.length; i++) {
-      var o = String(obs[i][0] || '').toUpperCase();
-      if (/PARROT/.test(o) && suc[i][0] !== 'CASA DE LA CULTURA') { suc[i][0] = 'CASA DE LA CULTURA'; ch++; }
+  try {
+    var shI = ss.getSheetByName('INGRESOS');
+    var nI = shI.getLastRow() - 1;
+    if (nI > 0) {
+      var rngS = shI.getRange(2, 3, nI, 1);
+      var suc = rngS.getValues();
+      var obs = shI.getRange(2, 15, nI, 1).getValues();
+      var ch = 0;
+      for (var i = 0; i < suc.length; i++) {
+        var o = String(obs[i][0] || '').toUpperCase();
+        if (/PARROT/.test(o) && suc[i][0] !== 'CASA DE LA CULTURA') { suc[i][0] = 'CASA DE LA CULTURA'; ch++; }
+      }
+      try { rngS.clearDataValidations(); } catch (e) {}
+      try { rngS.setNumberFormat('@'); } catch (e) {}
+      rngS.setValues(suc);
+      log.push('INGRESOS: ' + ch + ' cortes Parrot → CASA DE LA CULTURA ✅');
+      try { rngS.setDataValidation(rule); log.push('INGRESOS: dropdown ✅'); }
+      catch (e) { log.push('INGRESOS dropdown omitido (' + e.message + ')'); }
     }
-    rngS.setValues(suc);
-    shI.getRange(2, 3, shI.getMaxRows() - 1, 1).setDataValidation(
-      SpreadsheetApp.newDataValidation().requireValueInList(SUCURSALES_OFICIALES, true).setAllowInvalid(true).build());
-    log.push('INGRESOS: ' + ch + ' cortes Parrot → CASA DE LA CULTURA (+ dropdown)');
-  }
+  } catch (e) { log.push('INGRESOS ERROR: ' + e.message); }
 
   // ── FACTURAS: estandarizar UNIDAD (col C=3), vacías → CASA DE LA CULTURA ──
-  var shF = ss.getSheetByName('FACTURAS');
-  var nF = shF.getLastRow() - 1;
-  if (nF > 0) {
-    var rngU = shF.getRange(2, 3, nF, 1);
-    var uni = rngU.getValues();
-    var ch2 = 0;
-    for (var j = 0; j < uni.length; j++) {
-      var canon = _canonSucursal(uni[j][0], 'CASA DE LA CULTURA');
-      if (uni[j][0] !== canon) { uni[j][0] = canon; ch2++; }
+  try {
+    var shF = ss.getSheetByName('FACTURAS');
+    var nF = shF.getLastRow() - 1;
+    if (nF > 0) {
+      var rngU = shF.getRange(2, 3, nF, 1);
+      var uni = rngU.getValues();
+      var ch2 = 0;
+      for (var j = 0; j < uni.length; j++) {
+        var canon = _canonSucursal(uni[j][0], 'CASA DE LA CULTURA');
+        if (uni[j][0] !== canon) { uni[j][0] = canon; ch2++; }
+      }
+      try { rngU.clearDataValidations(); } catch (e) {}
+      try { rngU.setNumberFormat('@'); } catch (e) {}
+      rngU.setValues(uni);
+      log.push('FACTURAS: ' + ch2 + ' unidades estandarizadas ✅');
+      try { rngU.setDataValidation(rule); log.push('FACTURAS: dropdown ✅'); }
+      catch (e) { log.push('FACTURAS dropdown omitido (' + e.message + ')'); }
     }
-    rngU.setValues(uni);
-    shF.getRange(2, 3, shF.getMaxRows() - 1, 1).setDataValidation(
-      SpreadsheetApp.newDataValidation().requireValueInList(SUCURSALES_OFICIALES, true).setAllowInvalid(true).build());
-    log.push('FACTURAS: ' + ch2 + ' unidades estandarizadas (+ dropdown)');
-  }
+  } catch (e) { log.push('FACTURAS ERROR: ' + e.message); }
 
   Logger.log('Resultado estandarizarSucursales:\n  ' + log.join('\n  '));
 }
