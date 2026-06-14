@@ -855,7 +855,6 @@ function estandarizarSucursales() {
         if (/PARROT/.test(o) && suc[i][0] !== 'CASA DE LA CULTURA') { suc[i][0] = 'CASA DE LA CULTURA'; ch++; }
       }
       try { rngS.clearDataValidations(); } catch (e) {}
-      try { rngS.setNumberFormat('@'); } catch (e) {}
       rngS.setValues(suc);
       log.push('INGRESOS: ' + ch + ' cortes Parrot → CASA DE LA CULTURA ✅');
       try { rngS.setDataValidation(rule); log.push('INGRESOS: dropdown ✅'); }
@@ -876,7 +875,6 @@ function estandarizarSucursales() {
         if (uni[j][0] !== canon) { uni[j][0] = canon; ch2++; }
       }
       try { rngU.clearDataValidations(); } catch (e) {}
-      try { rngU.setNumberFormat('@'); } catch (e) {}
       rngU.setValues(uni);
       log.push('FACTURAS: ' + ch2 + ' unidades estandarizadas ✅');
       try { rngU.setDataValidation(rule); log.push('FACTURAS: dropdown ✅'); }
