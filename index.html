@@ -2384,14 +2384,15 @@ const LS_API = (() => {
 
     return rows.slice(1)
       .filter(r => r.length > 1 && r[COLS.FACTURAS.FECHA])
-      .filter(r => _pasaBranch(r[COLS.FACTURAS.UNIDAD] || ''))
+      // Unidad vacía → CASA DE LA CULTURA (default acordado); clasifica para el filtro
+      .filter(r => _pasaBranch(r[COLS.FACTURAS.UNIDAD] || 'CASA DE LA CULTURA'))
       .map(r => {
         const provRaw = r[COLS.FACTURAS.PROVEEDOR] || '';
         const provNombre = mapaProv[String(provRaw).trim().toUpperCase()] || provRaw;
         return {
           id:        r[COLS.FACTURAS.ID]        || '',
           fecha:     r[COLS.FACTURAS.FECHA]     || '',
-          unidad:    r[COLS.FACTURAS.UNIDAD]    || '',
+          unidad:    r[COLS.FACTURAS.UNIDAD]    || 'CASA DE LA CULTURA',
           proveedor: provNombre,        // nombre legible (resuelto)
           proveedorCodigo: provRaw,     // valor original (código o nombre)
           tipo:      r[COLS.FACTURAS.TIPO]      || '',
