@@ -3062,6 +3062,18 @@ const LS_API = (() => {
     return ALIAS[k] || k;
   }
 
+  // Nombre bonito y CONSISTENTE de la sucursal (Tipo Título), sin importar
+  // cómo esté escrito en la hoja. Agrupa todas las variantes/typos.
+  const NOMBRE_SUC = {
+    coffee:   'Coffee & Roasters',
+    cultura:  'Casa de la Cultura',
+    helfy:    'Helfy Fü',
+    barbacoa: 'Barbacoa y Menudo',
+    eventos:  'Eventos',
+    otro:     'Otra sucursal',
+  };
+  function nombreSucursal(texto) { return NOMBRE_SUC[_branchOf(texto)] || texto; }
+
   async function getVentasPorSucursal(period) {
     const { desde, hasta } = getRangoPeriodo(period || 'mes');
     const ingresosAll = await getIngresos();
@@ -3071,7 +3083,7 @@ const LS_API = (() => {
       if (!r.sucursal || r.sucursal.trim() === '') return;
       // Ignorar datos de prueba
       if (['TEST', 'PRUEBA', 'VERIFICACION'].some(t => r.sucursal.toUpperCase().includes(t))) return;
-      const k = aliasSucursal(r.sucursal);
+      const k = nombreSucursal(r.sucursal);
       agg[k] = (agg[k] || 0) + (r.ventaTotal || r.totalDeclarado || 0);
     });
     return Object.entries(agg)
@@ -3090,7 +3102,7 @@ const LS_API = (() => {
     getIngresos, getConciliacion, getFacturas,
     getArticulosDetalle, getClientes, getProveedores,
     getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos,
-    getVentasPorSucursal, aliasSucursal,
+    getVentasPorSucursal, aliasSucursal, nombreSucursal,
     // Escritura
     registrarIngreso, registrarFactura, registrarFacturaCompleta, actualizarFactura, borrarFactura,
     registrarProveedor, registrarCliente,
@@ -3301,18 +3313,18 @@ const LS_UI = (() => {
         if (sucEl && sucursales.length > 0) {
           const maxVal = sucursales[0].total;
           // Configuración real de sucursales (actualizado junio 2026)
+          // META por nombre bonito (igual al que devuelve getVentasPorSucursal)
           const META = {
-            'SUEÑO DE LUNA':      { nom:'Coffee & Roasters',    ico:'ti-coffee',             tags:['<span class="chan ch-m">Manual</span>','<span class="chan" style="background:rgba(201,168,76,.12);color:var(--dorado);border:1px solid rgba(201,168,76,.25);font-size:9.5px">Expos</span>'] },
-            'COFFEE & ROASTERS':  { nom:'Coffee & Roasters',    ico:'ti-coffee',             tags:['<span class="chan ch-m">Manual</span>','<span class="chan" style="background:rgba(201,168,76,.12);color:var(--dorado);border:1px solid rgba(201,168,76,.25);font-size:9.5px">Expos</span>'] },
-            'CASA DE LA CULTURA': { nom:'Casa de la Cultura',   ico:'ti-building-community', tags:['<span class="chan ch-p"><i class="ti ti-device-desktop"></i>Parrot</span>','<span class="chan ch-r">Rappi</span>'] },
-            'HELFY FÜ':           { nom:'Helfy Fü',             ico:'ti-salad',              tags:['<span class="chan ch-p"><i class="ti ti-device-desktop"></i>Parrot</span>','<span class="chan ch-r">Rappi</span>','<span class="chan ch-u">Uber</span>'] },
-            'HELFY FU':           { nom:'Helfy Fü',             ico:'ti-salad',              tags:['<span class="chan ch-p"><i class="ti ti-device-desktop"></i>Parrot</span>','<span class="chan ch-r">Rappi</span>','<span class="chan ch-u">Uber</span>'] },
-            'BARBACOA Y MENUDO':  { nom:'Barbacoa y Menudo',    ico:'ti-meat',               tags:['<span class="chan ch-m">Domingos</span>'] },
-            'EVENTOS':            { nom:'Sueño de Luna Eventos', ico:'ti-confetti',           tags:['<span class="chan ch-e">Cotización</span>'] },
+            'Coffee & Roasters':  { ico:'ti-coffee',             tags:['<span class="chan ch-m">Manual</span>','<span class="chan" style="background:rgba(201,168,76,.12);color:var(--dorado);border:1px solid rgba(201,168,76,.25);font-size:9.5px">Expos</span>'] },
+            'Casa de la Cultura': { ico:'ti-building-community', tags:['<span class="chan ch-p"><i class="ti ti-device-desktop"></i>Parrot</span>','<span class="chan ch-r">Rappi</span>'] },
+            'Helfy Fü':           { ico:'ti-salad',              tags:['<span class="chan ch-p"><i class="ti ti-device-desktop"></i>Parrot</span>','<span class="chan ch-r">Rappi</span>','<span class="chan ch-u">Uber</span>'] },
+            'Barbacoa y Menudo':  { ico:'ti-meat',               tags:['<span class="chan ch-m">Domingos</span>'] },
+            'Eventos':            { ico:'ti-confetti',           tags:['<span class="chan ch-e">Cotización</span>'] },
           };
           sucEl.innerHTML = sucursales.map(s => {
             const pct = maxVal > 0 ? Math.round(s.total / maxVal * 100) : 0;
-            const m = META[s.sucursal] || { nom: s.sucursal, ico: 'ti-building', tags: [] };
+            const meta = META[s.sucursal] || { ico: 'ti-building', tags: [] };
+            const m = { nom: s.sucursal, ico: meta.ico, tags: meta.tags };
             return `<div class="srow">
               <div class="s-ico"><i class="ti ${m.ico}"></i></div>
               <div class="s-info">
@@ -4118,7 +4130,7 @@ const LS_UI = (() => {
       const porSuc = {};
       ingresos.forEach(r => {
         efe += r.efectivo; tar += r.tarjeta; tra += r.transferencia; rap += r.rappi;
-        const k = LS_API.aliasSucursal(r.sucursal || 'Sin sucursal');
+        const k = LS_API.nombreSucursal(r.sucursal || 'Sin sucursal');
         if (!porSuc[k]) porSuc[k] = { efe:0, tar:0, tra:0, rap:0, total:0 };
         porSuc[k].efe += r.efectivo; porSuc[k].tar += r.tarjeta;
         porSuc[k].tra += r.transferencia; porSuc[k].rap += r.rappi;
@@ -4140,9 +4152,8 @@ const LS_UI = (() => {
       if (tbody) {
         const granTotal = filas.reduce((s,f)=>s+f.total,0);
         tbody.innerHTML = filas.length ? filas.map(f => {
-          const m = _SUC_META[f.suc] || { nom: f.suc };
           return `<tr>
-            <td style="font-weight:500">${m.nom}</td>
+            <td style="font-weight:500">${f.suc}</td>
             <td class="num" style="font-family:var(--mono)">${fmt(f.efe)}</td>
             <td class="num" style="font-family:var(--mono)">${fmt(f.tar)}</td>
             <td class="num" style="font-family:var(--mono)">${fmt(f.tra)}</td>
