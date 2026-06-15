@@ -1132,6 +1132,9 @@
         <div class="nav-sec">Registros</div>
         <div class="nav-item" data-page="ingresos" onclick="go('ingresos',this)"><i class="ti ti-cash"></i><span class="nav-lbl">Ingresos</span></div>
         <div class="nav-item" data-page="facturas" onclick="go('facturas',this)"><i class="ti ti-file-invoice"></i><span class="nav-lbl">Egresos</span></div>
+        <div class="nav-sec">Catálogos</div>
+        <div class="nav-item" data-page="proveedores" onclick="go('proveedores',this)"><i class="ti ti-truck-delivery"></i><span class="nav-lbl">Proveedores</span></div>
+        <div class="nav-item" data-page="catalogo" onclick="go('catalogo',this)"><i class="ti ti-package"></i><span class="nav-lbl">Artículos</span></div>
       </nav>
 
       <div class="sb-foot">
@@ -1599,6 +1602,55 @@
   </div>
 </div>
 
+<!-- ════════ PROVEEDORES ════════ -->
+<div id="p-proveedores" class="page" data-screen-label="Proveedores">
+  <div class="card">
+    <div class="card-head"><div><div class="card-title"><i class="ti ti-truck-delivery"></i>Directorio de proveedores</div><div class="card-sub" id="prov-sub">Cargando...</div></div><div class="card-actions"><button class="btn btn-primary btn-sm" onclick="LS_UI.nuevoProveedor()"><i class="ti ti-plus"></i>Nuevo proveedor</button></div></div>
+    <div style="padding:0 18px 12px">
+      <div style="position:relative;max-width:460px">
+        <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--tx-4);font-size:16px"></i>
+        <input type="text" id="prov-buscar" placeholder="Buscar por nombre, RFC, contacto..." oninput="LS_UI.buscarProveedores(this.value)"
+          style="width:100%;padding:9px 12px 9px 36px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none">
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl" data-sortable>
+        <thead><tr>
+          <th class="sortable" data-type="text">Proveedor<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th>RFC / Razón social</th><th>Contacto</th><th>Teléfono</th><th>Correo</th><th>Acciones</th>
+        </tr></thead>
+        <tbody id="tabla-proveedores"><tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ CATÁLOGO (ARTÍCULOS) ════════ -->
+<div id="p-catalogo" class="page" data-screen-label="Catálogo">
+  <div class="card">
+    <div class="card-head"><div><div class="card-title"><i class="ti ti-package"></i>Catálogo Maestro</div><div class="card-sub" id="cat-sub">Cargando...</div></div><div class="card-actions"><button class="btn btn-primary btn-sm" onclick="LS_UI.nuevoArticulo()"><i class="ti ti-plus"></i>Nuevo artículo</button></div></div>
+    <div style="padding:0 18px 12px">
+      <div style="position:relative;max-width:460px">
+        <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--tx-4);font-size:16px"></i>
+        <input type="text" id="cat-buscar" placeholder="Buscar por artículo, categoría o proveedor..." oninput="LS_UI.buscarCatalogo(this.value)"
+          style="width:100%;padding:9px 12px 9px 36px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none">
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl" data-sortable>
+        <thead><tr>
+          <th class="sortable" data-type="text">Artículo<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th>Categoría</th><th>Subcategoría</th>
+          <th class="sortable num" data-type="num">Costo base<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th class="sortable num" data-type="num">Costo dinámico<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th>Proveedor</th><th>Acciones</th>
+        </tr></thead>
+        <tbody id="tabla-catalogo"><tr><td colspan="7" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 
 
         </div>
@@ -1664,6 +1716,8 @@ const PAGES = {
   inventario:   { title: 'Inventario General',    sub: 'Stock y alertas de reabastecimiento' },
   ingresos:     { title: 'Registro de Ingresos',  sub: 'Cortes de caja por turno' },
   facturas:     { title: 'Facturas y Egresos',    sub: 'Comprobantes registrados' },
+  proveedores:  { title: 'Proveedores',           sub: 'Directorio de proveedores' },
+  catalogo:     { title: 'Artículos (Catálogo)',  sub: 'Catálogo Maestro de productos' },
 };
 
 const BRANCHES = {
@@ -2490,11 +2544,14 @@ const LS_API = (() => {
     return rows.slice(1)
       .filter(r => r.length > 1 && r[COLS.PROVEEDORES.NOMBRE])
       .map(r => ({
-        id:      r[COLS.PROVEEDORES.ID]      || '',
-        nombre:  r[COLS.PROVEEDORES.NOMBRE]  || '',
-        rfc:     r[COLS.PROVEEDORES.RFC]     || '',
-        correo:  r[COLS.PROVEEDORES.CORREO]  || '',
-        telefono:r[COLS.PROVEEDORES.TELEFONO]|| '',
+        id:           r[COLS.PROVEEDORES.ID]            || '',
+        nombre:       r[COLS.PROVEEDORES.NOMBRE]        || '',
+        rfc:          r[COLS.PROVEEDORES.RFC]           || '',
+        contacto:     r[COLS.PROVEEDORES.CONTACTO]      || '',
+        correo:       r[COLS.PROVEEDORES.CORREO]        || '',
+        telefono:     r[COLS.PROVEEDORES.TELEFONO]      || '',
+        lineaCredito: r[COLS.PROVEEDORES.LINEA_CREDITO] || '',
+        diasCredito:  r[COLS.PROVEEDORES.DIAS_CREDITO]  || '',
       }));
   }
 
@@ -2690,6 +2747,13 @@ const LS_API = (() => {
         detalles:       datos.detalles      || [],
       }
     });
+  }
+
+  async function actualizarProveedor(datos) {
+    return escribirViaScript('actualizarProveedor', { datos });
+  }
+  async function actualizarCatalogoArticulo(datos) {
+    return escribirViaScript('actualizarCatalogoArticulo', { datos });
   }
 
   // Registrar nueva factura
@@ -3226,7 +3290,7 @@ const LS_API = (() => {
     // Escritura
     registrarIngreso, registrarIngresoCompleto, actualizarIngreso, borrarIngreso, getIngresoDetalle,
     registrarFactura, registrarFacturaCompleta, actualizarFactura, borrarFactura,
-    registrarProveedor, registrarCliente,
+    registrarProveedor, registrarCliente, actualizarProveedor, actualizarCatalogoArticulo,
     registrarArticuloDetalle, registrarCatalogoArticulo,
     // Agregaciones
     getKPIsDashboard, getTopArticulos, getTopProveedores,
@@ -4046,6 +4110,175 @@ const LS_UI = (() => {
       toast('Error', res?.msg || 'No se pudo borrar', 'err', 'ti-alert-circle');
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-trash"></i> Sí, borrar'; }
     }
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // PROVEEDORES
+  // ══════════════════════════════════════════════════════════
+  async function renderProveedores() {
+    showLoading('tabla-proveedores');
+    try {
+      const provs = (await LS_API.getProveedores()).slice().sort((a, b) => a.nombre.localeCompare(b.nombre));
+      window._provVista = provs;
+      setTxt('prov-sub', provs.length + ' proveedores registrados');
+      _pintarProveedores(provs);
+    } catch (e) { showError('tabla-proveedores', 'Error cargando proveedores'); }
+  }
+  function _pintarProveedores(lista, esBusq) {
+    if (!lista || !lista.length) {
+      setEl('tabla-proveedores', `<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-3)">${esBusq ? 'Sin resultados' : 'Sin proveedores'}</td></tr>`);
+      return;
+    }
+    setEl('tabla-proveedores', lista.map(p => {
+      const id = (p.id || '').replace(/'/g, '');
+      return `<tr>
+        <td style="font-weight:500">${p.nombre}</td>
+        <td style="color:var(--tx-2)">${p.rfc || '—'}</td>
+        <td>${p.contacto || '—'}</td>
+        <td style="font-family:var(--mono)">${p.telefono || '—'}</td>
+        <td style="color:var(--tx-2)">${p.correo || '—'}</td>
+        <td style="white-space:nowrap">
+          <button class="icon-btn" title="Ver ficha" onclick="LS_UI.verProveedor('${id}')"><i class="ti ti-eye"></i></button>
+          <button class="icon-btn" title="Editar" onclick="LS_UI.editarProveedor('${id}')"><i class="ti ti-pencil"></i></button>
+        </td></tr>`;
+    }).join(''));
+  }
+  function buscarProveedores(q) {
+    const t = _norm(q), l = window._provVista || [];
+    if (!t) { _pintarProveedores(l); return; }
+    _pintarProveedores(l.filter(p => _norm(p.nombre).includes(t) || _norm(p.rfc).includes(t) || _norm(p.contacto).includes(t) || _norm(p.correo).includes(t) || _norm(p.telefono).includes(t)), true);
+  }
+  function verProveedor(id) {
+    const p = (window._provVista || []).find(x => String(x.id) === String(id));
+    if (!p) return;
+    const fila = (lbl, val) => `<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line)"><span style="color:var(--tx-3);font-size:12.5px">${lbl}</span><span style="font-size:13px;color:var(--tx);text-align:right;max-width:60%">${val || '—'}</span></div>`;
+    _modal(`<div class="modal" style="max-width:480px">
+      <div class="modal-header"><div><div class="modal-title"><i class="ti ti-truck-delivery" style="margin-right:6px;color:var(--terra-claro)"></i>${p.nombre}</div><div class="modal-sub">${p.id}</div></div><button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button></div>
+      <div class="modal-body">
+        ${fila('Razón social (RFC)', p.rfc)}${fila('Contacto', p.contacto)}${fila('Teléfono', p.telefono)}${fila('Correo', p.correo)}${fila('Línea de crédito', p.lineaCredito)}${fila('Días de crédito', p.diasCredito)}
+      </div>
+      <div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal()">Cerrar</button><button class="btn-save" onclick="_cerrarModal();LS_UI.editarProveedor('${(p.id||'').replace(/'/g,'')}')"><i class="ti ti-pencil"></i> Editar</button></div></div>`);
+  }
+  function _formProveedor(p) {
+    const esEd = !!p;
+    window._editandoProvId = esEd ? p.id : null;
+    p = p || {};
+    const f = (lbl, id, val, type) => `<div class="ff"><label>${lbl}</label><input type="${type||'text'}" id="${id}" value="${String(val||'').replace(/"/g,'&quot;')}"></div>`;
+    _modal(`<div class="modal" style="max-width:520px">
+      <div class="modal-header"><div><div class="modal-title">${esEd ? 'Editar proveedor' : 'Nuevo proveedor'}</div></div><button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button></div>
+      <div class="modal-body">
+        ${f('Nombre comercial', 'pf-nombre', p.nombre)}
+        ${f('Razón social (RFC)', 'pf-rfc', p.rfc)}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${f('Contacto', 'pf-contacto', p.contacto)}${f('Teléfono', 'pf-tel', p.telefono)}</div>
+        ${f('Correo', 'pf-correo', p.correo, 'email')}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${f('Línea de crédito ($)', 'pf-linea', p.lineaCredito, 'number')}${f('Días de crédito', 'pf-dias', p.diasCredito, 'number')}</div>
+      </div>
+      <div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarProveedor()"><i class="ti ti-device-floppy"></i> ${esEd ? 'Guardar cambios' : 'Registrar'}</button></div></div>`);
+  }
+  function nuevoProveedor() { _formProveedor(null); }
+  function editarProveedor(id) { _formProveedor((window._provVista || []).find(x => String(x.id) === String(id))); }
+  async function guardarProveedor() {
+    const v = id => document.getElementById(id)?.value?.trim() || '';
+    const datos = { nombre: v('pf-nombre'), rfc: v('pf-rfc'), contacto: v('pf-contacto'), telefono: v('pf-tel'), correo: v('pf-correo'), lineaCredito: parseFloat(v('pf-linea')) || 0, diasCredito: parseFloat(v('pf-dias')) || 0 };
+    if (!datos.nombre) { toast('Falta nombre', 'El nombre comercial es obligatorio', 'err', 'ti-alert-circle'); return; }
+    const editId = window._editandoProvId;
+    const btn = document.querySelector('.modal .btn-save'); if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 spin"></i> Guardando...'; }
+    let res;
+    if (editId) { datos.id = editId; res = await LS_API.actualizarProveedor(datos); }
+    else res = await LS_API.registrarProveedor(datos);
+    if (res?.status === 'ok') {
+      window._editandoProvId = null; _cerrarModal(); LS_API.invalidarCache('DATOS_PROVEEDORES');
+      toast(editId ? 'Proveedor actualizado' : 'Proveedor registrado', datos.nombre, 'ok', 'ti-check');
+      await renderProveedores();
+    } else { toast('Error', res?.msg || 'No se pudo guardar', 'err', 'ti-alert-circle'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy"></i> Guardar'; } }
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // CATÁLOGO (ARTÍCULOS)
+  // ══════════════════════════════════════════════════════════
+  async function renderCatalogo() {
+    showLoading('tabla-catalogo');
+    try {
+      const arts = (await LS_API.getCatalogo()).slice().sort((a, b) => a.articulo.localeCompare(b.articulo));
+      window._catVista = arts;
+      setTxt('cat-sub', arts.length + ' artículos en el catálogo');
+      _pintarCatalogo(arts);
+    } catch (e) { showError('tabla-catalogo', 'Error cargando catálogo'); }
+  }
+  function _pintarCatalogo(lista, esBusq) {
+    if (!lista || !lista.length) {
+      setEl('tabla-catalogo', `<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--tx-3)">${esBusq ? 'Sin resultados' : 'Sin artículos'}</td></tr>`);
+      return;
+    }
+    setEl('tabla-catalogo', lista.slice(0, 400).map(a => {
+      const key = (a.articulo || '').replace(/'/g, "\\'");
+      return `<tr>
+        <td style="font-weight:500">${a.articulo}</td>
+        <td style="color:var(--tx-2)">${a.categoria || '—'}</td>
+        <td style="color:var(--tx-2)">${a.subcategoria || '—'}</td>
+        <td class="num" data-v="${a.costoBase}" style="font-family:var(--mono)">${LS_API.formatMXNDec(a.costoBase)}</td>
+        <td class="num" data-v="${a.costoDinamico}" style="font-family:var(--mono);font-weight:600">${LS_API.formatMXNDec(a.costoDinamico)}</td>
+        <td style="color:var(--tx-2)">${a.proveedor || '—'}</td>
+        <td style="white-space:nowrap">
+          <button class="icon-btn" title="Ver" onclick="LS_UI.verArticulo('${key}')"><i class="ti ti-eye"></i></button>
+          <button class="icon-btn" title="Editar" onclick="LS_UI.editarArticulo('${key}')"><i class="ti ti-pencil"></i></button>
+        </td></tr>`;
+    }).join(''));
+  }
+  function buscarCatalogo(q) {
+    const t = _norm(q), l = window._catVista || [];
+    if (!t) { _pintarCatalogo(l); return; }
+    _pintarCatalogo(l.filter(a => _norm(a.articulo).includes(t) || _norm(a.categoria).includes(t) || _norm(a.subcategoria).includes(t) || _norm(a.proveedor).includes(t)), true);
+  }
+  function _findArt(key) { return (window._catVista || []).find(x => String(x.articulo) === String(key)); }
+  function verArticulo(key) {
+    const a = _findArt(key); if (!a) return;
+    const fila = (lbl, val) => `<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line)"><span style="color:var(--tx-3);font-size:12.5px">${lbl}</span><span style="font-size:13px;color:var(--tx);text-align:right">${val ?? '—'}</span></div>`;
+    _modal(`<div class="modal" style="max-width:480px">
+      <div class="modal-header"><div><div class="modal-title"><i class="ti ti-package" style="margin-right:6px;color:var(--terra-claro)"></i>${a.articulo}</div><div class="modal-sub">${a.categoria || ''} ${a.subcategoria ? '· ' + a.subcategoria : ''}</div></div><button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button></div>
+      <div class="modal-body">
+        ${fila('Costo base', LS_API.formatMXNDec(a.costoBase))}${fila('Costo dinámico (última compra)', LS_API.formatMXNDec(a.costoDinamico))}${fila('Costo final (con merma)', LS_API.formatMXNDec(a.costoFinal))}${fila('% Merma', a.merma + '%')}${fila('Unidad', a.unidad)}${fila('Proveedor', a.proveedor)}
+      </div>
+      <div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal()">Cerrar</button><button class="btn-save" onclick="_cerrarModal();LS_UI.editarArticulo('${(a.articulo||'').replace(/'/g,"\\'")}')"><i class="ti ti-pencil"></i> Editar</button></div></div>`);
+  }
+  async function _formArticulo(a) {
+    const esEd = !!a;
+    window._editandoArtKey = esEd ? a.articulo : null;
+    a = a || {};
+    const cats = await LS_API.getCategorias().catch(() => []);
+    const catSet = [...new Set((cats || []).map(c => c.categoria).filter(Boolean))].sort();
+    const catOpts = catSet.map(c => `<option value="${c}" ${c === a.categoria ? 'selected' : ''}>${c}</option>`).join('');
+    const f = (lbl, id, val, type) => `<div class="ff"><label>${lbl}</label><input type="${type||'text'}" id="${id}" value="${String(val??'').replace(/"/g,'&quot;')}"></div>`;
+    _modal(`<div class="modal" style="max-width:540px">
+      <div class="modal-header"><div><div class="modal-title">${esEd ? 'Editar artículo' : 'Nuevo artículo'}</div></div><button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button></div>
+      <div class="modal-body">
+        ${f('Artículo', 'af-nombre', a.articulo)}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="ff"><label>Categoría</label><select id="af-categoria"><option value="">Seleccionar...</option>${catOpts}</select></div>
+          ${f('Subcategoría', 'af-subcategoria', a.subcategoria)}
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">${f('Costo base ($)', 'af-costo', a.costoBase, 'number')}${f('% Merma', 'af-merma', a.merma, 'number')}${f('Unidad', 'af-unidad', a.unidad)}</div>
+        ${f('Proveedor', 'af-proveedor', a.proveedor)}
+        ${esEd ? `<div style="font-size:11.5px;color:var(--tx-3);margin-top:6px">💡 El costo dinámico (${LS_API.formatMXNDec(a.costoDinamico)}) se actualiza solo con cada compra; aquí editas el costo base.</div>` : ''}
+      </div>
+      <div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarArticulo()"><i class="ti ti-device-floppy"></i> ${esEd ? 'Guardar cambios' : 'Registrar'}</button></div></div>`);
+  }
+  function nuevoArticulo() { _formArticulo(null); }
+  function editarArticulo(key) { _formArticulo(_findArt(key)); }
+  async function guardarArticulo() {
+    const v = id => document.getElementById(id)?.value?.trim() || '';
+    const datos = { articulo: v('af-nombre'), categoria: v('af-categoria'), subcategoria: v('af-subcategoria'), costoBase: parseFloat(v('af-costo')) || 0, merma: parseFloat(v('af-merma')) || 0, unidad: v('af-unidad'), proveedor: v('af-proveedor') };
+    if (!datos.articulo) { toast('Falta artículo', 'El nombre del artículo es obligatorio', 'err', 'ti-alert-circle'); return; }
+    const editKey = window._editandoArtKey;
+    const btn = document.querySelector('.modal .btn-save'); if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 spin"></i> Guardando...'; }
+    let res;
+    if (editKey) { datos.articuloKey = editKey; res = await LS_API.actualizarCatalogoArticulo(datos); }
+    else res = await LS_API.registrarCatalogoArticulo(datos);
+    if (res?.status === 'ok') {
+      window._editandoArtKey = null; _cerrarModal(); LS_API.invalidarCache('Catálogo');
+      toast(editKey ? 'Artículo actualizado' : 'Artículo registrado', datos.articulo, 'ok', 'ti-check');
+      await renderCatalogo();
+    } else { toast('Error', res?.msg || 'No se pudo guardar', 'err', 'ti-alert-circle'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy"></i> Guardar'; } }
   }
 
   // ══════════════════════════════════════════════════════════
@@ -5524,6 +5757,8 @@ const LS_UI = (() => {
       case 'gastos':       await renderGastos();       break;
       case 'balance':      await renderBalance();      break;
       case 'inventario':   await renderInventario();   break;
+      case 'proveedores':  await renderProveedores();   break;
+      case 'catalogo':     await renderCatalogo();      break;
     }
   }
 
@@ -5550,7 +5785,9 @@ const LS_UI = (() => {
   return {
     renderDashboard, renderConciliacion, renderIngresos,
     renderFacturas, renderArticulos, renderRentabilidad,
-    renderGastos, renderBalance, renderInventario,
+    renderGastos, renderBalance, renderInventario, renderProveedores, renderCatalogo,
+    buscarProveedores, verProveedor, editarProveedor, nuevoProveedor, guardarProveedor,
+    buscarCatalogo, verArticulo, editarArticulo, nuevoArticulo, guardarArticulo,
     onPageChange, reloadPage, invalidarCacheYRecargar, recargarPagina,
     filtrarRentabilidad: (f) => renderRentabilidad(f),
     buscarFacturas, verFactura, editarFactura, confirmarBorrarFactura, ejecutarBorrarFactura,
