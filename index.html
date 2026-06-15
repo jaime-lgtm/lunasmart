@@ -493,8 +493,8 @@
     .btn-ghost:hover { background: rgba(177,70,24,0.1); border-color: transparent; }
     .btn-sm { padding: 5px 9px; font-size: 11px; }
 
-    .scroll-area { flex: 1; overflow-y: auto; }
-    .content { padding: 20px 22px 32px; max-width: 1680px; }
+    .scroll-area { flex: 1; overflow-y: auto; overflow-x: hidden; min-width: 0; }
+    .content { padding: 20px 22px 32px; max-width: 1680px; min-width: 0; }
     .page { display: none; }
     .page.active { display: block; animation: fadeUp 0.32s var(--ease); }
 </style>
@@ -516,7 +516,7 @@
     .filter-note .fx:hover { color: var(--terra-claro); }
 
     /* KPI */
-    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+    .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
     .kpi {
       background: linear-gradient(180deg, var(--cafe-card-hi), var(--cafe-card));
       border: 1px solid var(--line); border-radius: var(--r-lg); padding: 15px 16px;
@@ -551,10 +551,10 @@
     .card-sub { font-size: 11px; color: var(--tx-3); margin-top: 2px; font-weight: 400; }
     .card-actions { display: flex; align-items: center; gap: 7px; }
 
-    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-    .grid-21 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
-    @media (min-width: 1400px) { .kpis.k5 { grid-template-columns: repeat(5, 1fr); } }
+    .grid2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 14px; }
+    .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; }
+    .grid-21 { display: grid; grid-template-columns: 1.4fr minmax(0,1fr); gap: 14px; }
+    @media (min-width: 1400px) { .kpis.k5 { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 
     /* Tables */
     .tbl-wrap { overflow-x: auto; }
@@ -628,7 +628,7 @@
     .dc-val { font-family: 'DM Mono', monospace; font-size: 15px; font-weight: 500; color: var(--tx); display: block; max-width: 64px; }
     .dc-lbl { font-size: 8.5px; color: var(--tx-3); text-transform: uppercase; letter-spacing: 0.08em; }
     /* Cintillo de alertas tipo bolsa de valores (ticker) */
-    .ticker { overflow: hidden; background: var(--cafe-card); border: 1px solid var(--line); border-radius: var(--r); padding: 11px 0; margin-bottom: 14px; position: relative; -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); }
+    .ticker { overflow: hidden; max-width: 100%; background: var(--cafe-card); border: 1px solid var(--line); border-radius: var(--r); padding: 11px 0; margin-bottom: 14px; position: relative; -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); }
     .ticker-track { display: inline-flex; white-space: nowrap; will-change: transform; animation: tickerScroll linear infinite; }
     .ticker:hover .ticker-track { animation-play-state: paused; }
     .ticker-item { display: inline-flex; align-items: center; gap: 8px; padding: 0 26px; font-size: 13px; color: var(--tx-2); cursor: pointer; border-right: 1px solid var(--line); }
@@ -655,7 +655,7 @@
     .meta-bar-track { height: 14px; background: var(--track, rgba(255,255,255,0.06)); border-radius: 8px; overflow: hidden; margin: 10px 0 6px; }
     .meta-bar-fill { height: 100%; border-radius: 8px; transition: width 0.8s var(--ease); }
     /* Turno split */
-    .turno-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .turno-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 14px; }
     .turno-box { padding: 16px; border: 1px solid var(--line); border-radius: var(--r); display: flex; flex-direction: column; gap: 5px; }
     .turno-box .tb-ico { font-size: 22px; }
     .turno-box .tb-val { font-family: 'DM Mono', monospace; font-size: 22px; font-weight: 600; color: var(--tx); }
