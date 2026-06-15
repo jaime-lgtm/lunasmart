@@ -191,6 +191,7 @@ function doPost(e) {
     case 'registrarArticuloDetalle':   return _registrarArticuloDetalle(datos);
     case 'registrarProveedor':         return _registrarProveedor(datos);
     case 'actualizarProveedor':        return _actualizarProveedor(datos);
+    case 'borrarProveedor':            return _borrarProveedor(datos);
     case 'actualizarCatalogoArticulo': return _actualizarCatalogoArticulo(datos);
     case 'registrarCliente':           return _registrarCliente(datos);
     case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || datos.sucursal || 'CASA DE LA CULTURA', body.desde || datos.desde, body.hasta || datos.hasta);
@@ -617,16 +618,31 @@ function _actualizarCatalogoArticulo(b) {
         var costo = parseFloat(b.costoBase || vals[i][1] || 0);
         var merma = parseFloat(b.merma || 0);
         var costoFinal = merma > 0 ? costo / (1 - merma / 100) : costo;
-        // A=articulo B=costoBase C=costoDinamico(conserva) D=cantidad(conserva)
+        var cant = (b.cantidad != null && b.cantidad !== '') ? parseFloat(b.cantidad) : (vals[i][3] || 1);
+        // A=articulo B=costoBase C=costoDinamico(conserva) D=cantidad E..J
         sh.getRange(i + 1, 1, 1, 2).setValues([[b.articulo || vals[i][0], costo]]);
-        sh.getRange(i + 1, 5, 1, 6).setValues([[
-          b.unidad || '', merma, costoFinal,
+        sh.getRange(i + 1, 4, 1, 7).setValues([[
+          cant, b.unidad || '', merma, costoFinal,
           b.categoria || '', b.subcategoria || '', b.proveedor || '',
         ]]);
         return _json({ status: 'ok' });
       }
     }
     return _err('Artículo no encontrado: ' + clave);
+  } catch (e) { return _err(e.message); }
+}
+
+// Borrar proveedor (por ID en col A)
+function _borrarProveedor(b) {
+  try {
+    var id = String(b.id || '').trim();
+    if (!id) return _err('Falta el ID del proveedor');
+    var sh = _getSheet(HOJAS.PROVEEDORES);
+    var vals = sh.getDataRange().getValues();
+    for (var i = vals.length - 1; i >= 1; i--) {
+      if (String(vals[i][0]).trim() === id) sh.deleteRow(i + 1);
+    }
+    return _json({ status: 'ok' });
   } catch (e) { return _err(e.message); }
 }
 
@@ -1180,7 +1196,7 @@ function _registrarCatalogoArticulo(b) {
       b.articulo     || '',
       costo,                 // COSTO BASE
       costo,                 // COSTO DINAMICO (igual al base al inicio)
-      1,                     // CANTIDAD
+      (b.cantidad != null && b.cantidad !== '') ? parseFloat(b.cantidad) : 1, // CANTIDAD
       b.unidad       || '',  // UNIDA DE MEDIDA
       merma,                 // % MERMA
       costoFinal,            // COSTO FINAL
