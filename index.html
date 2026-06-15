@@ -2145,19 +2145,50 @@ const LS_API = (() => {
     },
   };
 
-  // ── CACHÉ LOCAL ────────────────────────────────────────────
+  // ── CACHÉ LOCAL (memoria + localStorage para recargas instantáneas) ──
   const _cache = {};
-  const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+  const CACHE_TTL = 8 * 60 * 1000; // 8 minutos
+  const LS_PREFIX = 'lscache:';
+
+  // Hidratar caché desde localStorage al iniciar (recargas/PWA sin esperar red)
+  (function hidratarCache() {
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || k.indexOf(LS_PREFIX) !== 0) continue;
+        const obj = JSON.parse(localStorage.getItem(k));
+        if (obj && Date.now() - obj.ts <= CACHE_TTL) {
+          _cache[k.slice(LS_PREFIX.length)] = obj;
+        } else {
+          localStorage.removeItem(k);
+        }
+      }
+    } catch (e) {}
+  })();
 
   function _cacheGet(key) {
     const c = _cache[key];
     if (!c) return null;
-    if (Date.now() - c.ts > CACHE_TTL) { delete _cache[key]; return null; }
+    if (Date.now() - c.ts > CACHE_TTL) { delete _cache[key]; try { localStorage.removeItem(LS_PREFIX + key); } catch(e){} return null; }
     return c.data;
   }
 
   function _cacheSet(key, data) {
     _cache[key] = { data, ts: Date.now() };
+    // Persistir en localStorage (ignora errores de cuota/serialización)
+    try { localStorage.setItem(LS_PREFIX + key, JSON.stringify({ data, ts: Date.now() })); } catch (e) {}
+  }
+
+  // Precargar en PARALELO las hojas base más usadas (calienta el caché)
+  async function precargar() {
+    try {
+      await Promise.all([
+        leerHoja(SHEETS.INGRESOS), leerHoja(SHEETS.FACTURAS),
+        leerHoja(SHEETS.ART_DETALLES), leerHoja(SHEETS.CATALOGO),
+        leerHoja(SHEETS.CONCILIACION), leerHoja(SHEETS.ING_DETALLES),
+        leerHoja(SHEETS.PROVEEDORES), leerHoja(SHEETS.DATA_INGRESOS),
+      ]);
+    } catch (e) {}
   }
 
   // ── LEER HOJA ──────────────────────────────────────────────
@@ -2243,10 +2274,13 @@ const LS_API = (() => {
     }
   }
 
-  // ── INVALIDAR CACHÉ ────────────────────────────────────────
+  // ── INVALIDAR CACHÉ (memoria + localStorage) ───────────────
   function invalidarCache(hoja) {
     Object.keys(_cache).forEach(k => {
-      if (!hoja || k.startsWith(hoja)) delete _cache[k];
+      if (!hoja || k.startsWith(hoja)) {
+        delete _cache[k];
+        try { localStorage.removeItem(LS_PREFIX + k); } catch (e) {}
+      }
     });
   }
 
@@ -3202,7 +3236,7 @@ const LS_API = (() => {
     // Utilidades
     parseNum, formatMXN, formatMXNDec, formatPct, hoy, mesFiltro, getRangoPeriodo,
     _enRango, _fechaISO, _mesDeDate, _branchOf,
-    setBranch, invalidarCache,
+    setBranch, invalidarCache, precargar,
     // Configurar
     setConfig(cfg) { Object.assign(CONFIG, cfg); },
   };
@@ -3339,6 +3373,8 @@ const LS_UI = (() => {
     const period = (typeof state !== 'undefined' && state.period) ? state.period : 'mes';
 
     try {
+      // Calentar el caché en PARALELO (evita ~7 descargas en serie)
+      await LS_API.precargar();
       const [kpis, topArt, concilia] = await Promise.all([
         LS_API.getKPIsDashboard(period),
         LS_API.getTopArticulos(5),
