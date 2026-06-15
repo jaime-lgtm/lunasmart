@@ -2252,16 +2252,32 @@ const LS_API = (() => {
     try { localStorage.setItem(LS_PREFIX + key, JSON.stringify({ data, ts: Date.now() })); } catch (e) {}
   }
 
-  // Precargar en PARALELO las hojas base más usadas (calienta el caché)
+  // Precargar las hojas base. Usa batchGet: TODAS en UNA sola petición HTTP
+  // (en vez de 8). Es el mayor ahorro de tiempo de carga.
   async function precargar() {
+    const sheets = [
+      SHEETS.INGRESOS, SHEETS.FACTURAS, SHEETS.ART_DETALLES, SHEETS.CATALOGO,
+      SHEETS.CONCILIACION, SHEETS.ING_DETALLES, SHEETS.PROVEEDORES, SHEETS.DATA_INGRESOS,
+    ];
+    const faltan = sheets.filter(s => !_cacheGet(`${s}:all`));
+    if (!faltan.length) return; // ya están todas en caché
     try {
-      await Promise.all([
-        leerHoja(SHEETS.INGRESOS), leerHoja(SHEETS.FACTURAS),
-        leerHoja(SHEETS.ART_DETALLES), leerHoja(SHEETS.CATALOGO),
-        leerHoja(SHEETS.CONCILIACION), leerHoja(SHEETS.ING_DETALLES),
-        leerHoja(SHEETS.PROVEEDORES), leerHoja(SHEETS.DATA_INGRESOS),
-      ]);
+      const params = faltan.map(s => `ranges=${encodeURIComponent(s)}`).join('&');
+      const url = `${CONFIG.BASE}/${CONFIG.SHEET_ID}/values:batchGet?${params}&valueRenderOption=FORMATTED_VALUE`;
+      const resp = await fetch(`${url}&key=${CONFIG.API_KEY}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        (data.valueRanges || []).forEach((vr, i) => {
+          if (vr.values) _cacheSet(`${faltan[i]}:all`, vr.values);
+        });
+        // Si alguna no vino, completar individual
+        const aun = faltan.filter(s => !_cacheGet(`${s}:all`));
+        if (aun.length) await Promise.all(aun.map(s => leerHoja(s)));
+        return;
+      }
     } catch (e) {}
+    // Fallback: descargas individuales en paralelo
+    try { await Promise.all(faltan.map(s => leerHoja(s))); } catch (e) {}
   }
 
   // ── LEER HOJA ──────────────────────────────────────────────
