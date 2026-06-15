@@ -627,6 +627,11 @@
     .donut-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
     .dc-val { font-family: 'DM Mono', monospace; font-size: 15px; font-weight: 500; color: var(--tx); display: block; max-width: 64px; }
     .dc-lbl { font-size: 8.5px; color: var(--tx-3); text-transform: uppercase; letter-spacing: 0.08em; }
+    /* Segmented toggle (Top vendidos/comprados) */
+    .seg { display: inline-flex; background: var(--cafe-800); border: 1px solid var(--line-2); border-radius: var(--r); padding: 3px; gap: 2px; }
+    .seg button { background: transparent; border: none; color: var(--tx-3); font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: calc(var(--r) - 3px); cursor: pointer; font-family: inherit; white-space: nowrap; transition: all .15s; }
+    .seg button.on { background: var(--terra); color: #fff; }
+
     /* Mini gráfica de barras (tendencia) */
     .trend { display: flex; align-items: flex-end; gap: 10px; height: 150px; padding: 8px 4px 0; }
     .trend-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
@@ -1198,11 +1203,7 @@
         <div class="content">
 <!-- ════════ DASHBOARD ════════ -->
 <div id="p-dashboard" class="page active" data-screen-label="Dashboard">
-  <div class="alert alert-d">
-    <i class="ti ti-alert-triangle"></i>
-    <span>Turno mañana <strong>03/06</strong> — faltante de <strong>$165</strong> en Sueño de Luna Coffee. Verificar con Denisse Hurtado.</span>
-    <button class="btn btn-sm a-act" onclick="go('conciliacion',document.querySelector('[data-page=conciliacion]'))"><i class="ti ti-arrow-right"></i>Revisar</button>
-  </div>
+  <div id="dash-alertas"></div>
   <div class="kpis k5">
     <div class="kpi">
       <div class="kpi-top"><div><div class="kpi-label" id="kpi-venta-label">Venta total · mes</div></div><div class="kpi-ico"><i class="ti ti-coin"></i></div></div>
@@ -1369,8 +1370,13 @@
     <div class="kpi"><div class="kpi-top"><div class="kpi-label">Gasto en artículos</div><div class="kpi-ico"><i class="ti ti-coin"></i></div></div><div class="kpi-val" id="art-gasto">—</div><div class="kpi-sub">en facturas</div></div>
   </div>
   <div class="card">
-    <div class="card-head"><div><div class="card-title"><i class="ti ti-star"></i>Artículos más comprados</div><div class="card-sub" id="art-sub">De tus facturas de proveedores</div></div></div>
-    <div id="articulos-nota-origen" style="display:none;padding:9px 16px;background:var(--ambar-bg);border-radius:var(--r-sm);margin:0 16px 12px;font-size:11.5px;color:var(--ambar)"><i class="ti ti-info-circle"></i> Datos de <strong>compras</strong> (facturas). Las ventas por artículo requieren integración con Parrot a nivel de orden.</div>
+    <div class="card-head">
+      <div><div class="card-title"><i class="ti ti-star"></i><span id="art-titulo">Top vendidos</span></div><div class="card-sub" id="art-sub">Productos más vendidos (Parrot + cortes)</div></div>
+      <div class="seg" id="art-toggle">
+        <button class="on" data-modo="vendidos" onclick="LS_UI.setModoArticulos('vendidos',this)">Top Ingresos (vendidos)</button>
+        <button data-modo="comprados" onclick="LS_UI.setModoArticulos('comprados',this)">Top Egresos (comprados)</button>
+      </div>
+    </div>
     <div class="tbl-wrap">
       <table class="tbl" data-sortable>
         <thead><tr>
@@ -2752,6 +2758,9 @@ const LS_API = (() => {
   async function actualizarProveedor(datos) {
     return escribirViaScript('actualizarProveedor', { datos });
   }
+  async function borrarProveedor(id) {
+    return escribirViaScript('borrarProveedor', { datos: { id } });
+  }
   async function actualizarCatalogoArticulo(datos) {
     return escribirViaScript('actualizarCatalogoArticulo', { datos });
   }
@@ -3290,7 +3299,7 @@ const LS_API = (() => {
     // Escritura
     registrarIngreso, registrarIngresoCompleto, actualizarIngreso, borrarIngreso, getIngresoDetalle,
     registrarFactura, registrarFacturaCompleta, actualizarFactura, borrarFactura,
-    registrarProveedor, registrarCliente, actualizarProveedor, actualizarCatalogoArticulo,
+    registrarProveedor, registrarCliente, actualizarProveedor, borrarProveedor, actualizarCatalogoArticulo,
     registrarArticuloDetalle, registrarCatalogoArticulo,
     // Agregaciones
     getKPIsDashboard, getTopArticulos, getTopProveedores,
@@ -3430,6 +3439,52 @@ const LS_UI = (() => {
     </div>`;
   }
 
+  // Banner de alertas DINÁMICO (faltantes, precios, meta, inventario)
+  async function renderAlertas() {
+    const cont = document.getElementById('dash-alertas');
+    if (!cont) return;
+    const A = [];
+    try {
+      const [ingresos, catalogo, meta, inv] = await Promise.all([
+        LS_API.getIngresos(), LS_API.getCatalogo(), LS_API.getMetaMes(),
+        LS_API.getAlertasInventario().catch(() => []),
+      ]);
+      // 1) Faltante de corte más reciente
+      const falt = ingresos.filter(r => r.diferencia < -1)
+        .sort((a, b) => (LS_API._fechaISO(b.fecha) || '').localeCompare(LS_API._fechaISO(a.fecha) || ''));
+      if (falt.length) {
+        const f = falt[0];
+        A.push({ c: 'alert-d', i: 'ti-alert-triangle', page: 'conciliacion',
+          html: `Faltante en corte <strong>${f.fecha}</strong> · ${LS_API.nombreSucursal(f.sucursal)} ${turnoLabel(f.cliente)} — <strong>${LS_API.formatMXN(Math.abs(f.diferencia))}</strong>` });
+      }
+      // 2) Aumento de precio (costo dinámico vs base)
+      const sub = (catalogo || []).filter(a => a.costoBase > 0 && a.costoDinamico > a.costoBase)
+        .map(a => ({ n: a.articulo, base: a.costoBase, din: a.costoDinamico, pct: (a.costoDinamico - a.costoBase) / a.costoBase * 100 }))
+        .filter(a => a.pct >= 8).sort((a, b) => b.pct - a.pct);
+      if (sub.length) {
+        const s = sub[0];
+        A.push({ c: 'alert-w', i: 'ti-trending-up', page: 'catalogo',
+          html: `<i class="ti ti-arrow-up-right" style="font-size:13px"></i> <strong>${s.n}</strong> subió <strong>${s.pct.toFixed(0)}%</strong> (de ${LS_API.formatMXNDec(s.base)} a ${LS_API.formatMXNDec(s.din)})` });
+      }
+      // 3) Ventas vs meta del mes
+      if (meta.meta > 0) {
+        if (meta.pct >= 100) A.push({ c: 'alert-s', i: 'ti-trophy', page: 'balance', html: `🎉 Meta del mes alcanzada: <strong>${Math.round(meta.pct)}%</strong> (${LS_API.formatMXN(meta.real)} de ${LS_API.formatMXN(meta.meta)})` });
+        else if (meta.pct < 60) A.push({ c: 'alert-w', i: 'ti-target-arrow', page: 'balance', html: `Vas <strong>${Math.round(meta.pct)}%</strong> de la meta del mes — faltan <strong>${LS_API.formatMXN(meta.meta - meta.real)}</strong>` });
+      }
+      // 4) Inventario crítico
+      const bajos = (inv || []).filter(x => x.urgente);
+      if (bajos.length) A.push({ c: 'alert-w', i: 'ti-packages', page: 'inventario', html: `<strong>${bajos.length}</strong> artículo(s) con stock crítico — conviene hacer inventario` });
+    } catch (e) { console.error('alertas', e); }
+
+    if (!A.length) {
+      cont.innerHTML = `<div class="alert alert-s"><i class="ti ti-circle-check"></i><span>Todo en orden — sin alertas relevantes.</span></div>`;
+      return;
+    }
+    cont.innerHTML = A.slice(0, 3).map(a => `
+      <div class="alert ${a.c}"><i class="ti ${a.i}"></i><span>${a.html}</span>
+      <button class="btn btn-sm a-act" onclick="go('${a.page}',document.querySelector('[data-page=${a.page}]'))"><i class="ti ti-arrow-right"></i>Ver</button></div>`).join('');
+  }
+
   // ══════════════════════════════════════════════════════════
   // DASHBOARD
   // ══════════════════════════════════════════════════════════
@@ -3439,6 +3494,7 @@ const LS_UI = (() => {
     try {
       // Calentar el caché en PARALELO (evita ~7 descargas en serie)
       await LS_API.precargar();
+      renderAlertas(); // banner dinámico (no bloquea)
       const [kpis, topArt, concilia] = await Promise.all([
         LS_API.getKPIsDashboard(period),
         LS_API.getTopArticulos(5),
@@ -4173,7 +4229,19 @@ const LS_UI = (() => {
         ${f('Correo', 'pf-correo', p.correo, 'email')}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${f('Línea de crédito ($)', 'pf-linea', p.lineaCredito, 'number')}${f('Días de crédito', 'pf-dias', p.diasCredito, 'number')}</div>
       </div>
-      <div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarProveedor()"><i class="ti ti-device-floppy"></i> ${esEd ? 'Guardar cambios' : 'Registrar'}</button></div></div>`);
+      <div class="modal-footer">${esEd ? `<button class="btn-cancel" style="color:var(--rojo);margin-right:auto" onclick="LS_UI.confirmarBorrarProveedor('${(p.id||'').replace(/'/g,'')}')"><i class="ti ti-trash"></i> Borrar</button>` : ''}<button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarProveedor()"><i class="ti ti-device-floppy"></i> ${esEd ? 'Guardar cambios' : 'Registrar'}</button></div></div>`);
+  }
+  function confirmarBorrarProveedor(id) {
+    const p = (window._provVista || []).find(x => String(x.id) === String(id)); if (!p) return;
+    _modal(`<div class="modal" style="max-width:400px"><div class="modal-header"><div class="modal-title" style="color:var(--rojo)"><i class="ti ti-trash" style="margin-right:6px"></i>Borrar proveedor</div></div>
+      <div class="modal-body"><p style="font-size:13.5px;color:var(--tx-2);line-height:1.6">¿Borrar a <strong>${p.nombre}</strong>?<br><span style="color:var(--tx-3);font-size:12px">No se puede deshacer.</span></p></div>
+      <div class="modal-footer"><button class="btn-cancel" onclick="LS_UI.editarProveedor('${(p.id||'').replace(/'/g,'')}')">Cancelar</button><button class="btn-save" style="background:var(--rojo)" id="btn-del-prov" onclick="LS_UI.ejecutarBorrarProveedor('${(p.id||'').replace(/'/g,'')}')"><i class="ti ti-trash"></i> Sí, borrar</button></div></div>`);
+  }
+  async function ejecutarBorrarProveedor(id) {
+    const btn = document.getElementById('btn-del-prov'); if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 spin"></i> Borrando...'; }
+    const res = await LS_API.borrarProveedor(id);
+    if (res?.status === 'ok') { _cerrarModal(); LS_API.invalidarCache('DATOS_PROVEEDORES'); toast('Proveedor borrado', '', 'ok', 'ti-check'); await renderProveedores(); }
+    else { toast('Error', res?.msg || 'No se pudo borrar', 'err', 'ti-alert-circle'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-trash"></i> Sí, borrar'; } }
   }
   function nuevoProveedor() { _formProveedor(null); }
   function editarProveedor(id) { _formProveedor((window._provVista || []).find(x => String(x.id) === String(id))); }
@@ -4237,7 +4305,7 @@ const LS_UI = (() => {
     _modal(`<div class="modal" style="max-width:480px">
       <div class="modal-header"><div><div class="modal-title"><i class="ti ti-package" style="margin-right:6px;color:var(--terra-claro)"></i>${a.articulo}</div><div class="modal-sub">${a.categoria || ''} ${a.subcategoria ? '· ' + a.subcategoria : ''}</div></div><button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button></div>
       <div class="modal-body">
-        ${fila('Costo base', LS_API.formatMXNDec(a.costoBase))}${fila('Costo dinámico (última compra)', LS_API.formatMXNDec(a.costoDinamico))}${fila('Costo final (con merma)', LS_API.formatMXNDec(a.costoFinal))}${fila('% Merma', a.merma + '%')}${fila('Unidad', a.unidad)}${fila('Proveedor', a.proveedor)}
+        ${fila('Costo base', LS_API.formatMXNDec(a.costoBase))}${fila('Costo dinámico (última compra)', LS_API.formatMXNDec(a.costoDinamico))}${fila('Costo final (con merma)', LS_API.formatMXNDec(a.costoFinal))}${fila('% Merma', a.merma + '%')}${fila('Cantidad', (a.cantidad != null ? a.cantidad : '—') + (a.unidad ? ' ' + a.unidad : ''))}${fila('Proveedor', a.proveedor)}
       </div>
       <div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal()">Cerrar</button><button class="btn-save" onclick="_cerrarModal();LS_UI.editarArticulo('${(a.articulo||'').replace(/'/g,"\\'")}')"><i class="ti ti-pencil"></i> Editar</button></div></div>`);
   }
@@ -4257,8 +4325,8 @@ const LS_UI = (() => {
           <div class="ff"><label>Categoría</label><select id="af-categoria"><option value="">Seleccionar...</option>${catOpts}</select></div>
           ${f('Subcategoría', 'af-subcategoria', a.subcategoria)}
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">${f('Costo base ($)', 'af-costo', a.costoBase, 'number')}${f('% Merma', 'af-merma', a.merma, 'number')}${f('Unidad', 'af-unidad', a.unidad)}</div>
-        ${f('Proveedor', 'af-proveedor', a.proveedor)}
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">${f('Costo base ($)', 'af-costo', a.costoBase, 'number')}${f('Cantidad', 'af-cantidad', a.cantidad != null ? a.cantidad : 1, 'number')}${f('Unidad', 'af-unidad', a.unidad)}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${f('% Merma', 'af-merma', a.merma, 'number')}${f('Proveedor', 'af-proveedor', a.proveedor)}</div>
         ${esEd ? `<div style="font-size:11.5px;color:var(--tx-3);margin-top:6px">💡 El costo dinámico (${LS_API.formatMXNDec(a.costoDinamico)}) se actualiza solo con cada compra; aquí editas el costo base.</div>` : ''}
       </div>
       <div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarArticulo()"><i class="ti ti-device-floppy"></i> ${esEd ? 'Guardar cambios' : 'Registrar'}</button></div></div>`);
@@ -4267,7 +4335,7 @@ const LS_UI = (() => {
   function editarArticulo(key) { _formArticulo(_findArt(key)); }
   async function guardarArticulo() {
     const v = id => document.getElementById(id)?.value?.trim() || '';
-    const datos = { articulo: v('af-nombre'), categoria: v('af-categoria'), subcategoria: v('af-subcategoria'), costoBase: parseFloat(v('af-costo')) || 0, merma: parseFloat(v('af-merma')) || 0, unidad: v('af-unidad'), proveedor: v('af-proveedor') };
+    const datos = { articulo: v('af-nombre'), categoria: v('af-categoria'), subcategoria: v('af-subcategoria'), costoBase: parseFloat(v('af-costo')) || 0, cantidad: parseFloat(v('af-cantidad')) || 1, merma: parseFloat(v('af-merma')) || 0, unidad: v('af-unidad'), proveedor: v('af-proveedor') };
     if (!datos.articulo) { toast('Falta artículo', 'El nombre del artículo es obligatorio', 'err', 'ti-alert-circle'); return; }
     const editKey = window._editandoArtKey;
     const btn = document.querySelector('.modal .btn-save'); if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 spin"></i> Guardando...'; }
@@ -4284,41 +4352,53 @@ const LS_UI = (() => {
   // ══════════════════════════════════════════════════════════
   // ARTÍCULOS ESTRELLA
   // ══════════════════════════════════════════════════════════
+  let _modoArticulos = 'vendidos';
+  function setModoArticulos(modo, el) {
+    _modoArticulos = modo;
+    document.querySelectorAll('#art-toggle button').forEach(b => b.classList.toggle('on', b === el));
+    renderArticulos();
+  }
   async function renderArticulos() {
     const containerId = 'tabla-articulos';
     showLoading(containerId);
+    const esVendidos = _modoArticulos === 'vendidos';
 
     try {
-      // Artículos de COMPRA (lo que se registra en facturas a proveedores)
-      const articulos = await LS_API.getTopArticulos(20);
+      // Vendidos = ventas reales (INGRESOS DETALLES + Parrot). Comprados = facturas.
+      const articulos = esVendidos
+        ? await LS_API.getProductosVendidos(null, null, 50)
+        : await LS_API.getTopArticulos(50);
+
+      // Textos según modo
+      setTxt('art-titulo', esVendidos ? 'Top vendidos' : 'Top comprados');
+      setTxt('art-sub', esVendidos ? 'Productos más vendidos (Parrot + cortes)' : 'De tus facturas de proveedores');
+      const thCant = document.querySelector('#p-articulos thead th:nth-child(3)');
+      const thTotal = document.querySelector('#p-articulos thead th:nth-child(4)');
+      if (thCant) thCant.childNodes[0].nodeValue = 'Cantidad';
+      if (thTotal) thTotal.childNodes[0].nodeValue = esVendidos ? 'Total vendido' : 'Total comprado';
+      // KPI labels
+      const lblTop = document.querySelector('#p-articulos .kpi:nth-child(2) .kpi-label');
+      if (lblTop) lblTop.textContent = esVendidos ? 'Más vendido' : 'Más comprado';
+      const lblGasto = document.querySelector('#p-articulos .kpi:nth-child(4) .kpi-label');
+      if (lblGasto) lblGasto.textContent = esVendidos ? 'Venta en artículos' : 'Gasto en artículos';
 
       if (articulos.length === 0) {
         setEl(containerId, `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--tx-3)">
           <i class="ti ti-chart-bar" style="font-size:32px;display:block;margin-bottom:12px;opacity:.3"></i>
-          <div style="font-weight:500;margin-bottom:6px">Sin datos de artículos aún</div>
-          <div style="font-size:12px;max-width:360px;margin:0 auto;line-height:1.5">
-            Los artículos estrella de <strong>ventas</strong> se cargarán cuando sincronices Parrot con datos de órdenes detalladas.<br><br>
-            Por ahora registra tus facturas de compra para ver los artículos más comprados.
-          </div>
+          <div style="font-weight:500">Sin datos de ${esVendidos ? 'ventas' : 'compras'} aún</div>
         </td></tr>`);
         return;
       }
-
-      // Nota aclaratoria sobre origen de datos
       const notaEl = document.getElementById('articulos-nota-origen');
-      if (notaEl) notaEl.style.display = '';
+      if (notaEl) notaEl.style.display = 'none';
 
-      // KPIs
-      try {
-        const cat = await LS_API.getCatalogo();
-        setTxt('art-skus', cat.length);
-      } catch(_) {}
-      const gastoTotal = articulos.reduce((s,a)=>s+a.total,0);
+      try { const cat = await LS_API.getCatalogo(); setTxt('art-skus', cat.length); } catch(_) {}
+      const total = articulos.reduce((s,a)=>s+a.total,0);
       setTxt('art-distintos', articulos.length);
-      setTxt('art-gasto', fmt(gastoTotal));
+      setTxt('art-gasto', fmt(total));
       if (articulos[0]) {
         setTxt('art-top', articulos[0].nombre);
-        setTxt('art-top-sub', articulos[0].cantidad + ' uds · ' + fmt(articulos[0].total));
+        setTxt('art-top-sub', Math.round(articulos[0].cantidad) + ' uds · ' + fmt(articulos[0].total));
       }
 
       const maxTotal = articulos[0].total;
@@ -4326,7 +4406,7 @@ const LS_UI = (() => {
         <tr>
           <td style="color:var(--tx-3);font-weight:600;font-size:11px">${String(i+1).padStart(2,'0')}</td>
           <td style="font-weight:500">${a.nombre}</td>
-          <td style="font-family:var(--mono);color:var(--tx-2)">${a.cantidad}</td>
+          <td style="font-family:var(--mono);color:var(--tx-2)">${Math.round(a.cantidad)}</td>
           <td style="font-family:var(--mono);font-weight:600">${fmt(a.total)}</td>
           <td style="min-width:100px">${barHtml(a.total, maxTotal)}</td>
         </tr>`).join(''));
@@ -5786,8 +5866,8 @@ const LS_UI = (() => {
     renderDashboard, renderConciliacion, renderIngresos,
     renderFacturas, renderArticulos, renderRentabilidad,
     renderGastos, renderBalance, renderInventario, renderProveedores, renderCatalogo,
-    buscarProveedores, verProveedor, editarProveedor, nuevoProveedor, guardarProveedor,
-    buscarCatalogo, verArticulo, editarArticulo, nuevoArticulo, guardarArticulo,
+    buscarProveedores, verProveedor, editarProveedor, nuevoProveedor, guardarProveedor, confirmarBorrarProveedor, ejecutarBorrarProveedor,
+    buscarCatalogo, verArticulo, editarArticulo, nuevoArticulo, guardarArticulo, setModoArticulos,
     onPageChange, reloadPage, invalidarCacheYRecargar, recargarPagina,
     filtrarRentabilidad: (f) => renderRentabilidad(f),
     buscarFacturas, verFactura, editarFactura, confirmarBorrarFactura, ejecutarBorrarFactura,
