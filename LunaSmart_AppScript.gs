@@ -193,6 +193,7 @@ function doPost(e) {
     case 'actualizarProveedor':        return _actualizarProveedor(datos);
     case 'borrarProveedor':            return _borrarProveedor(datos);
     case 'actualizarCatalogoArticulo': return _actualizarCatalogoArticulo(datos);
+    case 'borrarCatalogoArticulo':     return _borrarCatalogoArticulo(datos);
     case 'registrarCliente':           return _registrarCliente(datos);
     case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || datos.sucursal || 'CASA DE LA CULTURA', body.desde || datos.desde, body.hasta || datos.hasta);
     case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(datos);
@@ -629,6 +630,21 @@ function _actualizarCatalogoArticulo(b) {
       }
     }
     return _err('Artículo no encontrado: ' + clave);
+  } catch (e) { return _err(e.message); }
+}
+
+// Borrar artículo del Catálogo Maestro (por nombre en col A)
+function _borrarCatalogoArticulo(b) {
+  try {
+    var clave = String(b.articulo || b.articuloKey || '').trim().toLowerCase();
+    if (!clave) return _err('Falta el artículo');
+    var sh = _getSheet(HOJAS.CATALOGO);
+    var vals = sh.getDataRange().getValues();
+    var borradas = 0;
+    for (var i = vals.length - 1; i >= 1; i--) {
+      if (String(vals[i][0]).trim().toLowerCase() === clave) { sh.deleteRow(i + 1); borradas++; }
+    }
+    return _json({ status: 'ok', borradas: borradas });
   } catch (e) { return _err(e.message); }
 }
 
