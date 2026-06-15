@@ -182,6 +182,8 @@ function doPost(e) {
   switch (accion) {
     case 'registrarIngreso':           return _registrarIngreso(datos);
     case 'registrarIngresoCompleto':   return _registrarIngresoCompleto(datos);
+    case 'actualizarIngreso':          return _actualizarIngreso(datos);
+    case 'borrarIngreso':              return _borrarIngreso(datos);
     case 'registrarFactura':           return _registrarFactura(datos);
     case 'registrarFacturaCompleta':   return _registrarFacturaCompleta(datos);
     case 'actualizarFactura':          return _actualizarFactura(datos);
@@ -251,6 +253,97 @@ function _registrarIngresoCompleto(b) {
   } catch (e) {
     return _err(e.message);
   }
+}
+
+// ── ACTUALIZAR / BORRAR INGRESO (corte) ────────────────────────────────────
+function _actualizarIngreso(b) {
+  try {
+    var id = String(b.id || '').trim();
+    if (!id) return _err('Falta el ID del corte');
+    var sh = _getSheet(HOJAS.INGRESOS);
+    var vals = sh.getDataRange().getValues();
+    var fila = -1;
+    for (var i = 1; i < vals.length; i++) {
+      if (String(vals[i][0]).trim() === id) { fila = i + 1; break; }
+    }
+    if (fila === -1) return _err('Corte no encontrado: ' + id);
+
+    var efectivo      = parseFloat(b.efectivo || 0);
+    var tarjeta       = parseFloat(b.tarjeta || 0);
+    var transferencia = parseFloat(b.transferencia || 0);
+    var rappi         = parseFloat(b.rappi || 0);
+    var total         = efectivo + tarjeta + transferencia + rappi;
+    var ventaTotal    = parseFloat(b.ventaTotal || total);
+
+    // Actualizar cols B..O (fecha..observaciones)
+    sh.getRange(fila, 2, 1, 14).setValues([[
+      b.fecha || vals[fila-1][1],
+      b.sucursal || '',
+      b.cliente || '',
+      parseFloat(b.inicioCaja || 0),
+      parseFloat(b.retiros || 0),
+      parseFloat(b.depositos || 0),
+      efectivo, tarjeta, transferencia, rappi,
+      total, ventaTotal, total - ventaTotal,
+      b.observaciones || 'MANUAL',
+    ]]);
+
+    // Reemplazar detalle de venta (INGRESOS DETALLES col B = ID_INGRESOS)
+    if (b.detalles) {
+      var shD = _getSheet(HOJAS.ING_DETALLES);
+      var dvals = shD.getDataRange().getValues();
+      for (var j = dvals.length - 1; j >= 1; j--) {
+        if (String(dvals[j][1]).trim() === id) shD.deleteRow(j + 1);
+      }
+      var filas = (b.detalles || []).filter(function(d){ return d && d.articulo; }).map(function(d){
+        var c = parseFloat(d.cantidad || 0) || 0, p = parseFloat(d.precio || 0) || 0;
+        return [Utilities.getUuid().substring(0,8), id, b.fecha || '', d.articulo, c, p, c*p, '', 0];
+      });
+      if (filas.length) {
+        var fi = _siguienteFilaLibre(shD, 4);
+        shD.getRange(fi, 1, filas.length, 9).setValues(filas);
+      }
+    }
+    return _json({ status: 'ok', idIngreso: id });
+  } catch (e) { return _err(e.message); }
+}
+
+function _borrarIngreso(b) {
+  try {
+    var id = String(b.id || '').trim();
+    if (!id) return _err('Falta el ID del corte');
+    var sh = _getSheet(HOJAS.INGRESOS);
+    var vals = sh.getDataRange().getValues();
+    for (var i = vals.length - 1; i >= 1; i--) {
+      if (String(vals[i][0]).trim() === id) sh.deleteRow(i + 1);
+    }
+    var shD = _getSheet(HOJAS.ING_DETALLES);
+    var dvals = shD.getDataRange().getValues();
+    for (var j = dvals.length - 1; j >= 1; j--) {
+      if (String(dvals[j][1]).trim() === id) shD.deleteRow(j + 1);
+    }
+    return _json({ status: 'ok' });
+  } catch (e) { return _err(e.message); }
+}
+
+// Asigna ID a los cortes históricos que no tienen (para poder editarlos)
+function asignarIdsIngresos() {
+  var sh = _getSheet(HOJAS.INGRESOS);
+  var vals = sh.getDataRange().getValues();
+  var max = 0;
+  for (var i = 1; i < vals.length; i++) {
+    var m = String(vals[i][0]).match(/INGRESOS-(\d+)/);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  var ch = 0;
+  for (var k = 1; k < vals.length; k++) {
+    if (!String(vals[k][0]).trim() && String(vals[k][1]).trim()) {
+      max++;
+      sh.getRange(k + 1, 1).setValue('INGRESOS-' + String(max).padStart(5, '0'));
+      ch++;
+    }
+  }
+  Logger.log('✅ ' + ch + ' cortes recibieron ID nuevo.');
 }
 
 // ── REGISTRAR INGRESO ──────────────────────────────────────────────────────
