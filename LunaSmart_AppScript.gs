@@ -1059,6 +1059,28 @@ function backfillParrot() {
 
 // LIMPIEZA: borra TODOS los cortes importados de Parrot (INGRESOS con "PARROT:")
 // y sus productos en INGRESOS DETALLES. Útil para re-sincronizar limpio.
+// Borra SOLO los cortes fantasma del primer sync (formato viejo "PARROT-252",
+// mal fechados en ago/sep/oct). NO toca los cortes buenos ("PARROT:uuid").
+function borrarFantasmasParrot() {
+  var sh = _getSheet(HOJAS.INGRESOS);
+  var shD = _getSheet(HOJAS.ING_DETALLES);
+  var vals = sh.getDataRange().getValues();
+  var ids = {}, filas = [];
+  for (var i = 1; i < vals.length; i++) {
+    if (/PARROT-\d/i.test(String(vals[i][14] || ''))) {
+      var id = String(vals[i][0]).trim();
+      if (id) ids[id] = true;
+      filas.push(i + 1);
+    }
+  }
+  // borrar detalles ligados
+  var dv = shD.getDataRange().getValues(), fd = [];
+  for (var j = 1; j < dv.length; j++) { var r = String(dv[j][1]).trim(); if (r && ids[r]) fd.push(j + 1); }
+  fd.sort(function(a,b){return b-a;}).forEach(function(f){ shD.deleteRow(f); });
+  filas.sort(function(a,b){return b-a;}).forEach(function(f){ sh.deleteRow(f); });
+  Logger.log('🗑️ Borrados ' + filas.length + ' cortes fantasma (PARROT-### viejo) y ' + fd.length + ' detalles.');
+}
+
 function borrarCortesParrot() {
   var shIng = _getSheet(HOJAS.INGRESOS);
   var shDet = _getSheet(HOJAS.ING_DETALLES);
