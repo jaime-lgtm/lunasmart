@@ -2776,6 +2776,9 @@ const LS_API = (() => {
   async function actualizarCatalogoArticulo(datos) {
     return escribirViaScript('actualizarCatalogoArticulo', { datos });
   }
+  async function borrarCatalogoArticulo(articulo) {
+    return escribirViaScript('borrarCatalogoArticulo', { datos: { articulo } });
+  }
 
   // Registrar nueva factura
   async function registrarFactura(datos) {
@@ -3311,7 +3314,7 @@ const LS_API = (() => {
     // Escritura
     registrarIngreso, registrarIngresoCompleto, actualizarIngreso, borrarIngreso, getIngresoDetalle,
     registrarFactura, registrarFacturaCompleta, actualizarFactura, borrarFactura,
-    registrarProveedor, registrarCliente, actualizarProveedor, borrarProveedor, actualizarCatalogoArticulo,
+    registrarProveedor, registrarCliente, actualizarProveedor, borrarProveedor, actualizarCatalogoArticulo, borrarCatalogoArticulo,
     registrarArticuloDetalle, registrarCatalogoArticulo,
     // Agregaciones
     getKPIsDashboard, getTopArticulos, getTopProveedores,
@@ -4344,7 +4347,19 @@ const LS_UI = (() => {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${f('% Merma', 'af-merma', a.merma, 'number')}${f('Proveedor', 'af-proveedor', a.proveedor)}</div>
         ${esEd ? `<div style="font-size:11.5px;color:var(--tx-3);margin-top:6px">💡 El costo dinámico (${LS_API.formatMXNDec(a.costoDinamico)}) se actualiza solo con cada compra; aquí editas el costo base.</div>` : ''}
       </div>
-      <div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarArticulo()"><i class="ti ti-device-floppy"></i> ${esEd ? 'Guardar cambios' : 'Registrar'}</button></div></div>`);
+      <div class="modal-footer">${esEd ? `<button class="btn-cancel" style="color:var(--rojo);margin-right:auto" onclick="LS_UI.confirmarBorrarArticulo('${(a.articulo||'').replace(/'/g,"\\'")}')"><i class="ti ti-trash"></i> Borrar</button>` : ''}<button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarArticulo()"><i class="ti ti-device-floppy"></i> ${esEd ? 'Guardar cambios' : 'Registrar'}</button></div></div>`);
+  }
+  function confirmarBorrarArticulo(key) {
+    const a = _findArt(key); if (!a) return;
+    _modal(`<div class="modal" style="max-width:420px"><div class="modal-header"><div class="modal-title" style="color:var(--rojo)"><i class="ti ti-trash" style="margin-right:6px"></i>Borrar artículo</div></div>
+      <div class="modal-body"><p style="font-size:13.5px;color:var(--tx-2);line-height:1.6">¿Borrar <strong>${a.articulo}</strong> del Catálogo Maestro?<br><span style="color:var(--tx-3);font-size:12px">No se puede deshacer. (No borra los detalles de facturas ya registradas.)</span></p></div>
+      <div class="modal-footer"><button class="btn-cancel" onclick="LS_UI.editarArticulo('${(a.articulo||'').replace(/'/g,"\\'")}')">Cancelar</button><button class="btn-save" style="background:var(--rojo)" id="btn-del-art" onclick="LS_UI.ejecutarBorrarArticulo('${(a.articulo||'').replace(/'/g,"\\'")}')"><i class="ti ti-trash"></i> Sí, borrar</button></div></div>`);
+  }
+  async function ejecutarBorrarArticulo(key) {
+    const btn = document.getElementById('btn-del-art'); if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 spin"></i> Borrando...'; }
+    const res = await LS_API.borrarCatalogoArticulo(key);
+    if (res?.status === 'ok') { _cerrarModal(); LS_API.invalidarCache('Catálogo'); toast('Artículo borrado', key, 'ok', 'ti-check'); await renderCatalogo(); }
+    else { toast('Error', res?.msg || 'No se pudo borrar', 'err', 'ti-alert-circle'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-trash"></i> Sí, borrar'; } }
   }
   function nuevoArticulo() { _formArticulo(null); }
   function editarArticulo(key) { _formArticulo(_findArt(key)); }
@@ -5734,8 +5749,9 @@ const LS_UI = (() => {
     const editandoId = window._editandoFacturaId || null;
 
     // ── PROTECCIÓN ANTI-DUPLICADOS: mismo folio + mismo proveedor ──────────
-    // (en edición se excluye la propia factura)
-    if (folio) {
+    // Solo al CREAR (al editar se permite, puede haber varias facturas con el
+    // mismo folio/proveedor legítimamente, ej. un ticket dividido por categoría)
+    if (folio && !editandoId) {
       try {
         const facturas = await LS_API.getFacturas();
         const dup = facturas.find(f =>
@@ -5882,7 +5898,7 @@ const LS_UI = (() => {
     renderFacturas, renderArticulos, renderRentabilidad,
     renderGastos, renderBalance, renderInventario, renderProveedores, renderCatalogo,
     buscarProveedores, verProveedor, editarProveedor, nuevoProveedor, guardarProveedor, confirmarBorrarProveedor, ejecutarBorrarProveedor,
-    buscarCatalogo, verArticulo, editarArticulo, nuevoArticulo, guardarArticulo, setModoArticulos,
+    buscarCatalogo, verArticulo, editarArticulo, nuevoArticulo, guardarArticulo, setModoArticulos, confirmarBorrarArticulo, ejecutarBorrarArticulo,
     onPageChange, reloadPage, invalidarCacheYRecargar, recargarPagina,
     filtrarRentabilidad: (f) => renderRentabilidad(f),
     buscarFacturas, verFactura, editarFactura, confirmarBorrarFactura, ejecutarBorrarFactura,
