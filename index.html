@@ -2572,6 +2572,27 @@ const LS_API = (() => {
     });
   }
 
+  // Catálogo de productos de VENTA: une DATA_INGRESOS (con precio sugerido)
+  // + artículos vendidos reales de INGRESOS DETALLES. Deduplicado.
+  async function getProductosVenta() {
+    const [dataIng, detRows] = await Promise.all([
+      getDataIngresos(),
+      leerHoja(SHEETS.ING_DETALLES),
+    ]);
+    const map = {};
+    dataIng.forEach(d => {
+      const a = String(d.articulo || '').trim();
+      if (a) map[a.toLowerCase()] = { articulo: a, precio: d.precio || 0 };
+    });
+    (detRows || []).slice(1).forEach(r => {
+      const a = String(r[3] || '').trim();
+      if (!a) return;
+      const k = a.toLowerCase();
+      if (!map[k]) map[k] = { articulo: a, precio: parseNum(r[5]) || 0 };
+    });
+    return Object.values(map).sort((a, b) => a.articulo.localeCompare(b.articulo));
+  }
+
   // Registrar corte + detalle de venta (qué se vendió) en una sola operación
   async function registrarIngresoCompleto(datos) {
     return escribirViaScript('registrarIngresoCompleto', {
@@ -3125,7 +3146,7 @@ const LS_API = (() => {
     getIngresos, getConciliacion, getFacturas,
     getArticulosDetalle, getClientes, getProveedores,
     getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos,
-    getVentasPorSucursal, aliasSucursal, nombreSucursal,
+    getVentasPorSucursal, aliasSucursal, nombreSucursal, getProductosVenta,
     // Escritura
     registrarIngreso, registrarIngresoCompleto, registrarFactura, registrarFacturaCompleta, actualizarFactura, borrarFactura,
     registrarProveedor, registrarCliente,
@@ -4212,11 +4233,13 @@ const LS_UI = (() => {
       }
     } catch(_) {}
 
-    // Catálogo para sugerencias de artículos en el detalle de venta
+    // Productos de VENTA (DATA_INGRESOS + vendidos reales) para el detalle
     let artOpts = '';
+    window._preciosVenta = {};
     try {
-      const cat = await LS_API.getCatalogo();
-      artOpts = (cat || []).map(a => `<option value="${String(a.articulo).replace(/"/g,'&quot;')}">`).join('');
+      const prods = await LS_API.getProductosVenta();
+      artOpts = prods.map(p => `<option value="${String(p.articulo).replace(/"/g,'&quot;')}">`).join('');
+      prods.forEach(p => { window._preciosVenta[p.articulo.trim().toLowerCase()] = p.precio || 0; });
     } catch(_) {}
 
     openModal(`
@@ -4369,12 +4392,24 @@ const LS_UI = (() => {
     div.className = 'vlinea';
     div.style.cssText = 'display:grid;grid-template-columns:1fr 56px 84px 30px;gap:8px;margin-bottom:6px;align-items:center';
     div.innerHTML = `
-      <input list="venta-articulos-list" class="vl-art" placeholder="Artículo..." style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--tx);font-size:13px" oninput="LS_UI.calcVentaDetalle()">
+      <input list="venta-articulos-list" class="vl-art" placeholder="Artículo..." style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--tx);font-size:13px" oninput="LS_UI.autollenarPrecioVenta(this)">
       <input type="number" class="vl-cant" placeholder="Cant" min="0" step="1" value="1" style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--tx);font-size:13px;font-family:var(--mono);text-align:center" oninput="LS_UI.calcVentaDetalle()">
       <input type="number" class="vl-precio" placeholder="Precio" min="0" step="0.01" style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--tx);font-size:13px;font-family:var(--mono);text-align:right" oninput="LS_UI.calcVentaDetalle()">
       <button type="button" title="Quitar" onclick="this.closest('.vlinea').remove();LS_UI.calcVentaDetalle()" style="background:transparent;border:none;color:var(--rojo);cursor:pointer;font-size:16px">✕</button>`;
     cont.appendChild(div);
     div.querySelector('.vl-art').focus();
+  }
+
+  // Autollenar precio sugerido al elegir un artículo de venta
+  function autollenarPrecioVenta(inp) {
+    const linea = inp.closest('.vlinea');
+    if (!linea) return;
+    const precioInp = linea.querySelector('.vl-precio');
+    const p = (window._preciosVenta || {})[inp.value.trim().toLowerCase()];
+    if (p && precioInp && (!precioInp.value || parseFloat(precioInp.value) === 0)) {
+      precioInp.value = p;
+    }
+    calcVentaDetalle();
   }
 
   function calcVentaDetalle() {
@@ -5277,7 +5312,7 @@ const LS_UI = (() => {
     onPageChange, reloadPage, invalidarCacheYRecargar, recargarPagina,
     filtrarRentabilidad: (f) => renderRentabilidad(f),
     buscarFacturas, verFactura, editarFactura, confirmarBorrarFactura, ejecutarBorrarFactura,
-    calcIngreso, guardarIngreso, guardarFactura, agregarLineaVenta, calcVentaDetalle,
+    calcIngreso, guardarIngreso, guardarFactura, agregarLineaVenta, calcVentaDetalle, autollenarPrecioVenta,
     closeModal,
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },
