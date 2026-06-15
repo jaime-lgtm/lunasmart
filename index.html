@@ -2572,6 +2572,29 @@ const LS_API = (() => {
     });
   }
 
+  // Registrar corte + detalle de venta (qué se vendió) en una sola operación
+  async function registrarIngresoCompleto(datos) {
+    return escribirViaScript('registrarIngresoCompleto', {
+      hoja: SHEETS.INGRESOS,
+      datos: {
+        fecha:          datos.fecha,
+        sucursal:       datos.sucursal,
+        cliente:        datos.cliente,
+        inicioCaja:     datos.inicioCaja    || 0,
+        retiros:        datos.retiros       || 0,
+        depositos:      datos.depositos     || 0,
+        efectivo:       datos.efectivo      || 0,
+        tarjeta:        datos.tarjeta       || 0,
+        transferencia:  datos.transferencia || 0,
+        rappi:          datos.rappi         || 0,
+        totalDeclarado: datos.totalDeclarado,
+        ventaTotal:     datos.ventaTotal    || 0,
+        observaciones:  datos.observaciones || 'MANUAL',
+        detalles:       datos.detalles      || [],
+      }
+    });
+  }
+
   // Registrar nueva factura
   async function registrarFactura(datos) {
     return escribirViaScript('registrarFactura', {
@@ -3104,7 +3127,7 @@ const LS_API = (() => {
     getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos,
     getVentasPorSucursal, aliasSucursal, nombreSucursal,
     // Escritura
-    registrarIngreso, registrarFactura, registrarFacturaCompleta, actualizarFactura, borrarFactura,
+    registrarIngreso, registrarIngresoCompleto, registrarFactura, registrarFacturaCompleta, actualizarFactura, borrarFactura,
     registrarProveedor, registrarCliente,
     registrarArticuloDetalle, registrarCatalogoArticulo,
     // Agregaciones
@@ -4189,6 +4212,13 @@ const LS_UI = (() => {
       }
     } catch(_) {}
 
+    // Catálogo para sugerencias de artículos en el detalle de venta
+    let artOpts = '';
+    try {
+      const cat = await LS_API.getCatalogo();
+      artOpts = (cat || []).map(a => `<option value="${String(a.articulo).replace(/"/g,'&quot;')}">`).join('');
+    } catch(_) {}
+
     openModal(`
     <div class="modal-overlay" id="modal-ingreso" onclick="if(event.target===this)_cerrarModal()">
       <div class="modal" style="max-width:620px">
@@ -4288,6 +4318,24 @@ const LS_UI = (() => {
             <div id="ing-total-calc" style="font-size:28px;font-weight:700;color:var(--terra-claro);font-family:'DM Mono',monospace">$0.00</div>
           </div>
 
+          <!-- Detalle de venta (opcional) -->
+          <div style="border:1px solid var(--line);border-radius:var(--r-lg);padding:14px 16px;margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <div>
+                <div style="font-size:12px;font-weight:600;color:var(--tx)">Detalle de venta <span style="color:var(--tx-4);font-weight:400">· opcional</span></div>
+                <div style="font-size:11px;color:var(--tx-4);margin-top:2px">¿Qué se vendió? Sirve para conciliar y ver productos estrella</div>
+              </div>
+              <button type="button" class="btn btn-sm" onclick="LS_UI.agregarLineaVenta()"><i class="ti ti-plus"></i>Agregar</button>
+            </div>
+            <div id="venta-lineas"></div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)">
+              <span style="color:var(--tx-3)">Suma del detalle</span>
+              <span id="venta-detalle-total" style="font-family:var(--mono);font-weight:600;color:var(--tx)">$0.00</span>
+            </div>
+            <div id="venta-detalle-aviso" style="font-size:11px;margin-top:4px"></div>
+          </div>
+          <datalist id="venta-articulos-list">${artOpts}</datalist>
+
           <!-- Observaciones -->
           <div class="ff">
             <label>Observaciones (opcional)</label>
@@ -4310,6 +4358,43 @@ const LS_UI = (() => {
     const total = n('ing-efectivo') + n('ing-tarjeta') + n('ing-terminal-pay') + n('ing-transferencia') + n('ing-rappi');
     const el = document.getElementById('ing-total-calc');
     if (el) el.textContent = LS_API.formatMXNDec(total);
+    calcVentaDetalle();
+  }
+
+  // Detalle de venta del corte (líneas de qué se vendió)
+  function agregarLineaVenta() {
+    const cont = document.getElementById('venta-lineas');
+    if (!cont) return;
+    const div = document.createElement('div');
+    div.className = 'vlinea';
+    div.style.cssText = 'display:grid;grid-template-columns:1fr 56px 84px 30px;gap:8px;margin-bottom:6px;align-items:center';
+    div.innerHTML = `
+      <input list="venta-articulos-list" class="vl-art" placeholder="Artículo..." style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--tx);font-size:13px" oninput="LS_UI.calcVentaDetalle()">
+      <input type="number" class="vl-cant" placeholder="Cant" min="0" step="1" value="1" style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--tx);font-size:13px;font-family:var(--mono);text-align:center" oninput="LS_UI.calcVentaDetalle()">
+      <input type="number" class="vl-precio" placeholder="Precio" min="0" step="0.01" style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--tx);font-size:13px;font-family:var(--mono);text-align:right" oninput="LS_UI.calcVentaDetalle()">
+      <button type="button" title="Quitar" onclick="this.closest('.vlinea').remove();LS_UI.calcVentaDetalle()" style="background:transparent;border:none;color:var(--rojo);cursor:pointer;font-size:16px">✕</button>`;
+    cont.appendChild(div);
+    div.querySelector('.vl-art').focus();
+  }
+
+  function calcVentaDetalle() {
+    let sum = 0;
+    document.querySelectorAll('#venta-lineas .vlinea').forEach(l => {
+      const c = parseFloat(l.querySelector('.vl-cant')?.value || 0) || 0;
+      const p = parseFloat(l.querySelector('.vl-precio')?.value || 0) || 0;
+      sum += c * p;
+    });
+    const totEl = document.getElementById('venta-detalle-total');
+    if (totEl) totEl.textContent = LS_API.formatMXNDec(sum);
+    // Aviso de cuadre vs total declarado
+    const aviso = document.getElementById('venta-detalle-aviso');
+    if (aviso) {
+      const n = id => parseFloat(document.getElementById(id)?.value || 0) || 0;
+      const declarado = n('ing-efectivo') + n('ing-tarjeta') + n('ing-terminal-pay') + n('ing-transferencia') + n('ing-rappi');
+      if (sum === 0) { aviso.textContent = ''; }
+      else if (Math.abs(sum - declarado) < 1) { aviso.style.color = 'var(--verde)'; aviso.textContent = '✓ El detalle cuadra con el total declarado'; }
+      else { aviso.style.color = 'var(--ambar)'; aviso.textContent = `⚠ Diferencia de ${LS_API.formatMXNDec(Math.abs(sum - declarado))} vs total declarado`; }
+    }
   }
 
   async function guardarIngreso() {
@@ -4348,10 +4433,21 @@ const LS_UI = (() => {
       return;
     }
 
+    // Detalle de venta (qué se vendió) → INGRESOS DETALLES
+    datos.detalles = [...document.querySelectorAll('#venta-lineas .vlinea')].map(l => ({
+      articulo: (l.querySelector('.vl-art')?.value || '').trim(),
+      cantidad: parseFloat(l.querySelector('.vl-cant')?.value || 0) || 0,
+      precio:   parseFloat(l.querySelector('.vl-precio')?.value || 0) || 0,
+    })).filter(d => d.articulo);
+
     const btn = document.querySelector('#modal-ingreso .btn-modal-ok');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i> Guardando...'; }
 
-    const result = await LS_API.registrarIngreso(datos);
+    let result = await LS_API.registrarIngresoCompleto(datos);
+    // Fallback si el endpoint nuevo no está desplegado aún
+    if (result?.msg && /desconocida/i.test(result.msg)) {
+      result = await LS_API.registrarIngreso(datos);
+    }
 
     if (result?.status === 'ok') {
       closeModal('modal-ingreso');
@@ -5181,7 +5277,7 @@ const LS_UI = (() => {
     onPageChange, reloadPage, invalidarCacheYRecargar, recargarPagina,
     filtrarRentabilidad: (f) => renderRentabilidad(f),
     buscarFacturas, verFactura, editarFactura, confirmarBorrarFactura, ejecutarBorrarFactura,
-    calcIngreso, guardarIngreso, guardarFactura,
+    calcIngreso, guardarIngreso, guardarFactura, agregarLineaVenta, calcVentaDetalle,
     closeModal,
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },

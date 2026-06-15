@@ -181,6 +181,7 @@ function doPost(e) {
 
   switch (accion) {
     case 'registrarIngreso':           return _registrarIngreso(datos);
+    case 'registrarIngresoCompleto':   return _registrarIngresoCompleto(datos);
     case 'registrarFactura':           return _registrarFactura(datos);
     case 'registrarFacturaCompleta':   return _registrarFacturaCompleta(datos);
     case 'actualizarFactura':          return _actualizarFactura(datos);
@@ -191,6 +192,64 @@ function doPost(e) {
     case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || datos.sucursal || 'CASA DE LA CULTURA', body.desde || datos.desde, body.hasta || datos.hasta);
     case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(datos);
     default: return _err('Acción desconocida: ' + accion);
+  }
+}
+
+// ── REGISTRAR INGRESO + DETALLE DE VENTA ───────────────────────────────────
+// Escribe el corte en INGRESOS y, si vienen, las líneas de qué se vendió en
+// INGRESOS DETALLES (ligadas por ID_INGRESO en col B). Para conciliar manual.
+function _registrarIngresoCompleto(b) {
+  try {
+    var sh = _getSheet(HOJAS.INGRESOS);
+    var id = _nextId(HOJAS.INGRESOS, 'INGRESOS');
+    var efectivo      = parseFloat(b.efectivo      || 0);
+    var tarjeta       = parseFloat(b.tarjeta       || 0);
+    var transferencia = parseFloat(b.transferencia || 0);
+    var rappi         = parseFloat(b.rappi         || 0);
+    var total         = efectivo + tarjeta + transferencia + rappi;
+    var inicioCaja    = parseFloat(b.inicioCaja    || 0);
+    var retiros       = parseFloat(b.retiros       || 0);
+    var ventaTotal    = parseFloat(b.ventaTotal    || total);
+    var fecha         = b.fecha || _fechaHoy();
+
+    _escribirFila(sh, [
+      id, fecha, b.sucursal || '', b.cliente || '',
+      inicioCaja, retiros, parseFloat(b.depositos || 0),
+      efectivo, tarjeta, transferencia, rappi,
+      total, ventaTotal, total - ventaTotal,
+      b.observaciones || 'MANUAL',
+    ]);
+
+    // Detalle de venta → INGRESOS DETALLES
+    var nDet = 0;
+    var detalles = b.detalles || [];
+    if (detalles.length) {
+      var shD = _getSheet(HOJAS.ING_DETALLES);
+      var filas = detalles.filter(function(d){ return d && d.articulo; }).map(function(d){
+        var cant = parseFloat(d.cantidad || 0) || 0;
+        var precio = parseFloat(d.precio || 0) || 0;
+        return [
+          Utilities.getUuid().substring(0, 8), // A ID_CONCEPTO
+          id,                                   // B ID_INGRESOS (liga al corte)
+          fecha,                                // C FECHA
+          d.articulo,                           // D ARTICULO
+          cant,                                 // E CANTIDAD
+          precio,                               // F PRECIO UNIT
+          cant * precio,                        // G SUBTOTAL_LINEA
+          '',                                   // H ¿APLICA IVA?
+          0,                                    // I IVA MONTO
+        ];
+      });
+      if (filas.length) {
+        var filaInicio = _siguienteFilaLibre(shD, 4); // col D ARTICULO como indicador
+        shD.getRange(filaInicio, 1, filas.length, 9).setValues(filas);
+        nDet = filas.length;
+      }
+    }
+
+    return _json({ status: 'ok', idIngreso: id, detalles: nDet });
+  } catch (e) {
+    return _err(e.message);
   }
 }
 
