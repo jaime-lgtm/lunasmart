@@ -1533,6 +1533,15 @@
 <div id="p-ingresos" class="page" data-screen-label="Ingresos">
   <div class="card">
     <div class="card-head"><div><div class="card-title"><i class="ti ti-cash"></i>Cortes registrados <span id="ing-titulo-periodo"></span></div><div class="card-sub">Desglose de caja por turno</div></div><div class="card-actions"><span class="filter-note" id="fn-ingresos"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><button class="btn btn-primary btn-sm" onclick="openRegister('corte')"><i class="ti ti-plus"></i>Nuevo corte</button></div></div>
+    <!-- Buscador -->
+    <div style="padding:0 18px 12px">
+      <div style="position:relative;max-width:460px">
+        <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--tx-4);font-size:16px"></i>
+        <input type="text" id="ing-buscar" placeholder="Buscar en TODOS los cortes: fecha, sucursal o turno..."
+          oninput="LS_UI.buscarIngresos(this.value)"
+          style="width:100%;padding:9px 12px 9px 36px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none">
+      </div>
+    </div>
     <div class="tbl-wrap">
       <table class="tbl" data-sortable data-filterable="ingresos">
         <thead><tr>
@@ -3649,42 +3658,62 @@ const LS_UI = (() => {
         LS_API.getIngresoDetalle(),
       ]);
       window._ingDetCache = ingDet;
-      // Filtrar por período y ordenar por fecha (más reciente primero)
-      const datos = todos
-        .filter(r => LS_API._enRango ? LS_API._enRango(r.fecha, desde, hasta) : true)
+      // Lista completa ordenada (para buscar en TODO) + lista del período
+      const todosOrden = todos.slice()
         .sort((a, b) => (LS_API._fechaISO(b.fecha) || '').localeCompare(LS_API._fechaISO(a.fecha) || ''));
+      window._ingresosTodos = todosOrden;
+      const datos = todosOrden.filter(r => LS_API._enRango ? LS_API._enRango(r.fecha, desde, hasta) : true);
       window._ingresosVista = datos;
-
-      if (datos.length === 0) {
-        setEl(containerId, '<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--tx-3)">Sin cortes en el período seleccionado</td></tr>');
-        return;
-      }
-
-      setEl(containerId, datos.slice(0, 150).map(r => {
-        const id = (r.id || '').replace(/'/g, '');
-        const tieneId = !!id;
-        const acciones = `
-          <button class="icon-btn" title="Ver detalle" onclick="LS_UI.verIngreso('${id}','${(r.fecha||'')}')"><i class="ti ti-eye"></i></button>
-          ${tieneId ? `<button class="icon-btn" title="Editar" onclick="LS_UI.editarIngreso('${id}')"><i class="ti ti-pencil"></i></button>` : '<span style="color:var(--tx-4);font-size:10px" title="Corte sin ID (Parrot/histórico)">—</span>'}`;
-        return `
-        <tr>
-          <td>${r.fecha}</td>
-          <td>${LS_API.nombreSucursal(r.sucursal)}</td>
-          <td>${turnoLabel(r.cliente)}</td>
-          <td style="font-family:var(--mono)">${fmt(r.efectivo)}</td>
-          <td style="font-family:var(--mono)">${fmt(r.tarjeta)}</td>
-          <td style="font-family:var(--mono)">${fmt(r.rappi)}</td>
-          <td style="font-family:var(--mono)">${fmt(r.transferencia)}</td>
-          <td style="font-family:var(--mono);font-weight:600">${fmt(r.ventaTotal)}</td>
-          <td style="font-family:var(--mono)">${fmt(r.totalDeclarado)}</td>
-          <td style="font-family:var(--mono);color:${deltaColor(r.diferencia)};font-weight:600">${fmt(r.diferencia)}</td>
-          <td style="white-space:nowrap">${acciones}</td>
-        </tr>`;
-      }).join(''));
+      const q = document.getElementById('ing-buscar')?.value || '';
+      if (q.trim()) buscarIngresos(q); else _pintarIngresos(datos);
 
     } catch (err) {
       showError(containerId, 'Error cargando ingresos');
     }
+  }
+
+  function _pintarIngresos(lista, esBusqueda) {
+    if (!lista || lista.length === 0) {
+      setEl('tabla-ingresos', `<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--tx-3)">${esBusqueda ? 'Sin resultados para tu búsqueda' : 'Sin cortes en el período seleccionado'}</td></tr>`);
+      return;
+    }
+    setEl('tabla-ingresos', lista.slice(0, 300).map(r => {
+      const id = (r.id || '').replace(/'/g, '');
+      const acciones = `
+        <button class="icon-btn" title="Ver detalle" onclick="LS_UI.verIngreso('${id}','${(r.fecha||'')}')"><i class="ti ti-eye"></i></button>
+        ${id ? `<button class="icon-btn" title="Editar" onclick="LS_UI.editarIngreso('${id}')"><i class="ti ti-pencil"></i></button>` : '<span style="color:var(--tx-4);font-size:10px" title="Corte sin ID (Parrot/histórico)">—</span>'}`;
+      return `
+      <tr>
+        <td>${r.fecha}</td>
+        <td>${LS_API.nombreSucursal(r.sucursal)}</td>
+        <td>${turnoLabel(r.cliente)}</td>
+        <td style="font-family:var(--mono)">${fmt(r.efectivo)}</td>
+        <td style="font-family:var(--mono)">${fmt(r.tarjeta)}</td>
+        <td style="font-family:var(--mono)">${fmt(r.rappi)}</td>
+        <td style="font-family:var(--mono)">${fmt(r.transferencia)}</td>
+        <td style="font-family:var(--mono);font-weight:600">${fmt(r.ventaTotal)}</td>
+        <td style="font-family:var(--mono)">${fmt(r.totalDeclarado)}</td>
+        <td style="font-family:var(--mono);color:${deltaColor(r.diferencia)};font-weight:600">${fmt(r.diferencia)}</td>
+        <td style="white-space:nowrap">${acciones}</td>
+      </tr>`;
+    }).join(''));
+  }
+
+  // Busca en TODOS los cortes (ignora el filtro de período)
+  function buscarIngresos(q) {
+    const t = _norm(q);
+    const periodo = window._ingresosVista || [];
+    if (!t) { _pintarIngresos(periodo); return; }
+    const todos = window._ingresosTodos || periodo;
+    const res = todos.filter(r =>
+      _norm(r.fecha).includes(t) ||
+      _norm(LS_API._fechaISO(r.fecha)).includes(t) ||
+      _norm(LS_API.nombreSucursal(r.sucursal)).includes(t) ||
+      _norm(r.sucursal).includes(t) ||
+      _norm(turnoLabel(r.cliente)).includes(t) ||
+      _norm(r.cliente).includes(t)
+    );
+    _pintarIngresos(res, true);
   }
 
   // Ver detalle de un corte (cabecera + qué se vendió)
@@ -5488,7 +5517,7 @@ const LS_UI = (() => {
     onPageChange, reloadPage, invalidarCacheYRecargar, recargarPagina,
     filtrarRentabilidad: (f) => renderRentabilidad(f),
     buscarFacturas, verFactura, editarFactura, confirmarBorrarFactura, ejecutarBorrarFactura,
-    verIngreso, editarIngreso, confirmarBorrarIngreso, ejecutarBorrarIngreso,
+    verIngreso, editarIngreso, confirmarBorrarIngreso, ejecutarBorrarIngreso, buscarIngresos,
     calcIngreso, guardarIngreso, guardarFactura, agregarLineaVenta, calcVentaDetalle, autollenarPrecioVenta,
     closeModal,
     // Abrir modales
