@@ -190,6 +190,8 @@ function doPost(e) {
     case 'borrarFactura':              return _borrarFactura(datos);
     case 'registrarArticuloDetalle':   return _registrarArticuloDetalle(datos);
     case 'registrarProveedor':         return _registrarProveedor(datos);
+    case 'actualizarProveedor':        return _actualizarProveedor(datos);
+    case 'actualizarCatalogoArticulo': return _actualizarCatalogoArticulo(datos);
     case 'registrarCliente':           return _registrarCliente(datos);
     case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || datos.sucursal || 'CASA DE LA CULTURA', body.desde || datos.desde, body.hasta || datos.hasta);
     case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(datos);
@@ -583,6 +585,51 @@ function _actualizarCostoDinamico(nombreArticulo, nuevoCosto) {
 }
 
 // ── REGISTRAR PROVEEDOR ────────────────────────────────────────────────────
+// Actualizar proveedor existente (por ID en col A)
+function _actualizarProveedor(b) {
+  try {
+    var id = String(b.id || '').trim();
+    if (!id) return _err('Falta el ID del proveedor');
+    var sh = _getSheet(HOJAS.PROVEEDORES);
+    var vals = sh.getDataRange().getValues();
+    for (var i = 1; i < vals.length; i++) {
+      if (String(vals[i][0]).trim() === id) {
+        sh.getRange(i + 1, 2, 1, 7).setValues([[
+          b.nombre || '', b.rfc || '', b.contacto || '', b.correo || '',
+          b.telefono || '', parseFloat(b.lineaCredito || 0), parseFloat(b.diasCredito || 0),
+        ]]);
+        return _json({ status: 'ok', idProveedor: id });
+      }
+    }
+    return _err('Proveedor no encontrado: ' + id);
+  } catch (e) { return _err(e.message); }
+}
+
+// Actualizar artículo del Catálogo Maestro (por nombre clave)
+function _actualizarCatalogoArticulo(b) {
+  try {
+    var clave = String(b.articuloKey || b.articulo || '').trim().toLowerCase();
+    if (!clave) return _err('Falta el artículo');
+    var sh = _getSheet(HOJAS.CATALOGO);
+    var vals = sh.getDataRange().getValues();
+    for (var i = 1; i < vals.length; i++) {
+      if (String(vals[i][0]).trim().toLowerCase() === clave) {
+        var costo = parseFloat(b.costoBase || vals[i][1] || 0);
+        var merma = parseFloat(b.merma || 0);
+        var costoFinal = merma > 0 ? costo / (1 - merma / 100) : costo;
+        // A=articulo B=costoBase C=costoDinamico(conserva) D=cantidad(conserva)
+        sh.getRange(i + 1, 1, 1, 2).setValues([[b.articulo || vals[i][0], costo]]);
+        sh.getRange(i + 1, 5, 1, 6).setValues([[
+          b.unidad || '', merma, costoFinal,
+          b.categoria || '', b.subcategoria || '', b.proveedor || '',
+        ]]);
+        return _json({ status: 'ok' });
+      }
+    }
+    return _err('Artículo no encontrado: ' + clave);
+  } catch (e) { return _err(e.message); }
+}
+
 function _registrarProveedor(b) {
   try {
     const sh = _getSheet(HOJAS.PROVEEDORES);
