@@ -187,6 +187,7 @@
       background: var(--cafe-950);
       color: var(--tx);
       min-height: 100vh;
+      overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
       text-rendering: optimizeLegibility;
       font-feature-settings: "ss01" 1;
@@ -416,7 +417,7 @@
     .icon-btn:hover { color: var(--terra-claro); background: rgba(177,70,24,0.1); }
 
     /* MAIN */
-    .main { margin-left: var(--sidebar-w); flex: 1; min-height: 100vh; background: var(--cafe-950); display: flex; flex-direction: column; }
+    .main { margin-left: var(--sidebar-w); width: calc(100% - var(--sidebar-w)); min-width: 0; min-height: 100vh; background: var(--cafe-950); display: flex; flex-direction: column; }
 
     .topbar {
       height: var(--topbar-h); background: var(--topbar-bg); backdrop-filter: blur(18px);
