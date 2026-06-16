@@ -1211,6 +1211,55 @@ function backfillParrot() {
 }
 
 // Reinicia el backfill desde el inicio (borra el avance guardado)
+// Borra los cortes MANUALES de Casa de la Cultura (genéricos "CONSUMO EN
+// ESTABLECIMIENTO") SOLO en los días que Parrot YA importó. Nunca borra un día
+// sin respaldo de Parrot, así no se pierde ningún ingreso.
+// Ejecútala DESPUÉS de importar Parrot del rango. Edita DESDE/HASTA.
+function borrarManualesCultura() {
+  var DESDE = '2026-01-01';   // ← rango a limpiar
+  var HASTA = '2026-05-31';
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sh = ss.getSheetByName('INGRESOS');
+  var tz = ss.getSpreadsheetTimeZone();
+  var vals = sh.getDataRange().getValues();
+
+  function fISO(v) {
+    if (Object.prototype.toString.call(v) === '[object Date]') return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
+    var s = String(v).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0,10);
+    var p = s.replace(/-/g,'/').split('/');
+    if (p.length===3 && p[2].length===4) return p[2]+'-'+('0'+p[1]).slice(-2)+'-'+('0'+p[0]).slice(-2);
+    return '';
+  }
+
+  // 1) Fechas que YA tienen corte de Parrot (Cultura)
+  var fechasParrot = {};
+  for (var i=1;i<vals.length;i++){
+    if (/PARROT/i.test(String(vals[i][14]||''))) fechasParrot[fISO(vals[i][1])] = true;
+  }
+  // 2) Marcar manuales de Cultura en el rango Y con respaldo Parrot ese día
+  var idsBorrar = {}, filas = [];
+  for (var k=1;k<vals.length;k++){
+    var suc = _canonSucursal(vals[k][2], '');
+    var obs = String(vals[k][14] || '');
+    var f = fISO(vals[k][1]);
+    if (suc === 'CASA DE LA CULTURA' && f >= DESDE && f <= HASTA &&
+        !/PARROT/i.test(obs) && fechasParrot[f]) {
+      var id = String(vals[k][0]).trim();
+      if (id) idsBorrar[id] = true;
+      filas.push(k+1);
+    }
+  }
+  // 3) Borrar detalles ligados (CONSUMO EN ESTABLECIMIENTO genérico)
+  var shD = ss.getSheetByName('INGRESOS DETALLES');
+  var dv = shD.getDataRange().getValues(), fd = [];
+  for (var j=1;j<dv.length;j++){ var r=String(dv[j][1]).trim(); if(r && idsBorrar[r]) fd.push(j+1); }
+  fd.sort(function(a,b){return b-a;}).forEach(function(x){shD.deleteRow(x);});
+  filas.sort(function(a,b){return b-a;}).forEach(function(x){sh.deleteRow(x);});
+  Logger.log('🗑️ Borrados ' + filas.length + ' cortes manuales de Cultura ('+DESDE+'→'+HASTA+
+             ') con respaldo Parrot, y ' + fd.length + ' detalles genéricos.');
+}
+
 function backfillParrotReset() {
   PropertiesService.getScriptProperties().deleteProperty('backfill_cursor');
   Logger.log('🔄 Avance reiniciado. La próxima corrida de backfillParrot empieza desde DESDE.');
