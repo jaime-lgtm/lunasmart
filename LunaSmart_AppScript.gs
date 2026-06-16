@@ -1185,12 +1185,42 @@ function estandarizarSucursales() {
   Logger.log('Resultado estandarizarSucursales:\n  ' + log.join('\n  '));
 }
 
+// Backfill RESUMIBLE: procesa día por día, se pausa antes del límite de 6 min
+// y guarda el avance. Solo vuelve a correr backfillParrot hasta que diga COMPLETO.
 function backfillParrot() {
-  var DESDE = '2026-06-01';   // ← edita: primer día a sincronizar
-  // HASTA = hoy automáticamente (cubre todos los días hasta la fecha actual)
-  var HASTA = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  var r = _sincronizarParrot('CASA DE LA CULTURA', DESDE, HASTA);
-  Logger.log(r.getContent());
+  var DESDE = '2026-06-01';   // ← primer día a sincronizar (solo se usa la 1ª vez)
+  var tz = Session.getScriptTimeZone();
+  var HASTA = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  var props = PropertiesService.getScriptProperties();
+  var cursor = props.getProperty('backfill_cursor') || DESDE;
+  var t0 = Date.now();
+  var dias = 0;
+  while (cursor <= HASTA) {
+    _sincronizarParrot('CASA DE LA CULTURA', cursor, cursor);  // 1 día
+    dias++;
+    cursor = _siguienteDiaISO(cursor);
+    props.setProperty('backfill_cursor', cursor);
+    if (Date.now() - t0 > 4.5 * 60 * 1000) {   // ~4.5 min: deja margen
+      Logger.log('⏸ Pausado. Procesados ' + dias + ' día(s) en esta corrida.\n' +
+                 '→ Vuelve a EJECUTAR backfillParrot para continuar desde ' + cursor + '.');
+      return;
+    }
+  }
+  props.deleteProperty('backfill_cursor');
+  Logger.log('✅ Backfill COMPLETO hasta ' + HASTA + ' (' + dias + ' día(s) en esta corrida).');
+}
+
+// Reinicia el backfill desde el inicio (borra el avance guardado)
+function backfillParrotReset() {
+  PropertiesService.getScriptProperties().deleteProperty('backfill_cursor');
+  Logger.log('🔄 Avance reiniciado. La próxima corrida de backfillParrot empieza desde DESDE.');
+}
+
+function _siguienteDiaISO(iso) {
+  var p = String(iso).split('-');
+  var d = new Date(parseInt(p[0],10), parseInt(p[1],10) - 1, parseInt(p[2],10));
+  d.setDate(d.getDate() + 1);
+  return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 }
 
 // LIMPIEZA: borra TODOS los cortes importados de Parrot (INGRESOS con "PARROT:")
