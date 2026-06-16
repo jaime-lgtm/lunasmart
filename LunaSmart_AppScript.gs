@@ -881,9 +881,19 @@ function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
       Utilities.sleep(4500);
 
       var corteDeTurno = {};   // 'TURNO MAÑANA' → ID_INGRESO, 'TURNO TARDE' → ID_INGRESO
-      sesiones.forEach(function(s){
-        var inicioSes = new Date(s.startedAt || s.finishedAt);
-        var turno = turnoDe(inicioSes);
+      // SOLO cortes de turno (SHIFT_CLOSING). El DAILY_CLOSING suma ambos turnos → se ignora.
+      var esSabado = (Utilities.formatDate(cursor, 'America/Mexico_City', 'u') === '6');
+      var shifts = sesiones.filter(function(s){ return s.closingType !== 'DAILY_CLOSING'; });
+      shifts.sort(function(a,b){ return new Date(a.startedAt||a.finishedAt) - new Date(b.startedAt||b.finishedAt); });
+      shifts.forEach(function(s, idx){
+        // Turno por ORDEN cronológico (más confiable que la hora de apertura):
+        // 1er corte del día = MAÑANA, 2º = TARDE. Sábado con 1 solo corte = ambos.
+        var turno;
+        if (shifts.length === 1) {
+          turno = esSabado ? 'TURNO MAÑANA & TARDE' : turnoDe(new Date(s.startedAt || s.finishedAt));
+        } else {
+          turno = (idx === 0) ? 'TURNO MAÑANA' : 'TURNO TARDE';
+        }
         if (s.uuid && sesVistas[s.uuid]) { if (!corteDeTurno[turno]) corteDeTurno[turno] = sesVistas[s.uuid]; return; }
         var pay = {};
         (s.sessionByPaymentType || []).forEach(function(p){ pay[p.paymentType] = (pay[p.paymentType]||0) + (p.reportedAmount||0); });
