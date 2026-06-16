@@ -881,6 +881,7 @@ function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
       Utilities.sleep(4500);
 
       var corteDeTurno = {};   // 'TURNO MAÑANA' → ID_INGRESO, 'TURNO TARDE' → ID_INGRESO
+      var ventanasTurno = [];  // [{ini, fin, idIng}] — ventana horaria real de cada corte
       // SOLO cortes de turno (SHIFT_CLOSING). El DAILY_CLOSING suma ambos turnos → se ignora.
       var esSabado = (Utilities.formatDate(cursor, 'America/Mexico_City', 'u') === '6');
       var shifts = sesiones.filter(function(s){ return s.closingType !== 'DAILY_CLOSING'; });
@@ -894,7 +895,13 @@ function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
         } else {
           turno = (idx === 0) ? 'TURNO MAÑANA' : 'TURNO TARDE';
         }
-        if (s.uuid && sesVistas[s.uuid]) { if (!corteDeTurno[turno]) corteDeTurno[turno] = sesVistas[s.uuid]; return; }
+        var winIni = new Date(s.startedAt || s.finishedAt);
+        var winFin = new Date(s.finishedAt || s.startedAt);
+        if (s.uuid && sesVistas[s.uuid]) {
+          if (!corteDeTurno[turno]) corteDeTurno[turno] = sesVistas[s.uuid];
+          ventanasTurno.push({ ini: winIni, fin: winFin, idIng: sesVistas[s.uuid] });
+          return;
+        }
         var pay = {};
         (s.sessionByPaymentType || []).forEach(function(p){ pay[p.paymentType] = (pay[p.paymentType]||0) + (p.reportedAmount||0); });
         var cm = s.cashMovements || {};
@@ -917,6 +924,7 @@ function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
         ]);
         sesVistas[s.uuid] = idIng;
         if (!corteDeTurno[turno]) corteDeTurno[turno] = idIng;
+        ventanasTurno.push({ ini: winIni, fin: winFin, idIng: idIng });
         nCortes++;
       });
 
@@ -935,7 +943,12 @@ function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
           items.forEach(function(it){
             if (it.uuid && itemVistos[it.uuid]) return;  // ya importado
             var t = new Date(it.createdAt);
-            var idIng = corteDeTurno[turnoDe(t)] || unicoCorte;
+            // PRECISIÓN: ligar al corte cuya VENTANA real (apertura→cierre) contiene la venta
+            var idIng = null;
+            for (var w = 0; w < ventanasTurno.length; w++) {
+              if (t >= ventanasTurno[w].ini && t <= ventanasTurno[w].fin) { idIng = ventanasTurno[w].idIng; break; }
+            }
+            if (!idIng) idIng = corteDeTurno[turnoDe(t)] || unicoCorte;  // respaldo
             var fecha = Utilities.formatDate(t, tz, 'yyyy-MM-dd');  // ISO (evita inversión)
             var total = parseFloat(it.total) || 0;
             _escribirFila(shDet, [
