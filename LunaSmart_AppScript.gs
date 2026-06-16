@@ -732,6 +732,29 @@ function _registrarCliente(b) {
 // Ejecuta esta función desde el editor y copia TODO el "Registro de ejecución".
 // Sirve para ver qué devuelve la API de Parrot y si trae el detalle de productos
 // vendidos (para poder construir "Ventas por artículo / Artículos estrella").
+// DIAGNÓSTICO: vuelca TODAS las sesiones de caja de un día para entender
+// cómo Parrot distingue "corte de turno" vs "cierre del día". Edita la fecha.
+function dumpSesionesDia() {
+  var FECHA = '2026-06-02';   // ← edita el día a inspeccionar (con varios turnos)
+  var ini = _isoToDate(FECHA, false);
+  var fin = _isoToDate(FECHA, true);
+  var ses = _parrotGet('/v1/cashier-sessions', ini, fin, 50, 0);
+  Logger.log('Sesiones encontradas el ' + FECHA + ': ' + ses.length);
+  ses.forEach(function(s, i) {
+    Logger.log('─────────── SESIÓN ' + (i+1) + ' ───────────');
+    // Campos clave para distinguir turno vs cierre del día
+    Logger.log('uuid: ' + s.uuid);
+    Logger.log('name/alias: ' + (s.name || s.alias || s.cashRegisterName || '—'));
+    Logger.log('type/kind: ' + (s.type || s.kind || s.sessionType || '—'));
+    Logger.log('startedAt: ' + s.startedAt + '  finishedAt: ' + s.finishedAt);
+    Logger.log('isMain/isDayClose/closeType: ' + s.isMain + ' / ' + s.isDayClose + ' / ' + (s.closeType||'—'));
+    Logger.log('totalSales: ' + (s.sales && s.sales.totalSales));
+    Logger.log('cashMovements: ' + JSON.stringify(s.cashMovements || {}));
+    // JSON completo (recortado) para ver todos los campos disponibles
+    Logger.log('TODOS LOS CAMPOS: ' + JSON.stringify(s).substring(0, 900));
+  });
+}
+
 function diagnosticarParrot() {
   // Ventana de 24h (la API exige máximo 48h entre start y end)
   var hoy = new Date();
