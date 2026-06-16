@@ -2467,8 +2467,8 @@ const LS_API = (() => {
         totalDeclarado: parseNum(r[COLS.INGRESOS.TOTAL_DECLARADO]),
         ventaTotal:     parseNum(r[COLS.INGRESOS.VENTA_TOTAL]),
         diferencia:     parseNum(r[COLS.INGRESOS.DIFERENCIA]),
-        observaciones:  r[COLS.INGRESOS.OBSERVACIONES] || '',
-        esParrot:       (r[COLS.INGRESOS.OBSERVACIONES] || '').startsWith('PARROT-'),
+        observaciones:  String(r[COLS.INGRESOS.OBSERVACIONES] || ''),
+        esParrot:       String(r[COLS.INGRESOS.OBSERVACIONES] || '').startsWith('PARROT-'),
       }))
       .filter(r => {
         // Filtro de sucursal activo (global)
