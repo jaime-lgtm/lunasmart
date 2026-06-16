@@ -16,6 +16,10 @@
 // ── CONFIGURACIÓN ──────────────────────────────────────────────────────────
 const SHEET_ID = '1Dm5fcTs_URmtv8cwUDV6z_LxuGvdpJmf0ZkxszXzuCk';
 
+// Token compartido que autoriza ESCRITURAS. Debe coincidir con
+// CONFIG.WRITE_TOKEN en index.html. Cámbialo cuando quieras (en ambos lados).
+const WRITE_TOKEN = 'SDL-luna-w-7Kq9mT2pXr5vB';
+
 const PARROT_API_KEY   = 'pk_AFHobF97QSAeAk2LdsmoWYbY0aJNPngk_f343f0db581f4b17b644f101cb58e461';
 const PARROT_STORE_UUID = 'd6c9c246-8ff7-44a9-a641-e38793050097';
 const PARROT_BASE_URL  = 'https://api.parrot.rest/external';
@@ -175,6 +179,13 @@ function doPost(e) {
   }
 
   const accion = body.accion || '';
+
+  // ── SEGURIDAD: toda ESCRITURA requiere el token compartido ──────────────
+  // Bloquea que alguien con la URL del Apps Script escriba/borre sin la clave.
+  if (body.token !== WRITE_TOKEN) {
+    return _err('No autorizado');
+  }
+
   // El frontend envía los datos dentro de body.datos. Desenvolvemos aquí
   // (con fallback a body por compatibilidad con llamadas directas/planas).
   const datos = body.datos || body;
