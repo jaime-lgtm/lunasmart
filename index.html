@@ -2155,6 +2155,10 @@ const LS_API = (() => {
 
     // Base URL de la Sheets API
     BASE: 'https://sheets.googleapis.com/v4/spreadsheets',
+
+    // Token compartido para autorizar ESCRITURAS en el Apps Script.
+    // Debe coincidir con WRITE_TOKEN en LunaSmart_AppScript.gs
+    WRITE_TOKEN: 'SDL-luna-w-7Kq9mT2pXr5vB',
   };
 
   // ── NOMBRES DE HOJAS (exactamente como están en Sheets) ────
@@ -2341,10 +2345,11 @@ const LS_API = (() => {
       // válido que doPost() parsea con JSON.parse(e.postData.contents).
       // Enviar los datos TAMBIÉN aplanados al nivel superior (además de en .datos)
       // para que funcione con cualquier versión del Apps Script (lee b.fecha o b.datos.fecha).
-      const cuerpo = { accion, ...payload };
+      const cuerpo = { accion, token: CONFIG.WRITE_TOKEN, ...payload };
       if (payload && payload.datos && typeof payload.datos === 'object') {
         Object.assign(cuerpo, payload.datos);
       }
+      cuerpo.token = CONFIG.WRITE_TOKEN; // asegurar que no lo pise el spread
       const resp = await fetch(CONFIG.APPS_SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
