@@ -6,7 +6,7 @@
      - Datos de Google Sheets / Apps Script: SIEMPRE de red (nunca cacheados)
    ══════════════════════════════════════════════════════════════ */
 
-const CACHE = 'lunasmart-v1';
+const CACHE = 'lunasmart-v2';
 const SHELL = [
   '/index.html',
   '/manifest.json',
