@@ -5149,6 +5149,13 @@ const LS_UI = (() => {
       artOpts = prods.map(p => `<option value="${String(p.articulo).replace(/"/g,'&quot;')}">`).join('');
     } catch(_) {}
 
+    // Cargar clientes del catálogo
+    let clienteOpts = '';
+    try {
+      const clientes = await LS_API.getClientes();
+      clienteOpts = clientes.map(c => `<option value="${String(c.nombre).replace(/"/g,'&quot;')}">`).join('');
+    } catch(_) {}
+
     // Cargar vendedores desde localStorage (se guardan en el navegador)
     let vendedores = [];
     try {
@@ -5193,7 +5200,9 @@ const LS_UI = (() => {
           <!-- Cliente (quién compró) -->
           <div class="ff">
             <label>Cliente (quién compró)</label>
-            <input type="text" id="vdta-cliente" placeholder="Nombre del cliente o empresa">
+            <input list="vdta-clientes-list" id="vdta-cliente" placeholder="Selecciona o escribe"
+              style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--tx);font-size:13px">
+            <datalist id="vdta-clientes-list">${clienteOpts}</datalist>
           </div>
 
           <!-- Sucursal (por defecto Coffee & Roasters) -->
