@@ -1836,7 +1836,11 @@ function enterApp(u) {
   document.getElementById('u-avatar').textContent = u.ini;
   document.getElementById('login').style.display = 'none';
   document.getElementById('app').style.display = 'block';
-  setTimeout(() => toast('Bienvenido, ' + u.name.split(' ')[0], 'Sesión iniciada como ' + u.role, 'ok', 'ti-confetti'), 400);
+  // Leer el hash y navegar a esa página (o dashboard si no hay)
+  setTimeout(() => {
+    restaurarPaginaDelHash();
+    toast('Bienvenido, ' + u.name.split(' ')[0], 'Sesión iniciada como ' + u.role, 'ok', 'ti-confetti');
+  }, 400);
 }
 function doLogout() {
   sessionStorage.removeItem('ls_user');
@@ -1866,6 +1870,8 @@ function updateSubtitle() {
 function go(id, el) {
   if (!PAGES[id]) return;
   state.page = id;
+  // Actualiza el URL con hash (para que se guarde en el navegador)
+  window.location.hash = id;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const p = document.getElementById('p-' + id);
   if (p) p.classList.add('active');
@@ -1880,6 +1886,25 @@ function go(id, el) {
 function mgo(id, el) { go(id, null); }
 function mdrawerGo(id) { go(id, null); toggleDrawer(); }
 function toggleDrawer() { document.getElementById('m-drawer').classList.toggle('open'); }
+
+/* ─── ENRUTAMIENTO CON HASH: Se queda en la misma página al recargar ─── */
+window.addEventListener('hashchange', () => {
+  const hash = window.location.hash.substring(1); // Quita el #
+  if (hash && PAGES[hash]) {
+    go(hash, null);
+  }
+});
+
+// Al cargar la app, leer el hash y navegar a esa página
+function restaurarPaginaDelHash() {
+  const hash = window.location.hash.substring(1); // Quita el #
+  if (hash && PAGES[hash]) {
+    go(hash, null);
+  } else {
+    // Si no hay hash o no es válido, ir al dashboard
+    go('dashboard', null);
+  }
+}
 
 /* ─── BRANCH FILTER ─── */
 function toggleBranch(e) {
@@ -2065,10 +2090,20 @@ function sortTable(tbl, th, colIndex) {
 function openRegister(kind) {
   const map = {
     corte:   ['Nuevo corte de caja', 'Abre el formulario de corte por turno', 'ti-cash'],
+    venta:   ['Venta directa', 'Registra venta de café sin corte', 'ti-shopping-cart'],
     factura: ['Nueva factura', 'Captura un comprobante de egreso', 'ti-file-invoice'],
   };
   const m = map[kind] || ['Registrar', 'Selecciona qué deseas registrar', 'ti-plus'];
-  toast(m[0], m[1], 'ok', m[2]);
+
+  if (kind === 'corte') {
+    LS_UI.abrirNuevoIngreso();
+  } else if (kind === 'venta') {
+    LS_UI.abrirNuevaVentaDirecta();
+  } else if (kind === 'factura') {
+    LS_UI.abrirNuevaFactura();
+  } else {
+    toast(m[0], m[1], 'ok', m[2]);
+  }
 }
 
 /* ─── TOASTS ─── */
@@ -5104,6 +5139,222 @@ const LS_UI = (() => {
   }
 
   // ══════════════════════════════════════════════════════════
+  // FORMULARIO — VENTA DIRECTA (sin corte)
+  // ══════════════════════════════════════════════════════════
+  async function buildFormVentaDirecta() {
+    // Cargar artículos del catálogo para el dropdown
+    let artOpts = '';
+    try {
+      const prods = await LS_API.getProductosVenta();
+      artOpts = prods.map(p => `<option value="${String(p.articulo).replace(/"/g,'&quot;')}">`).join('');
+    } catch(_) {}
+
+    // Cargar vendedores desde localStorage (se guardan en el navegador)
+    let vendedores = [];
+    try {
+      const saved = localStorage.getItem('ls_vendedores');
+      if (saved) vendedores = JSON.parse(saved);
+    } catch(_) {}
+    if (vendedores.length === 0) vendedores = ['Jaime Sáenz']; // Default
+
+    const vendOptsHTML = vendedores.map(v => `<option value="${v}">`).join('');
+
+    openModal(`
+    <div class="modal-overlay" id="modal-venta" onclick="if(event.target===this)_cerrarModal()">
+      <div class="modal" style="max-width:500px">
+        <div class="modal-header">
+          <div>
+            <div class="modal-title">Venta Directa</div>
+            <div class="modal-sub">Registra venta de café sin turno ni corte de caja</div>
+          </div>
+          <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-body">
+
+          <!-- Fecha, Vendedor, Sucursal -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+            <div class="ff">
+              <label>Fecha</label>
+              <input type="date" id="vdta-fecha" value="${new Date().toISOString().split('T')[0]}">
+            </div>
+            <div class="ff">
+              <label>Vendedor</label>
+              <div style="display:flex;gap:6px">
+                <input list="vendedores-list" id="vdta-vendedor" placeholder="Selecciona o escribe"
+                  style="flex:1;background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--tx);font-size:13px">
+                <button type="button" class="btn btn-sm" title="Agregar vendedor"
+                  onclick="LS_UI.agregarVendedor(document.getElementById('vdta-vendedor').value)"
+                  style="padding:5px 9px"><i class="ti ti-plus"></i></button>
+              </div>
+              <datalist id="vendedores-list">${vendOptsHTML}</datalist>
+            </div>
+          </div>
+
+          <!-- Sucursal (por defecto Coffee & Roasters) -->
+          <div class="ff">
+            <label>Sucursal</label>
+            <select id="vdta-sucursal">
+              <option value="COFFEE & ROASTERS" selected>Coffee & Roasters</option>
+              <option value="CASA DE LA CULTURA">Casa de la Cultura</option>
+              <option value="EVENTOS">Eventos</option>
+            </select>
+          </div>
+
+          <!-- Artículos vendidos -->
+          <div style="border:1px solid var(--line);border-radius:var(--r-lg);padding:14px 16px;margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <div style="font-size:12px;font-weight:600;color:var(--tx)">Artículos vendidos</div>
+              <button type="button" class="btn btn-sm" onclick="LS_UI.agregarLineaVentaDirect()"><i class="ti ti-plus"></i>Agregar</button>
+            </div>
+            <div id="vdta-lineas"></div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)">
+              <span style="color:var(--tx-3)">Total</span>
+              <span id="vdta-total" style="font-family:var(--mono);font-weight:600;color:var(--terra-claro);font-size:16px">$0.00</span>
+            </div>
+          </div>
+          <datalist id="vdta-articulos-list">${artOpts}</datalist>
+
+          <!-- Observaciones -->
+          <div class="ff">
+            <label>Observaciones (opcional)</label>
+            <input type="text" id="vdta-obs" placeholder="Ej: Venta de evento, mercado...">
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
+          <button class="btn-save" onclick="LS_UI.guardarVentaDirecta()">
+            <i class="ti ti-device-floppy"></i> Guardar venta
+          </button>
+        </div>
+      </div>
+    </div>`);
+
+    // Pre-llenar vendedor si hay uno guardado
+    const vend = localStorage.getItem('ls_ultimo_vendedor');
+    if (vend) document.getElementById('vdta-vendedor').value = vend;
+  }
+
+  function agregarLineaVentaDirect() {
+    const cont = document.getElementById('vdta-lineas');
+    if (!cont) return;
+    const div = document.createElement('div');
+    div.className = 'vdta-linea';
+    div.style.cssText = 'display:grid;grid-template-columns:1fr 70px 90px 30px;gap:8px;margin-bottom:6px;align-items:center';
+    div.innerHTML = `
+      <input list="vdta-articulos-list" class="vdta-art" placeholder="Artículo..."
+        style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--tx);font-size:13px">
+      <input type="number" class="vdta-cant" placeholder="Cant" min="0" step="0.5" value="1"
+        style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--tx);font-size:13px;font-family:var(--mono);text-align:center" oninput="LS_UI.calcVentaDirectaTotal()">
+      <input type="number" class="vdta-precio" placeholder="Precio" min="0" step="0.01"
+        style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--tx);font-size:13px;font-family:var(--mono);text-align:right" oninput="LS_UI.calcVentaDirectaTotal()">
+      <button type="button" title="Quitar" onclick="this.closest('.vdta-linea').remove();LS_UI.calcVentaDirectaTotal()"
+        style="background:transparent;border:none;color:var(--rojo);cursor:pointer;font-size:16px">✕</button>`;
+    cont.appendChild(div);
+    div.querySelector('.vdta-art').focus();
+  }
+
+  function calcVentaDirectaTotal() {
+    let sum = 0;
+    document.querySelectorAll('#vdta-lineas .vdta-linea').forEach(l => {
+      const c = parseFloat(l.querySelector('.vdta-cant')?.value || 0) || 0;
+      const p = parseFloat(l.querySelector('.vdta-precio')?.value || 0) || 0;
+      sum += c * p;
+    });
+    const totEl = document.getElementById('vdta-total');
+    if (totEl) totEl.textContent = LS_API.formatMXNDec(sum);
+  }
+
+  function agregarVendedor(nombre) {
+    const n = (nombre || '').trim();
+    if (!n) { toast('Vendedor incompleto', 'Escribe el nombre del vendedor', 'warn', 'ti-alert-circle'); return; }
+    let vendedores = [];
+    try { vendedores = JSON.parse(localStorage.getItem('ls_vendedores') || '[]'); } catch(_) {}
+    if (!vendedores.includes(n)) {
+      vendedores.push(n);
+      localStorage.setItem('ls_vendedores', JSON.stringify(vendedores));
+      toast('Vendedor agregado', n, 'ok', 'ti-check');
+      // Actualizar la lista desplegable
+      const inp = document.getElementById('vdta-vendedor');
+      if (inp) inp.value = n;
+      // Reconstruir el datalist
+      const dl = document.getElementById('vendedores-list');
+      if (dl) dl.innerHTML = vendedores.map(v => `<option value="${v}">`).join('');
+    } else {
+      toast('Vendedor ya existe', n, 'warn', 'ti-alert-circle');
+    }
+  }
+
+  async function guardarVentaDirecta() {
+    const n = id => parseFloat(document.getElementById(id)?.value || 0) || 0;
+    const s = id => document.getElementById(id)?.value || '';
+
+    const vendedor = s('vdta-vendedor');
+    if (!vendedor) {
+      toast('Vendedor requerido', 'Selecciona o agrega un vendedor', 'err', 'ti-alert-circle');
+      return;
+    }
+
+    // Guardar el último vendedor usado
+    localStorage.setItem('ls_ultimo_vendedor', vendedor);
+
+    // Recopilar líneas de ventas
+    const detalles = [...document.querySelectorAll('#vdta-lineas .vdta-linea')].map(l => ({
+      articulo: (l.querySelector('.vdta-art')?.value || '').trim(),
+      cantidad: parseFloat(l.querySelector('.vdta-cant')?.value || 0) || 0,
+      precio:   parseFloat(l.querySelector('.vdta-precio')?.value || 0) || 0,
+    })).filter(d => d.articulo && d.cantidad > 0 && d.precio > 0);
+
+    if (detalles.length === 0) {
+      toast('Sin artículos', 'Agrega al menos un artículo', 'err', 'ti-alert-circle');
+      return;
+    }
+
+    const total = detalles.reduce((sum, d) => sum + (d.cantidad * d.precio), 0);
+    const datos = {
+      accion: 'registrarIngreso',
+      datos: {
+        fecha: s('vdta-fecha'),
+        sucursal: s('vdta-sucursal'),
+        cliente: `VENDEDOR: ${vendedor}`,  // en lugar de turno
+        efectivo: total,  // se registra como efectivo
+        tarjeta: 0,
+        transferencia: 0,
+        rappi: 0,
+        ventaTotal: total,
+        observaciones: `VENTA DIRECTA · ${vendedor} · ${s('vdta-obs') || 'sin observaciones'}`,
+        detalles: detalles,
+      }
+    };
+
+    const btn = document.querySelector('#modal-venta .btn-save');
+    const orig = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.9s linear infinite"></i> Guardando...'; }
+
+    try {
+      const result = await fetch(CONFIG.APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(datos),
+        redirect: 'follow'
+      }).then(r => r.json()).catch(() => ({}));
+
+      if (result.status === 'ok') {
+        typeof toast !== 'undefined' && toast('Venta directa guardada', `${total.toFixed(2)} MXN · ${vendedor}`, 'ok', 'ti-check');
+        _cerrarModal();
+        LS_API.invalidarCache();
+        LS_UI.reloadPage('ingresos');
+      } else {
+        typeof toast !== 'undefined' && toast('Error al guardar', result?.msg || 'Verifica los datos', 'err', 'ti-alert-circle');
+      }
+    } catch(err) {
+      typeof toast !== 'undefined' && toast('Error de conexión', err.message, 'err', 'ti-alert-circle');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════
   // FORMULARIO — NUEVA FACTURA
   // ══════════════════════════════════════════════════════════
   async function buildFormFactura(editData) {
@@ -5926,9 +6177,11 @@ const LS_UI = (() => {
     buscarFacturas, verFactura, editarFactura, confirmarBorrarFactura, ejecutarBorrarFactura,
     verIngreso, editarIngreso, confirmarBorrarIngreso, ejecutarBorrarIngreso, buscarIngresos,
     calcIngreso, guardarIngreso, guardarFactura, agregarLineaVenta, calcVentaDetalle, autollenarPrecioVenta,
+    agregarLineaVentaDirect, calcVentaDirectaTotal, agregarVendedor, guardarVentaDirecta,
     closeModal,
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },
+    async abrirNuevaVentaDirecta() { await buildFormVentaDirecta(); },
     async abrirNuevaFactura() { await buildFormFactura(); },
     filtrarProveedores,
     seleccionarProveedor,
@@ -6062,6 +6315,11 @@ openRegister = function(kind) {
           <div class="action-opt" onclick="_cerrarModal();openRegister('corte')">
             <div class="action-icon"><i class="ti ti-cash"></i></div>
             <div><div class="action-name">Nuevo corte de caja</div><div class="action-sub">Registra el cierre del turno</div></div>
+            <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--tx-4)"></i>
+          </div>
+          <div class="action-opt" onclick="_cerrarModal();openRegister('venta')">
+            <div class="action-icon"><i class="ti ti-shopping-cart"></i></div>
+            <div><div class="action-name">Venta directa</div><div class="action-sub">Venta de café sin corte de caja</div></div>
             <i class="ti ti-chevron-right" style="margin-left:auto;color:var(--tx-4)"></i>
           </div>
           <div class="action-opt" onclick="_cerrarModal();openRegister('factura')">
