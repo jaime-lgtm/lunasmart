@@ -209,6 +209,7 @@ function doPost(e) {
     case 'borrarCatalogoArticulo':     return _borrarCatalogoArticulo(datos);
     case 'registrarCliente':           return _registrarCliente(datos);
     case 'registrarReceta':            return _registrarReceta(datos);
+    case 'borrarIngresosPorFecha':      return _borrarIngresosPorFecha(datos);
     case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || datos.sucursal || 'CASA DE LA CULTURA', body.desde || datos.desde, body.hasta || datos.hasta);
     case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(datos);
     default: return _err('Acción desconocida: ' + accion);
@@ -726,6 +727,51 @@ function _registrarCliente(b) {
       b.diasCredito  || 0,
     ]);
     return _json({ status: 'ok', idCliente: id });
+  } catch(e) {
+    return _err(e.message);
+  }
+}
+
+function _borrarIngresosPorFecha(b) {
+  try {
+    const sh = _getSheet(HOJAS.INGRESOS);
+    const datos = sh.getDataRange().getValues();
+    const filasABorrar = [];
+
+    // Buscar filas que coincidan con los criterios
+    // Esperamos un array de objetos: [{fecha, sucursal, turno}, ...]
+    const criterios = b.criterios || [];
+
+    for (let i = 1; i < datos.length; i++) {
+      const fila = datos[i];
+      const fechaFila = String(fila[0] || '').trim();
+      const sucursalFila = String(fila[1] || '').trim().toUpperCase();
+      const turnoFila = String(fila[2] || '').trim();
+
+      // Verificar si esta fila cumple con alguno de los criterios
+      for (let crit of criterios) {
+        if (
+          fechaFila === crit.fecha &&
+          sucursalFila === crit.sucursal.toUpperCase() &&
+          turnoFila === crit.turno
+        ) {
+          filasABorrar.push(i + 1); // +1 porque deleteRows usa índice 1-based
+          break;
+        }
+      }
+    }
+
+    // Borrar filas de mayor a menor índice (para no cambiar los índices)
+    filasABorrar.sort((a, b) => b - a);
+    for (let idx of filasABorrar) {
+      sh.deleteRow(idx);
+    }
+
+    return _json({
+      status: 'ok',
+      msg: `Se borraron ${filasABorrar.length} ingresos`,
+      filasEliminadas: filasABorrar.length
+    });
   } catch(e) {
     return _err(e.message);
   }
