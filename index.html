@@ -5190,6 +5190,12 @@ const LS_UI = (() => {
             </div>
           </div>
 
+          <!-- Cliente (quién compró) -->
+          <div class="ff">
+            <label>Cliente (quién compró)</label>
+            <input type="text" id="vdta-cliente" placeholder="Nombre del cliente o empresa">
+          </div>
+
           <!-- Sucursal (por defecto Coffee & Roasters) -->
           <div class="ff">
             <label>Sucursal</label>
@@ -5311,12 +5317,17 @@ const LS_UI = (() => {
     }
 
     const total = detalles.reduce((sum, d) => sum + (d.cantidad * d.precio), 0);
+    const cliente = s('vdta-cliente');
+    if (!cliente) {
+      toast('Cliente requerido', 'Ingresa a quién se le vendió el café', 'err', 'ti-alert-circle');
+      return;
+    }
     const datos = {
       accion: 'registrarIngreso',
       datos: {
         fecha: s('vdta-fecha'),
         sucursal: s('vdta-sucursal'),
-        cliente: `VENDEDOR: ${vendedor}`,  // en lugar de turno
+        cliente: `${cliente} (vendedor: ${vendedor})`,  // cliente + vendedor
         efectivo: total,  // se registra como efectivo
         tarjeta: 0,
         transferencia: 0,
