@@ -5650,23 +5650,74 @@ const LS_UI = (() => {
     div.style.cssText = 'display:grid;grid-template-columns:2fr 80px 80px 30px;gap:8px;margin-bottom:6px;align-items:center';
     div.innerHTML = `
       <input list="rec-ingredientes-list" class="rec-art" placeholder="Ingrediente..."
-        style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--tx);font-size:13px">
+        style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--tx);font-size:13px"
+        onchange="LS_UI.actualizarIngrediente(this)">
       <input type="number" class="rec-cant" placeholder="Cantidad" min="0" step="0.5" value="1"
         style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--tx);font-size:13px;font-family:var(--mono);text-align:center" oninput="LS_UI.calcRecetaCosto()">
       <input type="text" class="rec-unidad" placeholder="Unidad" value="Gramos"
-        style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--tx);font-size:13px;text-align:center">
+        style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--tx);font-size:13px;text-align:center;background-color:var(--cafe-800)">
       <button type="button" title="Quitar" onclick="this.closest('.rec-linea').remove();LS_UI.calcRecetaCosto()"
         style="background:transparent;border:none;color:var(--rojo);cursor:pointer;font-size:16px">✕</button>`;
     cont.appendChild(div);
     div.querySelector('.rec-art').focus();
   }
 
-  function calcRecetaCosto() {
-    // TODO: Implementar cálculo de costo en tiempo real
-    let sum = 0;
-    // Por ahora simplemente placeholder
-    const totEl = document.getElementById('rec-costo-total');
-    if (totEl) totEl.textContent = '$0.00';
+  async function actualizarIngrediente(inputEl) {
+    // Cuando cambia el ingrediente, traer la unidad del Catálogo
+    try {
+      const artNombre = (inputEl.value || '').trim();
+      if (!artNombre) return;
+
+      const catalogo = await LS_API.getCatalogo();
+      const articulo = catalogo.find(p => p.articulo?.toLowerCase() === artNombre.toLowerCase());
+
+      if (articulo) {
+        const unidadEl = inputEl.closest('.rec-linea').querySelector('.rec-unidad');
+        if (unidadEl) {
+          unidadEl.value = articulo.unidad || 'Gramos';
+        }
+        // Recalcular costo
+        await calcRecetaCosto();
+      }
+    } catch(e) {
+      console.error('Error actualizando ingrediente:', e);
+    }
+  }
+
+  async function calcRecetaCosto() {
+    try {
+      const lineas = document.querySelectorAll('#rec-lineas .rec-linea');
+      let costoTotal = 0;
+
+      // Obtener catálogo para buscar costos
+      const catalogo = await LS_API.getCatalogo();
+      const catalogoMap = {};
+      catalogo.forEach(p => {
+        catalogoMap[p.articulo?.toLowerCase() || ''] = p;
+      });
+
+      // Calcular costo de cada línea
+      for (let linea of lineas) {
+        const artNombre = (linea.querySelector('.rec-art')?.value || '').trim().toLowerCase();
+        const cantidad = parseFloat(linea.querySelector('.rec-cant')?.value || 0) || 0;
+
+        if (artNombre && cantidad > 0 && catalogoMap[artNombre]) {
+          const articulo = catalogoMap[artNombre];
+          // Costo final = (Costo base / Cantidad presentación) × Cantidad utilizada
+          const costoFinal = articulo.costo_final || articulo.costo_base || 0;
+          const cantPres = articulo.cantidad || 1;
+          const costoPorUnidad = costoFinal / cantPres;
+          const costoPorLinea = costoPorUnidad * cantidad;
+
+          costoTotal += costoPorLinea;
+        }
+      }
+
+      const totEl = document.getElementById('rec-costo-total');
+      if (totEl) totEl.textContent = LS_API.formatMXNDec(costoTotal);
+    } catch(e) {
+      console.error('Error calculando costo:', e);
+    }
   }
 
   async function guardarReceta() {
@@ -6586,7 +6637,7 @@ const LS_UI = (() => {
     verIngreso, editarIngreso, confirmarBorrarIngreso, ejecutarBorrarIngreso, buscarIngresos,
     calcIngreso, guardarIngreso, guardarFactura, agregarLineaVenta, calcVentaDetalle, autollenarPrecioVenta,
     agregarLineaVentaDirect, calcVentaDirectaTotal, agregarVendedor, guardarVentaDirecta, registrarNuevoCliente,
-    abrirNuevaReceta, agregarLineaReceta, calcRecetaCosto, guardarReceta, renderRecetas,
+    abrirNuevaReceta, agregarLineaReceta, actualizarIngrediente, calcRecetaCosto, guardarReceta, renderRecetas,
     closeModal,
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },
