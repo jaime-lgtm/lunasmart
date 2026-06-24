@@ -3315,6 +3315,21 @@ const LS_API = (() => {
     });
   }
 
+  async function registrarCliente(datos) {
+    return escribirViaScript('registrarCliente', {
+      hoja: 'DATOS_CLIENTES',
+      datos: {
+        nombre:        datos.nombre       || '',
+        rfc:           datos.rfc          || '',
+        contacto:      datos.contacto     || '',
+        correo:        datos.correo       || '',
+        telefono:      datos.telefono     || '',
+        lineaCredito:  datos.lineaCredito || 0,
+        diasCredito:   datos.diasCredito  || 0,
+      }
+    });
+  }
+
   // Ventas agrupadas por sucursal (para Top sucursales real)
   // Normaliza/agrupa nombres de sucursal (corrige etiquetas históricas)
   function aliasSucursal(nombre) {
@@ -3372,7 +3387,7 @@ const LS_API = (() => {
     registrarIngreso, registrarIngresoCompleto, actualizarIngreso, borrarIngreso, getIngresoDetalle,
     registrarFactura, registrarFacturaCompleta, actualizarFactura, borrarFactura,
     registrarProveedor, registrarCliente, actualizarProveedor, borrarProveedor, actualizarCatalogoArticulo, borrarCatalogoArticulo,
-    registrarArticuloDetalle, registrarCatalogoArticulo,
+    registrarArticuloDetalle, registrarCatalogoArticulo, registrarCliente,
     // Agregaciones
     getKPIsDashboard, getTopArticulos, getTopProveedores,
     getTopComprados, getProductosVendidos,
@@ -5200,8 +5215,13 @@ const LS_UI = (() => {
           <!-- Cliente (quién compró) -->
           <div class="ff">
             <label>Cliente (quién compró)</label>
-            <input list="vdta-clientes-list" id="vdta-cliente" placeholder="Selecciona o escribe"
-              style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--tx);font-size:13px">
+            <div style="display:flex;gap:6px">
+              <input list="vdta-clientes-list" id="vdta-cliente" placeholder="Selecciona o escribe"
+                style="flex:1;background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--tx);font-size:13px">
+              <button type="button" class="btn btn-sm" title="Registrar nuevo cliente"
+                onclick="LS_UI.abrirFormularioNuevoCliente()"
+                style="padding:5px 9px"><i class="ti ti-plus"></i></button>
+            </div>
             <datalist id="vdta-clientes-list">${clienteOpts}</datalist>
           </div>
 
@@ -5298,6 +5318,89 @@ const LS_UI = (() => {
     } else {
       toast('Vendedor ya existe', n, 'warn', 'ti-alert-circle');
     }
+  }
+
+  async function registrarNuevoCliente() {
+    const nombre = document.getElementById('nuevo-cliente-nombre')?.value?.trim() || '';
+    if (!nombre) {
+      toast('Nombre requerido', 'Ingresa el nombre del cliente', 'err', 'ti-alert-circle');
+      return;
+    }
+
+    const datos = {
+      nombre:        nombre,
+      rfc:           document.getElementById('nuevo-cliente-rfc')?.value?.trim() || '',
+      contacto:      document.getElementById('nuevo-cliente-contacto')?.value?.trim() || '',
+      correo:        document.getElementById('nuevo-cliente-correo')?.value?.trim() || '',
+      telefono:      document.getElementById('nuevo-cliente-telefono')?.value?.trim() || '',
+      lineaCredito:  0,
+      diasCredito:   0,
+    };
+
+    const btn = document.querySelector('#ls-modal-2 .btn-save');
+    const orig = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.9s linear infinite"></i> Guardando...'; }
+
+    try {
+      const result = await LS_API.registrarCliente(datos);
+      if (result.status === 'ok') {
+        toast('Cliente registrado', nombre, 'ok', 'ti-check');
+        document.getElementById('vdta-cliente').value = nombre;
+        _cerrarModal2();
+        LS_API.invalidarCache();
+      } else {
+        toast('Error al registrar', result?.msg || 'Intenta de nuevo', 'err', 'ti-alert-circle');
+      }
+    } catch(err) {
+      toast('Error de conexión', err.message, 'err', 'ti-alert-circle');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+    }
+  }
+
+  function abrirFormularioNuevoCliente() {
+    _modal2(`
+      <div class="modal" style="max-width:450px">
+        <div class="modal-header">
+          <div>
+            <div class="modal-title">Nuevo Cliente</div>
+            <div class="modal-sub">Registra un cliente en el catálogo</div>
+          </div>
+          <button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="ff">
+            <label>Nombre</label>
+            <input type="text" id="nuevo-cliente-nombre" placeholder="Nombre del cliente o empresa">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="ff">
+              <label>RFC</label>
+              <input type="text" id="nuevo-cliente-rfc" placeholder="RFC (opcional)">
+            </div>
+            <div class="ff">
+              <label>Contacto</label>
+              <input type="text" id="nuevo-cliente-contacto" placeholder="Nombre del contacto">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="ff">
+              <label>Correo</label>
+              <input type="email" id="nuevo-cliente-correo" placeholder="correo@example.com">
+            </div>
+            <div class="ff">
+              <label>Teléfono</label>
+              <input type="tel" id="nuevo-cliente-telefono" placeholder="+52 ...">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button>
+          <button class="btn-save" onclick="LS_UI.registrarNuevoCliente()">
+            <i class="ti ti-plus"></i> Registrar cliente
+          </button>
+        </div>
+      </div>`);
   }
 
   async function guardarVentaDirecta() {
@@ -6197,7 +6300,7 @@ const LS_UI = (() => {
     buscarFacturas, verFactura, editarFactura, confirmarBorrarFactura, ejecutarBorrarFactura,
     verIngreso, editarIngreso, confirmarBorrarIngreso, ejecutarBorrarIngreso, buscarIngresos,
     calcIngreso, guardarIngreso, guardarFactura, agregarLineaVenta, calcVentaDetalle, autollenarPrecioVenta,
-    agregarLineaVentaDirect, calcVentaDirectaTotal, agregarVendedor, guardarVentaDirecta,
+    agregarLineaVentaDirect, calcVentaDirectaTotal, agregarVendedor, guardarVentaDirecta, registrarNuevoCliente,
     closeModal,
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },
