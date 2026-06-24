@@ -2246,6 +2246,8 @@ const LS_API = (() => {
     INVENTARIO:     'BD_INVENTARIO_GENERAL',
     CONCILIACION:   'CONCILIACION',
     DATA_INGRESOS:  'DATA_INGRESOS',
+    RECETAS:        'BD_RECETAS',
+    RECETAS_DET:    'BD_RECETAS_DETALLES',
   };
 
   // ── ÍNDICES DE COLUMNAS (base 0) ───────────────────────────
@@ -2651,7 +2653,7 @@ const LS_API = (() => {
   // Obtener recetas
   async function getRecetas() {
     try {
-      const rows = await leerHoja('BD_RECETAS');
+      const rows = await leerHoja(SHEETS.RECETAS);
       if (!rows) return [];
       return rows.slice(1)
         .filter(r => r.length > 0 && r[0])
