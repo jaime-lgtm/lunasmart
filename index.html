@@ -1153,6 +1153,7 @@
         <div class="nav-sec">Catálogos</div>
         <div class="nav-item" data-page="proveedores" onclick="go('proveedores',this)"><i class="ti ti-truck-delivery"></i><span class="nav-lbl">Proveedores</span></div>
         <div class="nav-item" data-page="catalogo" onclick="go('catalogo',this)"><i class="ti ti-package"></i><span class="nav-lbl">Artículos</span></div>
+        <div class="nav-item" data-page="recetas" onclick="go('recetas',this)"><i class="ti ti-chef-hat"></i><span class="nav-lbl">Recetas</span></div>
       </nav>
 
       <div class="sb-foot">
@@ -1670,7 +1671,42 @@
   </div>
 </div>
 
-
+<!-- PÁGINA: RECETAS -->
+<div id="p-recetas" class="page" data-screen-label="Recetas">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title"><i class="ti ti-chef-hat"></i>Recetas de producción</div>
+        <div class="card-sub">Gestiona recetas y costos de elaboración</div>
+      </div>
+      <div class="card-actions">
+        <button class="btn btn-primary btn-sm" onclick="LS_UI.abrirNuevaReceta()"><i class="ti ti-plus"></i>Nueva receta</button>
+      </div>
+    </div>
+    <div style="padding:0 18px 12px">
+      <div style="position:relative;max-width:460px">
+        <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--tx-4);font-size:16px"></i>
+        <input type="text" id="rec-buscar" placeholder="Buscar por nombre de receta..."
+          style="width:100%;padding:9px 12px 9px 36px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none">
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl" data-sortable>
+        <thead><tr>
+          <th class="sortable" data-type="text">Receta<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th>Categoría</th>
+          <th>Tipo</th>
+          <th class="sortable num" data-type="num">Costo elab.<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th class="sortable num" data-type="num">Por porción<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th>Porciones</th>
+          <th>Fecha</th>
+          <th>Acciones</th>
+        </tr></thead>
+        <tbody id="tabla-recetas"><tr><td colspan="8" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
         </div>
       </div>
@@ -2612,6 +2648,30 @@ const LS_API = (() => {
       }));
   }
 
+  // Obtener recetas
+  async function getRecetas() {
+    try {
+      const rows = await leerHoja('RECETAS');
+      if (!rows) return [];
+      return rows.slice(1)
+        .filter(r => r.length > 0 && r[0])
+        .map(r => ({
+          id:                 r[0] || '',
+          nombre:             r[1] || '',
+          categoria:          r[2] || '',
+          tipo:               r[3] || '',
+          tamano:             parseFloat(r[4]) || 0,
+          porciones:          parseFloat(r[5]) || 1,
+          clase:              r[6] || '',
+          fecha:              r[7] || '',
+          costo_elaboracion:  parseFloat(r[8]) || 0,
+        }));
+    } catch(e) {
+      console.error('Error cargando recetas:', e);
+      return [];
+    }
+  }
+
   // Obtener proveedores
   async function getProveedores() {
     const rows = await leerHoja(SHEETS.PROVEEDORES);
@@ -3380,7 +3440,7 @@ const LS_API = (() => {
   return {
     // Lectura
     getIngresos, getConciliacion, getFacturas,
-    getArticulosDetalle, getClientes, getProveedores,
+    getArticulosDetalle, getClientes, getProveedores, getRecetas,
     getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos,
     getVentasPorSucursal, aliasSucursal, nombreSucursal, getProductosVenta,
     // Escritura
@@ -5478,6 +5538,227 @@ const LS_UI = (() => {
   }
 
   // ══════════════════════════════════════════════════════════
+  // FORMULARIO — NUEVA RECETA
+  // ══════════════════════════════════════════════════════════
+  async function abrirNuevaReceta() {
+    // Cargar ingredientes disponibles del Catálogo
+    let artOpts = '';
+    try {
+      const prods = await LS_API.getCatalogo();
+      artOpts = prods.map(p => `<option value="${String(p.articulo).replace(/"/g,'&quot;')}">`).join('');
+    } catch(_) {}
+
+    openModal(`
+    <div class="modal-overlay" id="modal-receta" onclick="if(event.target===this)_cerrarModal()">
+      <div class="modal" style="max-width:600px;max-height:90vh;overflow-y:auto">
+        <div class="modal-header">
+          <div>
+            <div class="modal-title">Nueva Receta</div>
+            <div class="modal-sub">Registra una nueva receta de producción</div>
+          </div>
+          <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-body">
+
+          <!-- Datos básicos de receta -->
+          <div class="ff">
+            <label>Nombre de la receta</label>
+            <input type="text" id="rec-nombre" placeholder="Ej: Cheesecake Mango">
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="ff">
+              <label>Categoría</label>
+              <select id="rec-categoria">
+                <option value="BUENOS DÍAS">Buenos Días</option>
+                <option value="POSTRES">Postres</option>
+                <option value="ALIMENTOS">Alimentos</option>
+                <option value="BEBIDAS">Bebidas</option>
+                <option value="HOTCAKES Y WAFFLES">Hotcakes y Waffles</option>
+              </select>
+            </div>
+            <div class="ff">
+              <label>Tipo</label>
+              <select id="rec-tipo">
+                <option value="ALIMENTOS">Alimentos</option>
+                <option value="BEBIDAS">Bebidas</option>
+                <option value="POSTRES">Postres</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="ff">
+              <label>Tamaño/Presentación</label>
+              <input type="number" id="rec-tamano" placeholder="Ej: 354">
+            </div>
+            <div class="ff">
+              <label>Rendimiento (porciones)</label>
+              <input type="number" id="rec-porciones" placeholder="Ej: 8" value="1">
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="ff">
+              <label>Clase de Receta</label>
+              <select id="rec-clase">
+                <option value="Productos Vendibles">Productos Vendibles</option>
+                <option value="Preparaciones">Preparaciones</option>
+                <option value="Semielaborados">Semielaborados</option>
+              </select>
+            </div>
+            <div class="ff">
+              <label>Fecha de elaboración</label>
+              <input type="date" id="rec-fecha" value="${new Date().toISOString().split('T')[0]}">
+            </div>
+          </div>
+
+          <!-- Ingredientes -->
+          <div style="border:1px solid var(--line);border-radius:var(--r-lg);padding:14px 16px;margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <div style="font-size:12px;font-weight:600;color:var(--tx)">Ingredientes</div>
+              <button type="button" class="btn btn-sm" onclick="LS_UI.agregarLineaReceta()"><i class="ti ti-plus"></i>Agregar</button>
+            </div>
+            <div id="rec-lineas"></div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)">
+              <span style="color:var(--tx-3)">Costo total</span>
+              <span id="rec-costo-total" style="font-family:var(--mono);font-weight:600;color:var(--terra-claro);font-size:16px">$0.00</span>
+            </div>
+          </div>
+
+          <datalist id="rec-ingredientes-list">${artOpts}</datalist>
+
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
+          <button class="btn-save" onclick="LS_UI.guardarReceta()">
+            <i class="ti ti-device-floppy"></i> Guardar receta
+          </button>
+        </div>
+      </div>
+    </div>`);
+  }
+
+  function agregarLineaReceta() {
+    const cont = document.getElementById('rec-lineas');
+    if (!cont) return;
+    const div = document.createElement('div');
+    div.className = 'rec-linea';
+    div.style.cssText = 'display:grid;grid-template-columns:2fr 80px 80px 30px;gap:8px;margin-bottom:6px;align-items:center';
+    div.innerHTML = `
+      <input list="rec-ingredientes-list" class="rec-art" placeholder="Ingrediente..."
+        style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--tx);font-size:13px">
+      <input type="number" class="rec-cant" placeholder="Cantidad" min="0" step="0.5" value="1"
+        style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--tx);font-size:13px;font-family:var(--mono);text-align:center" oninput="LS_UI.calcRecetaCosto()">
+      <input type="text" class="rec-unidad" placeholder="Unidad" value="Gramos"
+        style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--tx);font-size:13px;text-align:center">
+      <button type="button" title="Quitar" onclick="this.closest('.rec-linea').remove();LS_UI.calcRecetaCosto()"
+        style="background:transparent;border:none;color:var(--rojo);cursor:pointer;font-size:16px">✕</button>`;
+    cont.appendChild(div);
+    div.querySelector('.rec-art').focus();
+  }
+
+  function calcRecetaCosto() {
+    // TODO: Implementar cálculo de costo en tiempo real
+    let sum = 0;
+    // Por ahora simplemente placeholder
+    const totEl = document.getElementById('rec-costo-total');
+    if (totEl) totEl.textContent = '$0.00';
+  }
+
+  async function guardarReceta() {
+    const nombre = document.getElementById('rec-nombre')?.value?.trim() || '';
+    if (!nombre) {
+      toast('Nombre requerido', 'Ingresa el nombre de la receta', 'err', 'ti-alert-circle');
+      return;
+    }
+
+    const porciones = parseFloat(document.getElementById('rec-porciones')?.value || 1) || 1;
+
+    // Recopilar ingredientes
+    const ingredientes = [...document.querySelectorAll('#rec-lineas .rec-linea')].map(l => ({
+      articulo:  (l.querySelector('.rec-art')?.value || '').trim(),
+      cantidad:  parseFloat(l.querySelector('.rec-cant')?.value || 0) || 0,
+      unidad:    (l.querySelector('.rec-unidad')?.value || '').trim(),
+    })).filter(d => d.articulo && d.cantidad > 0);
+
+    if (ingredientes.length === 0) {
+      toast('Sin ingredientes', 'Agrega al menos un ingrediente', 'err', 'ti-alert-circle');
+      return;
+    }
+
+    const datos = {
+      accion: 'registrarReceta',
+      datos: {
+        nombre:        nombre,
+        categoria:     document.getElementById('rec-categoria')?.value || '',
+        tipo:          document.getElementById('rec-tipo')?.value || '',
+        tamano:        parseFloat(document.getElementById('rec-tamano')?.value || 0) || 0,
+        porciones:     porciones,
+        clase:         document.getElementById('rec-clase')?.value || '',
+        fecha:         document.getElementById('rec-fecha')?.value || '',
+        ingredientes:  ingredientes,
+      }
+    };
+
+    const btn = document.querySelector('#modal-receta .btn-save');
+    const orig = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.9s linear infinite"></i> Guardando...'; }
+
+    try {
+      const result = await fetch('https://script.google.com/macros/s/AKfycbwWsUIXoYDN_XayVBNDk6pshHL81WtxA_whT_tjy8tOQGhqxpVsKFqk2a-kDZyZmCCk/exec', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(datos),
+        redirect: 'follow'
+      }).then(r => r.json()).catch(() => ({}));
+
+      if (result.status === 'ok') {
+        toast('Receta registrada', nombre, 'ok', 'ti-check');
+        _cerrarModal();
+        LS_API.invalidarCache();
+        LS_UI.renderRecetas();
+      } else {
+        toast('Error al guardar', result?.msg || 'Intenta de nuevo', 'err', 'ti-alert-circle');
+      }
+    } catch(err) {
+      toast('Error de conexión', err.message, 'err', 'ti-alert-circle');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+    }
+  }
+
+  async function renderRecetas() {
+    try {
+      const recetas = await LS_API.getRecetas();
+      const tbody = document.getElementById('tabla-recetas');
+      if (!tbody) return;
+
+      if (recetas.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--tx-4)">No hay recetas registradas</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = recetas.map(r => `
+        <tr>
+          <td><strong>${r.nombre || ''}</strong></td>
+          <td>${r.categoria || ''}</td>
+          <td>${r.tipo || ''}</td>
+          <td style="text-align:right;font-family:var(--mono)">${LS_API.formatMXNDec(r.costo_elaboracion || 0)}</td>
+          <td style="text-align:right;font-family:var(--mono)">${LS_API.formatMXNDec((r.costo_elaboracion || 0) / (r.porciones || 1))}</td>
+          <td style="text-align:center">${r.porciones || ''}</td>
+          <td style="font-size:12px;color:var(--tx-3)">${r.fecha || ''}</td>
+          <td style="text-align:center;font-size:14px">
+            <button class="btn-icon" title="Editar" onclick="alert('Función pendiente')" style="background:none;border:none;color:var(--azul);cursor:pointer"><i class="ti ti-edit"></i></button>
+          </td>
+        </tr>
+      `).join('');
+    } catch(e) {
+      console.error('Error cargando recetas:', e);
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════
   // FORMULARIO — NUEVA FACTURA
   // ══════════════════════════════════════════════════════════
   async function buildFormFactura(editData) {
@@ -6266,6 +6547,7 @@ const LS_UI = (() => {
       case 'inventario':   await renderInventario();   break;
       case 'proveedores':  await renderProveedores();   break;
       case 'catalogo':     await renderCatalogo();      break;
+      case 'recetas':      await renderRecetas();       break;
     }
   }
 
@@ -6301,6 +6583,7 @@ const LS_UI = (() => {
     verIngreso, editarIngreso, confirmarBorrarIngreso, ejecutarBorrarIngreso, buscarIngresos,
     calcIngreso, guardarIngreso, guardarFactura, agregarLineaVenta, calcVentaDetalle, autollenarPrecioVenta,
     agregarLineaVentaDirect, calcVentaDirectaTotal, agregarVendedor, guardarVentaDirecta, registrarNuevoCliente,
+    abrirNuevaReceta, agregarLineaReceta, calcRecetaCosto, guardarReceta, renderRecetas,
     closeModal,
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },
