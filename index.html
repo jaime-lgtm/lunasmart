@@ -5455,7 +5455,7 @@ const LS_UI = (() => {
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.9s linear infinite"></i> Guardando...'; }
 
     try {
-      const result = await fetch(CONFIG.APPS_SCRIPT_URL, {
+      const result = await fetch('https://script.google.com/macros/s/AKfycbwWsUIXoYDN_XayVBNDk6pshHL81WtxA_whT_tjy8tOQGhqxpVsKFqk2a-kDZyZmCCk/exec', {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(datos),
@@ -6410,8 +6410,14 @@ enterApp = function(u) {
   const perm = aplicarPermisos(u.role);
   setTimeout(() => {
     toast('Bienvenido, ' + u.name.split(' ')[0], 'Sesión iniciada como ' + u.role, 'ok', 'ti-confetti');
-    LS_UI.onPageChange(perm.inicio);
-    go(perm.inicio, document.querySelector('[data-page="'+perm.inicio+'"]'));
+    // Si hay un hash válido, restaurarlo; si no, ir a perm.inicio
+    const hash = window.location.hash.substring(1);
+    if (hash && PAGES[hash]) {
+      restaurarPaginaDelHash();
+    } else {
+      LS_UI.onPageChange(perm.inicio);
+      go(perm.inicio, document.querySelector('[data-page="'+perm.inicio+'"]'));
+    }
   }, 350);
 };
 
