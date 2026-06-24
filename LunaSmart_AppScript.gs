@@ -39,6 +39,8 @@ const HOJAS = {
   CONCILIACION:   'CONCILIACION',
   DATA_INGRESOS:  'DATA_INGRESOS',
   VENTAS_PARROT:  'VENTAS_PARROT',        // ventas por artículo (de Parrot)
+  RECETAS:        'RECETAS',
+  RECETAS_DET:    'RECETAS DETALLES',
 };
 
 // ── JSON OUTPUT ─────────────────────────────────────────────────────────────
@@ -206,6 +208,7 @@ function doPost(e) {
     case 'actualizarCatalogoArticulo': return _actualizarCatalogoArticulo(datos);
     case 'borrarCatalogoArticulo':     return _borrarCatalogoArticulo(datos);
     case 'registrarCliente':           return _registrarCliente(datos);
+    case 'registrarReceta':            return _registrarReceta(datos);
     case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || datos.sucursal || 'CASA DE LA CULTURA', body.desde || datos.desde, body.hasta || datos.hasta);
     case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(datos);
     default: return _err('Acción desconocida: ' + accion);
@@ -723,6 +726,61 @@ function _registrarCliente(b) {
       b.diasCredito  || 0,
     ]);
     return _json({ status: 'ok', idCliente: id });
+  } catch(e) {
+    return _err(e.message);
+  }
+}
+
+function _registrarReceta(b) {
+  try {
+    const shRecetas = _getSheet(HOJAS.RECETAS);
+    const shDetalles = _getSheet(HOJAS.RECETAS_DET);
+
+    // Verificar si la receta ya existe
+    const datos = shRecetas.getDataRange().getValues();
+    for (let i = 1; i < datos.length; i++) {
+      if (String(datos[i][1]).trim().toLowerCase() === String(b.nombre || '').trim().toLowerCase()) {
+        return _json({ status: 'ok', msg: 'La receta ya existe', idReceta: datos[i][0] });
+      }
+    }
+
+    // Generar ID para la receta
+    const id = _nextId(HOJAS.RECETAS, 'INGRESOS');
+
+    // Calcular costo total de ingredientes
+    let costoTotal = 0;
+    if (b.ingredientes && Array.isArray(b.ingredientes)) {
+      // TODO: Buscar costos de ingredientes desde Catálogo
+      // Por ahora, simplemente guardar los ingredientes
+    }
+
+    // Insertar receta en hoja RECETAS
+    _escribirFila(shRecetas, [
+      id,
+      b.nombre           || '',
+      b.categoria        || '',
+      b.tipo             || '',
+      b.tamano           || 0,
+      b.porciones        || 1,
+      b.clase            || '',
+      b.fecha            || '',
+      costoTotal,        // costo_elaboracion
+    ]);
+
+    // Insertar detalles de ingredientes en hoja RECETAS_DETALLES
+    if (b.ingredientes && Array.isArray(b.ingredientes)) {
+      for (let ing of b.ingredientes) {
+        _escribirFila(shDetalles, [
+          id,              // id_receta
+          ing.articulo     || '',
+          ing.cantidad     || 0,
+          ing.unidad       || '',
+          0,               // costo_en_receta (se calcula después)
+        ]);
+      }
+    }
+
+    return _json({ status: 'ok', idReceta: id });
   } catch(e) {
     return _err(e.message);
   }
