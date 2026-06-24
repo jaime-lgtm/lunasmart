@@ -755,6 +755,82 @@ function dumpSesionesDia() {
   });
 }
 
+/**
+ * BÚSQUEDA RÁPIDA DE RANGO: resumible (pausa antes de 6 min).
+ * Busca día a día, muestra resumen de cuáles días tienen datos.
+ * Si timeout: ejecuta de nuevo para continuar donde se pausó.
+ */
+function dumpSesionesRango() {
+  var DESDE = '2026-01-01';   // ← edita la fecha de inicio
+  var HASTA = '2026-05-31';   // ← edita la fecha de fin
+  var props = PropertiesService.getScriptProperties();
+  var cursor = props.getProperty('dumpRango_cursor') || DESDE;
+  var diasStr = props.getProperty('dumpRango_dias') || '';
+  var diasConDatos = diasStr ? diasStr.split(',') : [];
+  var t0 = Date.now();
+  var dias = 0;
+
+  Logger.log('🔍 Buscando datos de Parrot desde ' + cursor + ' hasta ' + HASTA + '...');
+  if (diasConDatos.length > 0) {
+    Logger.log('(continuando desde búsqueda anterior: ' + diasConDatos.length + ' días ya encontrados)');
+  }
+  Logger.log('');
+
+  var fecha = cursor;
+  while (fecha <= HASTA) {
+    var ini = _isoToDate(fecha, false);
+    var fin = _isoToDate(fecha, true);
+    var ses = _parrotGet('/v1/cashier-sessions', ini, fin, 50, 0);
+    if (ses.length > 0) {
+      diasConDatos.push(fecha);
+      Logger.log('✅ ' + fecha + ': ' + ses.length + ' sesiones');
+    }
+    fecha = _siguienteDiaISO(fecha);
+    dias++;
+    props.setProperty('dumpRango_cursor', fecha);
+    props.setProperty('dumpRango_dias', diasConDatos.join(','));
+
+    // Rate limit de Parrot: máx 15 req/min → 4 seg entre peticiones
+    Utilities.sleep(4000);
+
+    // Pausa si se acerca al límite de 6 min (deja margen antes de timeout)
+    if (Date.now() - t0 > 4 * 60 * 1000) {
+      Logger.log('');
+      Logger.log('⏸ Pausado. Procesados ' + dias + ' día(s) en esta corrida.');
+      Logger.log('→ Vuelve a ejecutar dumpSesionesRango para continuar desde ' + fecha + '.');
+      return;
+    }
+  }
+
+  // Limpiar propiedades cuando termina
+  props.deleteProperty('dumpRango_cursor');
+  props.deleteProperty('dumpRango_dias');
+
+  Logger.log('');
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log('📊 RESUMEN FINAL');
+  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  Logger.log('Rango buscado: ' + DESDE + ' a ' + HASTA);
+  Logger.log('Días totales con datos: ' + diasConDatos.length);
+  if (diasConDatos.length > 0) {
+    Logger.log('Primer día: ' + diasConDatos[0]);
+    Logger.log('Último día: ' + diasConDatos[diasConDatos.length-1]);
+    Logger.log('');
+    Logger.log('✅ Parrot tiene datos. Para importar, usa en backfillParrot:');
+    Logger.log('   var DESDE = \'' + diasConDatos[0] + '\';');
+    Logger.log('   var HASTA = \'' + diasConDatos[diasConDatos.length-1] + '\';');
+  } else {
+    Logger.log('⚠️ NO se encontraron datos en este rango.');
+  }
+}
+
+function dumpSesionesRangoReset() {
+  var props = PropertiesService.getScriptProperties();
+  props.deleteProperty('dumpRango_cursor');
+  props.deleteProperty('dumpRango_dias');
+  Logger.log('🔄 Búsqueda reiniciada. La próxima ejecución empieza desde el inicio.');
+}
+
 function diagnosticarParrot() {
   // Ventana de 24h (la API exige máximo 48h entre start y end)
   var hoy = new Date();
@@ -1100,6 +1176,42 @@ function sincronizarParrotDias(dias) {
   Logger.log(r.getContent());
 }
 
+// BACKFILL JUNIO COMPLETO 2026 — pausable y resumible
+function backfillJunioCompleto() {
+  var DESDE = '2026-06-01';   // 1 de junio
+  var HASTA = '2026-06-30';   // 30 de junio
+  var props = PropertiesService.getScriptProperties();
+  var cursor = props.getProperty('backfill_junio_cursor') || DESDE;
+  var t0 = Date.now();
+  var dias = 0;
+
+  Logger.log('🔄 Sincronizando junio completo: ' + cursor + ' → ' + HASTA);
+
+  while (cursor <= HASTA) {
+    _sincronizarParrot('CASA DE LA CULTURA', cursor, cursor);  // 1 día
+    dias++;
+    cursor = _siguienteDiaISO(cursor);
+    props.setProperty('backfill_junio_cursor', cursor);
+
+    // Si se pasa de 4.5 minutos, pausar y guardar avance
+    if (Date.now() - t0 > 4.5 * 60 * 1000) {
+      Logger.log('⏸ Pausado. Procesados ' + dias + ' día(s).\n' +
+                 '→ Vuelve a ejecutar backfillJunioCompleto para continuar desde ' + cursor + '.');
+      return;
+    }
+  }
+
+  // Limpiar cuando termina
+  props.deleteProperty('backfill_junio_cursor');
+  Logger.log('✅ Junio 2026 completamente sincronizado (' + dias + ' día(s) en total).');
+}
+
+// Si necesitas reiniciar el backfill:
+function backfillJunioReset() {
+  PropertiesService.getScriptProperties().deleteProperty('backfill_junio_cursor');
+  Logger.log('🔄 Avance de junio reiniciado. La próxima ejecución empieza desde el 01-jun.');
+}
+
 // BACKFILL: jala un rango de fechas completo. EDITA DESDE/HASTA y ejecuta.
 // Máximo ~3 semanas por corrida (límite de 6 min de Apps Script).
 // ════════════════════════════════════════════════════════════════
@@ -1115,12 +1227,15 @@ var SUCURSALES_OFICIALES = ['COFFEE & ROASTERS','CASA DE LA CULTURA','HELFY FÜ'
 function _canonSucursal(v, vaciaDefault) {
   var t = String(v == null ? '' : v).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
   if (!t) return vaciaDefault || '';
+  // PARROT: Sueño de Luna (Coah) → CASA DE LA CULTURA
+  if (/SUENO DE LUNA|SUEÑO DE LUNA|\(COAH\)/.test(t)) return 'CASA DE LA CULTURA';
+  // MANUAL: Coffee & Roasters (solo cuando NO viene de Parrot)
+  if (/COFFEE|COOFFEE|ROASTER/.test(t)) return 'COFFEE & ROASTERS';
+  // Otras sucursales
   if (/CULTURA/.test(t)) return 'CASA DE LA CULTURA';
   if (/HELFY/.test(t)) return 'HELFY FÜ';
   if (/BARBACOA|MENUDO|BENJAMIN|JAIME/.test(t)) return 'BARBACOA Y MENUDO';
   if (/EVENTO/.test(t)) return 'EVENTOS';
-  if (/COFFEE|COOFFEE|ROASTER/.test(t)) return 'COFFEE & ROASTERS';
-  if (/SUENO DE LUNA/.test(t)) return 'COFFEE & ROASTERS';
   return v; // desconocido: dejar igual
 }
 
@@ -1188,9 +1303,8 @@ function estandarizarSucursales() {
 // Backfill RESUMIBLE: procesa día por día, se pausa antes del límite de 6 min
 // y guarda el avance. Solo vuelve a correr backfillParrot hasta que diga COMPLETO.
 function backfillParrot() {
-  var DESDE = '2026-06-01';   // ← primer día a sincronizar (solo se usa la 1ª vez)
-  var tz = Session.getScriptTimeZone();
-  var HASTA = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  var DESDE = '2026-01-02';   // ← CAMBIO: edita la fecha de inicio
+  var HASTA = '2026-05-30';   // ← CAMBIO: edita la fecha de fin
   var props = PropertiesService.getScriptProperties();
   var cursor = props.getProperty('backfill_cursor') || DESDE;
   var t0 = Date.now();
@@ -1323,7 +1437,11 @@ function borrarCortesParrot() {
   filasDet.sort(function(a,b){return b-a;}).forEach(function(f){ shDet.deleteRow(f); });
   filasIng.sort(function(a,b){return b-a;}).forEach(function(f){ shIng.deleteRow(f); });
 
+  // Reiniciar cursor de backfill
+  PropertiesService.getScriptProperties().deleteProperty('backfill_cursor');
+
   Logger.log('🗑️ Borrados ' + filasIng.length + ' cortes y ' + filasDet.length + ' productos de Parrot.');
+  Logger.log('✅ Cursor de backfill reiniciado. Listo para re-importar.');
 }
 
 // ── REGISTRAR ARTÍCULO EN CATÁLOGO MAESTRO ────────────────────────────────
