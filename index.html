@@ -7,7 +7,7 @@
 
   <!-- ══ PWA — App instalable en celular/tablet ══ -->
   <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#1a1008">
+  <meta name="theme-color" content="#1a1008"
   <!-- iOS (iPhone / iPad) -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -6860,7 +6860,7 @@ window.addEventListener('load', () => {
       document.getElementById('login').style.display  = 'none';
       document.getElementById('app').style.display    = 'block';
       const perm = aplicarPermisos(u.role);   // aplicar permisos al restaurar sesión
-      setTimeout(() => { go(perm.inicio, document.querySelector('[data-page="'+perm.inicio+'"]')); }, 200);
+      setTimeout(() => { const _h = window.location.hash.substring(1); if (_h && PAGES[_h]) { restaurarPaginaDelHash(); } else { go(perm.inicio, document.querySelector('[data-page="'+perm.inicio+'"\']')); } }, 200);
     } catch(e) {}
   }
 });
