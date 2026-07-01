@@ -2419,7 +2419,7 @@ const LS_API = (() => {
       // válido que doPost() parsea con JSON.parse(e.postData.contents).
       // Enviar los datos TAMBIÉN aplanados al nivel superior (además de en .datos)
       // para que funcione con cualquier versión del Apps Script (lee b.fecha o b.datos.fecha).
-      const cuerpo = { accion, token: CONFIG.WRITE_TOKEN, ...payload };
+      const cuerpo = { accion, token: 'SDL-luna-w-7Kq9mT2pXr5vB', ...payload };
       if (payload && payload.datos && typeof payload.datos === 'object') {
         Object.assign(cuerpo, payload.datos);
       }
