@@ -5466,7 +5466,44 @@ const LS_UI = (() => {
       </div>`);
   }
 
-  async function guardarVentaDirecta() {
+  async function guardarNuevoCliente() {
+  const nombreInput = document.getElementById('nuevo-cliente-nombre');
+  const nombre = nombreInput?.value?.trim();
+  if (!nombre) {
+    LS_UI.toast('El nombre del cliente es requerido', 'warn', 'ti-alert-circle');
+    return;
+  }
+  const contacto = document.getElementById('nuevo-cliente-contacto')?.value?.trim() || '';
+  const correo = document.getElementById('nuevo-cliente-correo')?.value?.trim() || '';
+
+  try {
+    const btn = document.getElementById('btn-guardar-nuevo-cliente');
+    if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+    
+    await registrarCliente({ nombre, contacto, correo });
+    
+    // Add to datalist so it's immediately available
+    const dl = document.getElementById('clientes-list');
+    if (dl) {
+      const opt = document.createElement('option');
+      opt.value = nombre;
+      dl.appendChild(opt);
+    }
+    
+    // Set the cliente input to the new name
+    const clienteInput = document.getElementById('vdta-cliente');
+    if (clienteInput) clienteInput.value = nombre;
+    
+    // Close any open modal
+    document.querySelector('.modal-overlay')?.remove();
+    
+    LS_UI.toast('Cliente "' + nombre + '" registrado exitosamente', 'ok', 'ti-user-check');
+  } catch (err) {
+    LS_UI.toast('Error al registrar cliente: ' + err.message, 'err', 'ti-alert-circle');
+  }
+}
+
+async function guardarVentaDirecta() {
     const n = id => parseFloat(document.getElementById(id)?.value || 0) || 0;
     const s = id => document.getElementById(id)?.value || '';
 
@@ -5499,6 +5536,7 @@ const LS_UI = (() => {
     }
     const datos = {
       accion: 'registrarIngreso',
+      token: CONFIG.WRITE_TOKEN,
       datos: {
         fecha: s('vdta-fecha'),
         sucursal: s('vdta-sucursal'),
@@ -6636,7 +6674,7 @@ const LS_UI = (() => {
     buscarFacturas, verFactura, editarFactura, confirmarBorrarFactura, ejecutarBorrarFactura,
     verIngreso, editarIngreso, confirmarBorrarIngreso, ejecutarBorrarIngreso, buscarIngresos,
     calcIngreso, guardarIngreso, guardarFactura, agregarLineaVenta, calcVentaDetalle, autollenarPrecioVenta,
-    agregarLineaVentaDirect, calcVentaDirectaTotal, agregarVendedor, guardarVentaDirecta, registrarNuevoCliente,
+    agregarLineaVentaDirect, calcVentaDirectaTotal, agregarVendedor, guardarVentaDirecta, abrirFormularioNuevoCliente, guardarNuevoCliente, registrarNuevoCliente,
     abrirNuevaReceta, agregarLineaReceta, actualizarIngrediente, calcRecetaCosto, guardarReceta, renderRecetas,
     closeModal,
     // Abrir modales
