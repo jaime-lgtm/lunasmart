@@ -1534,7 +1534,7 @@
     <div class="kpi"><div class="kpi-top"><div class="kpi-label">Valor inventario</div><div class="kpi-ico d"><i class="ti ti-coin"></i></div></div><div class="kpi-val" id="inv-valor">—</div><div class="kpi-sub">Costo de reposición</div></div>
   </div>
   <div class="card">
-    <div class="card-head"><div><div class="card-title"><i class="ti ti-alert-octagon"></i>Alertas de stock crítico</div><div class="card-sub">Insumos por debajo del mínimo</div></div><div class="card-actions"><span class="filter-note" id="fn-inventario"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><button class="btn btn-primary btn-sm" onclick="toast('Orden creada','Solicitud de reabastecimiento enviada','ok','ti-shopping-cart-plus')"><i class="ti ti-shopping-cart-plus"></i>Generar orden</button></div></div>
+    <div class="card-head"><div><div class="card-title"><i class="ti ti-alert-octagon"></i>Alertas de stock crítico</div><div class="card-sub">Insumos por debajo del mínimo</div></div><div class="card-actions"><span class="filter-note" id="fn-inventario"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><button class="btn btn-outline btn-sm" onclick="LS_UI.abrirRegistrarInventario()"><i class="ti ti-clipboard-list"></i>Registrar inventario</button><button class="btn btn-primary btn-sm" onclick="toast('Orden creada','Solicitud de reabastecimiento enviada','ok','ti-shopping-cart-plus')"><i class="ti ti-shopping-cart-plus"></i>Generar orden</button></div></div>
     <div class="tbl-wrap">
       <table class="tbl" data-sortable data-filterable="inventario">
         <thead><tr>
@@ -2289,10 +2289,10 @@ const LS_API = (() => {
       CATEGORIA: 7, SUBCATEGORIA: 8, PROVEEDOR: 9,
     },
     INVENTARIO: {
-      ID: 0, SUCURSAL: 1, CATEGORIA: 2, UBICACION: 3,
-      ARTICULO: 4, STOCK_FISICO: 5, FALTANTE: 6,
-      STOCK_SUGERIDO: 7, UNIDAD: 8, PRESENTACION: 9,
-      COSTO_UNIT: 10, COSTO_RESURTIDO: 11,
+      ID: 0, SUCURSAL: 1, CONTEO_VISUAL: 2, CATEGORIA: 3, UBICACION: 4,
+      ARTICULO: 5, STOCK_FISICO: 6, FALTANTE: 7,
+      STOCK_SUGERIDO: 8, UNIDAD: 9, PRESENTACION: 10,
+      COSTO_UNIT: 11, CONVERSION: 12, COSTO_RESURTIDO: 13, TIMESTAMP: 14,
     },
   };
 
@@ -2752,10 +2752,21 @@ const LS_API = (() => {
         unidad:         r[COLS.INVENTARIO.UNIDAD]          || '',
         costoUnit:      parseNum(r[COLS.INVENTARIO.COSTO_UNIT]),
         costoResurtido: parseNum(r[COLS.INVENTARIO.COSTO_RESURTIDO]),
-      }));
-  }
+          ultimaActualizacion: r[COLS.INVENTARIO.TIMESTAMP] || '',
+        }));
+      }
 
   // Obtener categorías
+  async function getSucursalesInventario() {
+    const inv = await getInventario();
+    const set = new Set(inv.map(a => a.sucursal).filter(Boolean));
+    return Array.from(set).sort();
+  }
+
+  async function guardarInventarioFisico(sucursal, items) {
+    return escribirViaScript('guardarInventarioFisico', { hoja: SHEETS.INVENTARIO, datos: { sucursal, items } });
+  }
+
   async function getCategorias() {
     const rows = await leerHoja(SHEETS.CATEGORIAS);
     if (!rows) return [];
@@ -3444,13 +3455,13 @@ const LS_API = (() => {
     // Lectura
     getIngresos, getConciliacion, getFacturas,
     getArticulosDetalle, getClientes, getProveedores, getRecetas,
-    getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos,
+    getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos, getSucursalesInventario,
     getVentasPorSucursal, aliasSucursal, nombreSucursal, getProductosVenta,
     // Escritura
     registrarIngreso, registrarIngresoCompleto, actualizarIngreso, borrarIngreso, getIngresoDetalle,
     registrarFactura, registrarFacturaCompleta, actualizarFactura, borrarFactura,
     registrarProveedor, registrarCliente, actualizarProveedor, borrarProveedor, actualizarCatalogoArticulo, borrarCatalogoArticulo,
-    registrarArticuloDetalle, registrarCatalogoArticulo, registrarCliente,
+    registrarArticuloDetalle, registrarCatalogoArticulo, registrarCliente, guardarInventarioFisico,
     // Agregaciones
     getKPIsDashboard, getTopArticulos, getTopProveedores,
     getTopComprados, getProductosVendidos,
@@ -6662,11 +6673,119 @@ async function guardarVentaDirecta() {
     onPageChange(pageId);
   }
 
+  async function abrirRegistrarInventario() {
+    _modal(`
+      <div class="modal" style="max-width:720px">
+        <div class="modal-header">
+          <div>
+            <div class="modal-title"><i class="ti ti-clipboard-list" style="margin-right:6px;color:var(--terra-claro)"></i>Registrar inventario físico</div>
+            <div class="modal-sub">Selecciona la sucursal y captura el stock físico contado</div>
+          </div>
+          <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="ff" style="max-width:320px;margin-bottom:14px">
+            <label>Sucursal</label>
+            <select id="reginv-sucursal" onchange="LS_UI.filtrarArticulosInventarioModal(this.value)">
+              <option value="">Cargando sucursales...</option>
+            </select>
+          </div>
+          <div class="tbl-wrap" style="max-height:360px;overflow:auto">
+            <table class="tbl">
+              <thead><tr>
+                <th>Artículo</th><th>Unidad de medida</th><th style="text-align:right">Stock físico</th>
+              </tr></thead>
+              <tbody id="reginv-tbody">
+                <tr><td colspan="3" style="text-align:center;padding:28px;color:var(--tx-4)">Selecciona una sucursal para ver sus artículos</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
+          <button class="btn-save" id="reginv-btn-guardar" onclick="LS_UI.guardarRegistroInventario()" disabled>
+            <i class="ti ti-device-floppy"></i> Guardar registro
+          </button>
+        </div>
+      </div>`);
+
+    const sel = document.getElementById('reginv-sucursal');
+    try {
+      const sucursales = await LS_API.getSucursalesInventario();
+      if (sel) {
+        sel.innerHTML = '<option value="">Seleccionar sucursal...</option>' +
+          sucursales.map(s => `<option value="${s}">${s}</option>`).join('');
+      }
+    } catch(e) {
+      if (sel) sel.innerHTML = '<option value="">Error al cargar sucursales</option>';
+    }
+  }
+
+  async function filtrarArticulosInventarioModal(sucursal) {
+    const tbody = document.getElementById('reginv-tbody');
+    const btnGuardar = document.getElementById('reginv-btn-guardar');
+    if (!tbody) return;
+    if (!sucursal) {
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:28px;color:var(--tx-4)">Selecciona una sucursal para ver sus artículos</td></tr>';
+      if (btnGuardar) btnGuardar.disabled = true;
+      return;
+    }
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:28px;color:var(--tx-3)"><i class="ti ti-loader-2 spin"></i> Cargando artículos...</td></tr>';
+    const inv = await LS_API.getInventario();
+    const articulos = inv.filter(a => a.sucursal === sucursal);
+    if (articulos.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:28px;color:var(--tx-4)">No hay artículos para esta sucursal</td></tr>';
+      if (btnGuardar) btnGuardar.disabled = true;
+      return;
+    }
+    tbody.innerHTML = articulos.map(a => `
+      <tr data-id="${a.id}">
+        <td style="font-weight:500">${a.articulo}</td>
+        <td style="color:var(--tx-3)">${a.unidad}</td>
+        <td style="text-align:right">
+          <input type="number" step="any" min="0" class="reginv-input" data-id="${a.id}" value="${a.stockFisico || 0}" style="width:110px;text-align:right">
+        </td>
+      </tr>`).join('');
+    if (btnGuardar) btnGuardar.disabled = false;
+  }
+
+  async function guardarRegistroInventario() {
+    const sel = document.getElementById('reginv-sucursal');
+    const sucursal = sel ? sel.value : '';
+    if (!sucursal) { toast('Falta sucursal', 'Selecciona una sucursal', 'err', 'ti-alert-circle'); return; }
+
+    const inputs = document.querySelectorAll('.reginv-input');
+    const items = Array.from(inputs).map(inp => ({
+      id: inp.getAttribute('data-id'),
+      stockFisico: parseFloat(inp.value || 0),
+    }));
+    if (items.length === 0) { toast('Sin artículos', 'No hay artículos para registrar', 'err', 'ti-alert-circle'); return; }
+
+    const btn = document.getElementById('reginv-btn-guardar');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 spin"></i> Guardando...'; }
+
+    try {
+      const res = await LS_API.guardarInventarioFisico(sucursal, items);
+      if (res && res.status === 'ok') {
+        toast('Inventario registrado', (res.actualizados || items.length) + ' artículos actualizados', 'ok', 'ti-check');
+        _cerrarModal();
+        renderInventario();
+      } else {
+        toast('Error', (res && res.msg) || 'No se pudo guardar el inventario', 'err', 'ti-alert-circle');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy"></i> Guardar registro'; }
+      }
+    } catch(e) {
+      toast('Error', 'No se pudo guardar el inventario', 'err', 'ti-alert-circle');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy"></i> Guardar registro'; }
+    }
+  }
+
   // API pública del módulo UI
   return {
     renderDashboard, renderConciliacion, renderIngresos,
     renderFacturas, renderArticulos, renderRentabilidad,
     renderGastos, renderBalance, renderInventario, renderProveedores, renderCatalogo,
+    abrirRegistrarInventario, filtrarArticulosInventarioModal, guardarRegistroInventario,
     buscarProveedores, verProveedor, editarProveedor, nuevoProveedor, guardarProveedor, confirmarBorrarProveedor, ejecutarBorrarProveedor,
     buscarCatalogo, verArticulo, editarArticulo, nuevoArticulo, guardarArticulo, setModoArticulos, confirmarBorrarArticulo, ejecutarBorrarArticulo,
     onPageChange, reloadPage, invalidarCacheYRecargar, recargarPagina,
