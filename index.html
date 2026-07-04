@@ -2739,10 +2739,13 @@ const LS_API = (() => {
   async function getInventario() {
     const rows = await leerHoja(SHEETS.INVENTARIO);
     if (!rows) return [];
-    return rows.slice(1)
-      .filter(r => r.length > 4 && r[COLS.INVENTARIO.ARTICULO])
-      .map(r => ({
+    return rows
+      .map((r, idx) => ({ r, fila: idx + 1 }))
+      .slice(1)
+      .filter(x => x.r.length > 4 && x.r[COLS.INVENTARIO.ARTICULO])
+      .map(x => { const r = x.r; return ({
         id:             r[COLS.INVENTARIO.ID]              || '',
+        fila:           x.fila,
         sucursal:       r[COLS.INVENTARIO.SUCURSAL]        || '',
         categoria:      r[COLS.INVENTARIO.CATEGORIA]       || '',
         articulo:       r[COLS.INVENTARIO.ARTICULO]        || '',
@@ -2753,7 +2756,7 @@ const LS_API = (() => {
         costoUnit:      parseNum(r[COLS.INVENTARIO.COSTO_UNIT]),
         costoResurtido: parseNum(r[COLS.INVENTARIO.COSTO_RESURTIDO]),
           ultimaActualizacion: r[COLS.INVENTARIO.TIMESTAMP] || '',
-        }));
+        }); });
       }
 
   // Obtener categorías
@@ -6743,7 +6746,7 @@ async function guardarVentaDirecta() {
         <td style="font-weight:500">${a.articulo}</td>
         <td style="color:var(--tx-3)">${a.unidad}</td>
         <td style="text-align:right">
-          <input type="number" step="any" min="0" class="reginv-input" data-id="${a.id}" value="${a.stockFisico || 0}" style="width:110px;text-align:right">
+          <input type="number" step="any" min="0" class="reginv-input" data-fila="${a.fila}" value="${a.stockFisico || 0}" style="width:110px;text-align:right">
         </td>
       </tr>`).join('');
     if (btnGuardar) btnGuardar.disabled = false;
@@ -6756,7 +6759,7 @@ async function guardarVentaDirecta() {
 
     const inputs = document.querySelectorAll('.reginv-input');
     const items = Array.from(inputs).map(inp => ({
-      id: inp.getAttribute('data-id'),
+      fila: parseInt(inp.getAttribute('data-fila'), 10),
       stockFisico: parseFloat(inp.value || 0),
     }));
     if (items.length === 0) { toast('Sin artículos', 'No hay artículos para registrar', 'err', 'ti-alert-circle'); return; }
