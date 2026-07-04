@@ -6678,7 +6678,7 @@ async function guardarVentaDirecta() {
 
   async function abrirRegistrarInventario() {
     _modal(`
-      <div class="modal" style="max-width:720px">
+      <div class="modal" style="max-width:760px">
         <div class="modal-header">
           <div>
             <div class="modal-title"><i class="ti ti-clipboard-list" style="margin-right:6px;color:var(--terra-claro)"></i>Registrar inventario físico</div>
@@ -6693,13 +6693,13 @@ async function guardarVentaDirecta() {
               <option value="">Cargando sucursales...</option>
             </select>
           </div>
-          <div class="tbl-wrap" style="max-height:360px;overflow:auto">
+          <div class="tbl-wrap" style="max-height:400px;overflow:auto">
             <table class="tbl">
               <thead><tr>
-                <th>Artículo</th><th>Unidad de medida</th><th style="text-align:right">Stock físico</th>
+                <th>Artículo</th><th>Unidad de medida</th><th style="text-align:right">Stock sugerido</th><th style="text-align:right">Stock físico</th>
               </tr></thead>
               <tbody id="reginv-tbody">
-                <tr><td colspan="3" style="text-align:center;padding:28px;color:var(--tx-4)">Selecciona una sucursal para ver sus artículos</td></tr>
+                <tr><td colspan="4" style="text-align:center;padding:28px;color:var(--tx-4)">Selecciona una sucursal para ver sus artículos</td></tr>
               </tbody>
             </table>
           </div>
@@ -6729,26 +6729,42 @@ async function guardarVentaDirecta() {
     const btnGuardar = document.getElementById('reginv-btn-guardar');
     if (!tbody) return;
     if (!sucursal) {
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:28px;color:var(--tx-4)">Selecciona una sucursal para ver sus artículos</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(--tx-4)">Selecciona una sucursal para ver sus artículos</td></tr>';
       if (btnGuardar) btnGuardar.disabled = true;
       return;
     }
-    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:28px;color:var(--tx-3)"><i class="ti ti-loader-2 spin"></i> Cargando artículos...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(--tx-3)"><i class="ti ti-loader-2 spin"></i> Cargando artículos...</td></tr>';
     const inv = await LS_API.getInventario();
     const articulos = inv.filter(a => a.sucursal === sucursal);
     if (articulos.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:28px;color:var(--tx-4)">No hay artículos para esta sucursal</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(--tx-4)">No hay artículos para esta sucursal</td></tr>';
       if (btnGuardar) btnGuardar.disabled = true;
       return;
     }
-    tbody.innerHTML = articulos.map(a => `
+    const ordenados = articulos.slice().sort((a, b) => {
+      const ca = (a.categoria || 'SIN CATEGORÍA').localeCompare(b.categoria || 'SIN CATEGORÍA');
+      if (ca !== 0) return ca;
+      return (a.articulo || '').localeCompare(b.articulo || '');
+    });
+    let catActual = null;
+    let html = '';
+    ordenados.forEach(a => {
+      const cat = a.categoria || 'SIN CATEGORÍA';
+      if (cat !== catActual) {
+        catActual = cat;
+        html += `<tr class="reginv-cat-header"><td colspan="4" style="background:var(--cafe-card-hi);font-weight:600;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--tx-2);padding:8px 10px;border-top:1px solid var(--line)">${cat}</td></tr>`;
+      }
+      html += `
       <tr data-id="${a.id}">
         <td style="font-weight:500">${a.articulo}</td>
         <td style="color:var(--tx-3)">${a.unidad}</td>
+        <td style="text-align:right;color:var(--tx-3)">${a.stockSugerido || 0}</td>
         <td style="text-align:right">
           <input type="number" step="any" min="0" class="reginv-input" data-fila="${a.fila}" value="${a.stockFisico || 0}" style="width:110px;text-align:right">
         </td>
-      </tr>`).join('');
+      </tr>`;
+    });
+    tbody.innerHTML = html;
     if (btnGuardar) btnGuardar.disabled = false;
   }
 
