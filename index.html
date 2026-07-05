@@ -1530,12 +1530,12 @@
 <div id="p-inventario" class="page" data-screen-label="Inventario">
   <div class="kpis">
     <div class="kpi"><div class="kpi-top"><div class="kpi-label">Artículos catálogo</div><div class="kpi-ico"><i class="ti ti-packages"></i></div></div><div class="kpi-val" id="inv-total-articulos">—</div><div class="kpi-sub">Insumos y productos</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Stock crítico</div><div class="kpi-ico r"><i class="ti ti-alert-octagon"></i></div></div><div class="kpi-val dn" id="inv-criticos">—</div><div class="kpi-sub">Bajo mínimo</div></div>
+    <div class="kpi" onclick="LS_UI.abrirStockCritico()" style="cursor:pointer" title="Ver artículos críticos"><div class="kpi-top"><div class="kpi-label">Stock crítico</div><div class="kpi-ico r"><i class="ti ti-alert-octagon"></i></div></div><div class="kpi-val dn" id="inv-criticos">—</div><div class="kpi-sub">Bajo mínimo</div></div>
     <div class="kpi"><div class="kpi-top"><div class="kpi-label">Registros inventario</div><div class="kpi-ico a"><i class="ti ti-clipboard-list"></i></div></div><div class="kpi-val am" id="inv-registros">—</div><div class="kpi-sub">En BD_INVENTARIO</div></div>
     <div class="kpi"><div class="kpi-top"><div class="kpi-label">Valor inventario</div><div class="kpi-ico d"><i class="ti ti-coin"></i></div></div><div class="kpi-val" id="inv-valor">—</div><div class="kpi-sub">Costo de reposición</div></div>
   </div>
   <div class="card">
-    <div class="card-head"><div><div class="card-title"><i class="ti ti-alert-octagon"></i>Alertas de stock crítico</div><div class="card-sub">Insumos por debajo del mínimo</div></div><div class="card-actions"><span class="filter-note" id="fn-inventario"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><button class="btn btn-outline btn-sm" onclick="LS_UI.abrirRegistrarInventario()"><i class="ti ti-clipboard-list"></i>Registrar inventario</button><button class="btn btn-primary btn-sm" onclick="toast('Orden creada','Solicitud de reabastecimiento enviada','ok','ti-shopping-cart-plus')"><i class="ti ti-shopping-cart-plus"></i>Generar orden</button></div></div>
+    <div class="card-head"><div><div class="card-title"><i class="ti ti-alert-octagon"></i>Alertas de stock crítico</div><div class="card-sub">Insumos por debajo del mínimo</div></div><div class="card-actions"><span class="filter-note" id="fn-inventario"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><button class="btn btn-outline btn-sm" onclick="LS_UI.abrirRegistrarInventario()"><i class="ti ti-clipboard-list"></i>Registrar inventario</button><button class="btn btn-primary btn-sm" onclick="LS_UI.abrirGenerarOrden()"><i class="ti ti-shopping-cart-plus"></i>Generar orden</button></div></div>
     <div class="tbl-wrap">
       <table class="tbl" data-sortable data-filterable="inventario">
         <thead><tr>
@@ -6800,12 +6800,120 @@ async function guardarVentaDirecta() {
     }
   }
 
-  // API pública del módulo UI
+async function abrirStockCritico() {
+      const alertas = await LS_API.getAlertasInventario();
+      if (!alertas.length) { toast('Todo en orden', 'No hay artículos por debajo del mínimo', 'ok', 'ti-check'); return; }
+      const filas = alertas.map(a => {
+        const cls = a.urgente ? 'err' : 'warn';
+        const txt = a.urgente ? 'Urgente' : 'Reponer';
+        return `<tr>
+          <td style="font-weight:500">${a.articulo}</td>
+          <td style="color:var(--tx-3)">${a.categoria}</td>
+          <td>${a.sucursal}</td>
+          <td style="font-family:var(--mono);color:${a.urgente ? 'var(--rojo)' : 'var(--ambar)'};font-weight:600">${a.stockFisico} ${a.unidad}</td>
+          <td style="font-family:var(--mono);color:var(--tx-3)">${a.stockSugerido} ${a.unidad}</td>
+          <td><span class="badge ${cls}">${txt}</span></td>
+  </tr>`;
+      }).join('');
+      _modal(`
+        <div class="modal" style="max-width:820px">
+          <div class="modal-header">
+            <div>
+              <div class="modal-title"><i class="ti ti-alert-octagon" style="margin-right:6px;color:var(--rojo)"></i>Artículos en stock crítico</div>
+              <div class="modal-sub">${alertas.length} artículo(s) por debajo de su mínimo</div>
+</div>
+            <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
+</div>
+          <div class="modal-body" style="max-height:60vh;overflow:auto">
+            <table class="tbl">
+              <thead><tr><th>Artículo</th><th>Categoría</th><th>Sucursal</th><th>Stock actual</th><th>Mínimo</th><th>Estado</th></tr></thead>
+              <tbody>${filas}</tbody>
+</table>
+  </div>
+          <div class="modal-footer">
+            <button class="btn btn-primary btn-sm" onclick="_cerrarModal(); LS_UI.abrirGenerarOrden()"><i class="ti ti-shopping-cart-plus"></i> Generar orden de compra</button>
+  </div>
+</div>
+      `);
+    }
+  
+    async function abrirGenerarOrden() {
+      const alertas = await LS_API.getAlertasInventario();
+      if (!alertas.length) { toast('Todo en orden', 'No hay artículos por debajo del mínimo que ordenar', 'ok', 'ti-check'); return; }
+      const catalogo = await LS_API.getCatalogo();
+      const provMap = {};
+      catalogo.forEach(c => { provMap[(c.articulo || '').trim().toUpperCase()] = c.proveedor || ''; });
+      const grupos = {};
+      alertas.forEach(a => {
+        const prov = provMap[(a.articulo || '').trim().toUpperCase()] || 'Sin proveedor asignado';
+        (grupos[prov] = grupos[prov] || []).push(a);
+      });
+      const proveedores = Object.keys(grupos).sort();
+      const fecha = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
+      let bodyHtml = '';
+      let texto = `*Orden de compra sugerida — Sueño de Luna*
+  ${fecha}
+  
+  `;
+      proveedores.forEach(prov => {
+        const items = grupos[prov];
+        const filasHtml = items.map(a => `<tr><td>${a.articulo}</td><td>${a.sucursal}</td><td style="text-align:right">${a.stockFisico} ${a.unidad}</td><td style="text-align:right">${a.stockSugerido} ${a.unidad}</td></tr>`).join('');
+        bodyHtml += `<div style="margin-bottom:16px"><div style="font-weight:700;margin-bottom:6px">${prov} <span style="color:var(--tx-4);font-weight:400">(${items.length} art.)</span></div><table class="tbl"><thead><tr><th>Artículo</th><th>Sucursal</th><th style="text-align:right">Stock actual</th><th style="text-align:right">Mínimo</th></tr></thead><tbody>${filasHtml}</tbody></table></div>`;
+        texto += `*${prov}*
+  `;
+        items.forEach(a => { texto += `• ${a.articulo} — ${a.stockFisico} de ${a.stockSugerido} ${a.unidad} (${a.sucursal})
+  `; });
+        texto += `
+  `;
+      });
+      window.__ordenTextoWA = texto;
+      window.__ordenHtmlPDF = bodyHtml;
+      window.__ordenFecha = fecha;
+      _modal(`
+        <div class="modal" style="max-width:840px">
+          <div class="modal-header">
+            <div>
+              <div class="modal-title"><i class="ti ti-shopping-cart-plus" style="margin-right:6px;color:var(--terra-claro)"></i>Orden de compra sugerida</div>
+              <div class="modal-sub">${alertas.length} artículo(s), agrupados por proveedor</div>
+  </div>
+            <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
+  </div>
+          <div class="modal-body" style="max-height:55vh;overflow:auto">${bodyHtml}</div>
+          <div class="modal-footer">
+            <button class="btn btn-outline btn-sm" onclick="LS_UI.imprimirOrdenCompra()"><i class="ti ti-printer"></i> Descargar / Imprimir PDF</button>
+            <button class="btn btn-primary btn-sm" onclick="LS_UI.enviarOrdenWhatsApp()"><i class="ti ti-brand-whatsapp"></i> Enviar por WhatsApp</button>
+  </div>
+</div>
+      `);
+    }
+  
+    function imprimirOrdenCompra() {
+      const w = window.open('', '_blank');
+      if (!w) { toast('Error', 'Habilita las ventanas emergentes para imprimir', 'err', 'ti-alert-circle'); return; }
+      w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Orden de compra</title>
+        <style>body{font-family:Arial,sans-serif;padding:24px;color:#222}h1{font-size:18px;margin-bottom:2px}p{color:#666;margin-top:0}
+        table{width:100%;border-collapse:collapse;margin-bottom:18px}th,td{border:1px solid #ccc;padding:4px 8px;font-size:12px;text-align:left}
+        th{background:#f2f2f2}</style></head><body>
+        <h1>Orden de compra sugerida — Sueño de Luna</h1><p>${window.__ordenFecha || ''}</p>
+        ${window.__ordenHtmlPDF || ''}
+        </body></html>`);
+      w.document.close();
+      w.focus();
+      setTimeout(() => w.print(), 350);
+    }
+  
+    function enviarOrdenWhatsApp() {
+      const numero = '528781404532';
+      const url = 'https://wa.me/' + numero + '?text=' + encodeURIComponent(window.__ordenTextoWA || '');
+      window.open(url, '_blank');
+    }
+  
+    // API pública del módulo UI
   return {
     renderDashboard, renderConciliacion, renderIngresos,
     renderFacturas, renderArticulos, renderRentabilidad,
     renderGastos, renderBalance, renderInventario, renderProveedores, renderCatalogo,
-    abrirRegistrarInventario, filtrarArticulosInventarioModal, guardarRegistroInventario,
+    abrirRegistrarInventario, filtrarArticulosInventarioModal, guardarRegistroInventario, abrirStockCritico, abrirGenerarOrden, imprimirOrdenCompra, enviarOrdenWhatsApp,
     buscarProveedores, verProveedor, editarProveedor, nuevoProveedor, guardarProveedor, confirmarBorrarProveedor, ejecutarBorrarProveedor,
     buscarCatalogo, verArticulo, editarArticulo, nuevoArticulo, guardarArticulo, setModoArticulos, confirmarBorrarArticulo, ejecutarBorrarArticulo,
     onPageChange, reloadPage, invalidarCacheYRecargar, recargarPagina,
