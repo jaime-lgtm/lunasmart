@@ -6737,6 +6737,7 @@ async function guardarVentaDirecta() {
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(--tx-3)"><i class="ti ti-loader-2 spin"></i> Cargando artículos...</td></tr>';
     const inv = await LS_API.getInventario();
     const articulos = inv.filter(a => a.sucursal === sucursal);
+    window.__reginvArticulos = articulos;
     if (articulos.length === 0) {
       tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(--tx-4)">No hay artículos para esta sucursal</td></tr>';
       if (btnGuardar) btnGuardar.disabled = true;
@@ -6770,34 +6771,75 @@ async function guardarVentaDirecta() {
   }
 
   async function guardarRegistroInventario() {
-    const sel = document.getElementById('reginv-sucursal');
-    const sucursal = sel ? sel.value : '';
-    if (!sucursal) { toast('Falta sucursal', 'Selecciona una sucursal', 'err', 'ti-alert-circle'); return; }
+        const sel = document.getElementById('reginv-sucursal');
+      const sucursal = sel ? sel.value : '';
+      if (!sucursal) { toast('Falta sucursal', 'Selecciona una sucursal', 'err', 'ti-alert-circle'); return; }
 
-    const inputs = document.querySelectorAll('.reginv-input');
-    const items = Array.from(inputs).map(inp => ({
-      fila: parseInt(inp.getAttribute('data-fila'), 10),
-      stockFisico: parseFloat(inp.value || 0),
-    }));
-    if (items.length === 0) { toast('Sin artículos', 'No hay artículos para registrar', 'err', 'ti-alert-circle'); return; }
+      const inputs = document.querySelectorAll('.reginv-input');
+      const items = Array.from(inputs).map(inp => ({
+        fila: parseInt(inp.getAttribute('data-fila'), 10),
+        stockFisico: parseFloat(inp.value || 0),
+  }));
+      if (items.length === 0) { toast('Sin artículos', 'No hay artículos para registrar', 'err', 'ti-alert-circle'); return; }
 
-    const btn = document.getElementById('reginv-btn-guardar');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 spin"></i> Guardando...'; }
+      const btn = document.getElementById('reginv-btn-guardar');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 spin"></i> Guardando...'; }
 
-    try {
-      const res = await LS_API.guardarInventarioFisico(sucursal, items);
-      if (res && res.status === 'ok') {
-        toast('Inventario registrado', (res.actualizados || items.length) + ' artículos actualizados', 'ok', 'ti-check');
-        _cerrarModal();
-        renderInventario();
-      } else {
-        toast('Error', (res && res.msg) || 'No se pudo guardar el inventario', 'err', 'ti-alert-circle');
+      try {
+        const res = await LS_API.guardarInventarioFisico(sucursal, items);
+        if (res && res.status === 'ok') {
+          toast('Inventario registrado', (res.actualizados || items.length) + ' artículos actualizados', 'ok', 'ti-check');
+                         const catalogo = window.__reginvArticulos || [];
+          const fecha = new Date().toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
+          let texto = '*Registro de inventario*\nAlmacén: ' + sucursal + '\nFecha: ' + fecha + '\n\n';
+                  items.forEach(it => {
+            const art = catalogo.find(a => a.fila === it.fila);
+            const nombre = art ? art.articulo : ('Artículo fila ' + it.fila);
+            const unidad = art ? (art.unidad || '') : '';
+            texto += '• ' + nombre + ': ' + it.stockFisico + ' ' + unidad + '\n';
+  });
+          window.__reginvTextoWA = texto;
+          window.__reginvAlmacen = sucursal;
+          window.__reginvCantidad = items.length;
+          _cerrarModal();
+          renderInventario();
+          abrirResumenRegistroInventario();
+        } else {
+          toast('Error', (res && res.msg) || 'No se pudo guardar el inventario', 'err', 'ti-alert-circle');
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy"></i> Guardar registro'; }
+        }
+      } catch(e) {
+          toast('Error', 'No se pudo guardar el inventario', 'err', 'ti-alert-circle');
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy"></i> Guardar registro'; }
-      }
-    } catch(e) {
-      toast('Error', 'No se pudo guardar el inventario', 'err', 'ti-alert-circle');
-      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy"></i> Guardar registro'; }
-    }
+  }
+  }
+
+    function abrirResumenRegistroInventario() {
+      const sucursal = window.__reginvAlmacen || '';
+      const cantidad = window.__reginvCantidad || 0;
+      _modal(`
+        <div class="modal" style="max-width:420px">
+          <div class="modal-header">
+            <div>
+              <div class="modal-title"><i class="ti ti-clipboard-check" style="margin-right:6px;color:var(--terra-claro)"></i>Registro guardado</div>
+              <div class="modal-sub">${cantidad} artículo(s) — ${sucursal}</div>
+</div>
+            <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
+  </div>
+          <div class="modal-body">
+            <p style="color:var(--tx-3);font-size:13px">¿Quieres enviar este registro de inventario por WhatsApp?</p>
+  </div>
+          <div class="modal-footer">
+            <button class="btn-cancel" onclick="_cerrarModal()">Cerrar</button>
+            <button class="btn-save" onclick="LS_UI.enviarRegistroInventarioWhatsApp()"><i class="ti ti-brand-whatsapp"></i> Enviar por WhatsApp</button>
+  </div>
+</div>`);
+  }
+
+    function enviarRegistroInventarioWhatsApp() {
+      const numero = '528781404532';
+      const url = 'https://wa.me/' + numero + '?text=' + encodeURIComponent(window.__reginvTextoWA || '');
+      window.open(url, '_blank');
   }
 
 async function abrirStockCritico(sucursal) {
@@ -6947,7 +6989,7 @@ async function abrirGenerarOrden(sucursal) {
     renderDashboard, renderConciliacion, renderIngresos,
     renderFacturas, renderArticulos, renderRentabilidad,
     renderGastos, renderBalance, renderInventario, renderProveedores, renderCatalogo,
-    abrirRegistrarInventario, filtrarArticulosInventarioModal, guardarRegistroInventario, abrirStockCritico, abrirGenerarOrden, imprimirOrdenCompra, enviarOrdenWhatsApp,
+    abrirRegistrarInventario, filtrarArticulosInventarioModal, guardarRegistroInventario, enviarRegistroInventarioWhatsApp, abrirStockCritico, abrirGenerarOrden, imprimirOrdenCompra, enviarOrdenWhatsApp,
     buscarProveedores, verProveedor, editarProveedor, nuevoProveedor, guardarProveedor, confirmarBorrarProveedor, ejecutarBorrarProveedor,
     buscarCatalogo, verArticulo, editarArticulo, nuevoArticulo, guardarArticulo, setModoArticulos, confirmarBorrarArticulo, ejecutarBorrarArticulo,
     onPageChange, reloadPage, invalidarCacheYRecargar, recargarPagina,
