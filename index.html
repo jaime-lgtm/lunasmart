@@ -2780,6 +2780,10 @@ const LS_API = (() => {
     return escribirViaScript('actualizarMinMaxInventario', { hoja: SHEETS.INVENTARIO, datos: { items } });
   }
 
+          async function agregarArticuloInventario(datos) {
+        return escribirViaScript('agregarArticuloInventario', { hoja: SHEETS.INVENTARIO, datos });
+          }
+
   async function getCategorias() {
     const rows = await leerHoja(SHEETS.CATEGORIAS);
     if (!rows) return [];
@@ -3480,7 +3484,7 @@ const LS_API = (() => {
     // Agregaciones
     getKPIsDashboard, getTopArticulos, getTopProveedores,
     getTopComprados, getProductosVendidos,
-    getTendenciaVentas, getMetaMes, getVentaPorTurno,
+    getTendenciaVentas, getMetaMes, getVentaPorTurno, agregarArticuloInventario,
     getGastoPorCategoria, getGastoPorSubcategoria, getResumenMensual, getAlertasInventario,
     // Utilidades
     parseNum, formatMXN, formatMXNDec, formatPct, hoy, mesFiltro, getRangoPeriodo,
@@ -7039,6 +7043,7 @@ async function abrirGenerarOrden(sucursal) {
           <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button></div>
           <div class="modal-body" style="max-height:65vh;overflow:auto">
           <input type="text" id="inv-cat-buscar" placeholder="Buscar artículo..." style="width:100%;padding:9px 12px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none" oninput="LS_UI.buscarCatalogoInventario(this.value)">
+                    <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="LS_UI.abrirAgregarArticuloInventario()"><i class="ti ti-plus"></i> Agregar artículo</button>
           <div class="seg" style="margin:12px 0"><button class="on" onclick="LS_UI.filtrarCatalogoInventario('todos', this)">Todos</button><button onclick="LS_UI.filtrarCatalogoInventario('critico', this)">Stock crítico</button><button onclick="LS_UI.filtrarCatalogoInventario('sobre', this)">Sobre-inventariado</button><button onclick="LS_UI.filtrarCatalogoInventario('ok', this)">Niveles controlados</button></div>
           <table class="tbl"><thead><tr><th>Artículo</th><th>Sucursales</th><th>Estado</th><th></th></tr></thead>
           <tbody id="inv-cat-tbody"></tbody></table>
@@ -7108,13 +7113,91 @@ async function abrirGenerarOrden(sucursal) {
           toast('Error', 'No se pudo guardar', 'err');
   }
   }
+  async function abrirAgregarArticuloInventario() {
+        _modal2(`<div class="modal" style="max-width:520px"><div class="modal-header"><div class="modal-title"><i class="ti ti-package"></i> Agregar artículo</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body" id="agr-art-body"><div style="text-align:center;padding:30px 0;color:var(--tx-3)">Cargando catálogo maestro…</div></div></div>`);
+          try {
+          var filas = await leerHoja('Catálogo Maestro');
+          var nombres = [];
+            for (var i = 1; i < filas.length; i++) {
+            var n = String(filas[i][0] || '').trim();
+            if (n) nombres.push(n);
+  }
+          nombres = Array.from(new Set(nombres)).sort(function(a,b){ return a.localeCompare(b, 'es'); });
+  
+          var sucursales = [];
+          try {
+            var base = window._invCatBase || [];
+            var setS = {};
+            base.forEach(function(g){ g.filas.forEach(function(r){ if (r.sucursal) setS[r.sucursal] = true; }); });
+            sucursales = Object.keys(setS).sort();
+  } catch(e2) {}
+          if (!sucursales.length) sucursales = ['COFFEE ROASTERS','MATRIZ','EVENTOS','SUC. CASA DE LA CULTURA'];
+  
+          var body = document.getElementById('agr-art-body');
+          if (!body) return;
+          body.innerHTML = '<div class="ff"><label>Artículo (Catálogo Maestro)</label><select id="agr-articulo">' +
+            '<option value="">— Selecciona un artículo —</option>' +
+            nombres.map(function(n){ return '<option value="'+ n.replace(/"/g,'&quot;') +'">'+ n +'</option>'; }).join('') +
+            '</select></div>' +
+            '<div class="ff"><label>Sucursal</label><select id="agr-sucursal">' +
+            sucursales.map(function(s){ return '<option value="'+ s.replace(/"/g,'&quot;') +'">'+ s +'</option>'; }).join('') +
+            '</select></div>' +
+  
+            '<div class="ff"><label>Ubicación (opcional)</label><input id="agr-ubicacion" type="text" placeholder="Almacén, barra, bodega…"></div>' +
+            '<div style="display:flex;gap:10px"><div class="ff" style="flex:1"><label>Stock inicial</label><input id="agr-stock" type="number" step="any" value="0"></div>' +
+            '<div class="ff" style="flex:1"><label>Mínimo</label><input id="agr-minimo" type="number" step="any" value="0"></div>' +
+            '<div class="ff" style="flex:1"><label>Máximo (sugerido)</label><input id="agr-maximo" type="number" step="any" value="0"></div></div>' +
+  
+            '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">' +
+            '<button class="btn" onclick="_cerrarModal2()">Cancelar</button>' +
+            '<button class="btn btn-primary" onclick="LS_UI.guardarNuevoArticuloInventario()"><i class="ti ti-check"></i> Guardar</button></div>';
+        } catch (e) {
+          toast('Error', 'No se pudo cargar el Catálogo Maestro', 'err');
+  }
+  }
+  
+      async function guardarNuevoArticuloInventario() {
+        var elA = document.getElementById('agr-articulo');
+        var elS = document.getElementById('agr-sucursal');
+        var elU = document.getElementById('agr-ubicacion');
+        var elSt = document.getElementById('agr-stock');
+        var elMin = document.getElementById('agr-minimo');
+        var elMax = document.getElementById('agr-maximo');
+        var articulo = elA ? elA.value : '';
+        var sucursal = elS ? elS.value : '';
+  
+        if (!articulo) { toast('Falta información', 'Selecciona un artículo del catálogo', 'err'); return; }
+        if (!sucursal) { toast('Falta información', 'Selecciona una sucursal', 'err'); return; }
+        try {
+          var r = await LS_API.agregarArticuloInventario({
+            articulo: articulo,
+            sucursal: sucursal,
+            ubicacion: elU ? elU.value : '',
+            stockInicial: elSt ? elSt.value : 0,
+            minimo: elMin ? elMin.value : 0,
+            maximo: elMax ? elMax.value : 0
+          });
+  
+          if (r && r.status === 'ok') {
+            toast('Listo', 'Artículo agregado a inventario', 'ok');
+            _cerrarModal2();
+            try { renderInventario(); } catch(e) {}
+            await abrirCatalogoInventario();
+  } else {
+            toast('Error', (r && r.msg) || 'No se pudo agregar el artículo', 'err');
+          }
+  } catch (e) {
+          toast('Error', 'No se pudo guardar', 'err');
+  }
+      }
+  
   // API pública del módulo UI
   return {
     renderDashboard, renderConciliacion, renderIngresos,
     renderFacturas, renderArticulos, renderRentabilidad,
     renderGastos, renderBalance, renderInventario, renderProveedores, renderCatalogo,
     abrirRegistrarInventario, filtrarArticulosInventarioModal, guardarRegistroInventario, enviarRegistroInventarioWhatsApp, abrirStockCritico, abrirGenerarOrden, imprimirOrdenCompra, enviarOrdenWhatsApp,
-    abrirCatalogoInventario, buscarCatalogoInventario, filtrarCatalogoInventario, verArticuloInventario, editarArticuloInventario, guardarMinMaxInventario,
+    abrirCatalogoInventario, buscarCatalogoInventario, filtrarCatalogoInventario, verArticuloInventario, editarArticuloInventario, guardarMinMaxInventario, abrirAgregarArticuloInventario, guardarNuevoArticuloInventario,
     buscarProveedores, verProveedor, editarProveedor, nuevoProveedor, guardarProveedor, confirmarBorrarProveedor, ejecutarBorrarProveedor,
     buscarCatalogo, verArticulo, editarArticulo, nuevoArticulo, guardarArticulo, setModoArticulos, confirmarBorrarArticulo, ejecutarBorrarArticulo,
     onPageChange, reloadPage, invalidarCacheYRecargar, recargarPagina,
