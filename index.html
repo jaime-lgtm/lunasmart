@@ -1529,7 +1529,7 @@
 <!-- ════════ INVENTARIO ════════ -->
 <div id="p-inventario" class="page" data-screen-label="Inventario">
   <div class="kpis">
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Artículos catálogo</div><div class="kpi-ico"><i class="ti ti-packages"></i></div></div><div class="kpi-val" id="inv-total-articulos">—</div><div class="kpi-sub">Insumos y productos</div></div>
+    <div class="kpi" onclick="LS_UI.abrirCatalogoInventario()" style="cursor:pointer" title="Buscar y editar artículos"><div class="kpi-top"><div class="kpi-label">Artículos catálogo</div><div class="kpi-ico"><i class="ti ti-packages"></i></div></div><div class="kpi-val" id="inv-total-articulos">—</div><div class="kpi-sub">Insumos y productos</div></div>
     <div class="kpi" onclick="LS_UI.abrirStockCritico()" style="cursor:pointer" title="Ver artículos críticos"><div class="kpi-top"><div class="kpi-label">Stock crítico</div><div class="kpi-ico r"><i class="ti ti-alert-octagon"></i></div></div><div class="kpi-val dn" id="inv-criticos">—</div><div class="kpi-sub">Bajo mínimo</div></div>
     <div class="kpi"><div class="kpi-top"><div class="kpi-label">Registros inventario</div><div class="kpi-ico a"><i class="ti ti-clipboard-list"></i></div></div><div class="kpi-val am" id="inv-registros">—</div><div class="kpi-sub">En BD_INVENTARIO</div></div>
     <div class="kpi"><div class="kpi-top"><div class="kpi-label">Valor inventario</div><div class="kpi-ico d"><i class="ti ti-coin"></i></div></div><div class="kpi-val" id="inv-valor">—</div><div class="kpi-sub">Costo de reposición</div></div>
@@ -2776,6 +2776,10 @@ const LS_API = (() => {
     return escribirViaScript('sumarStockPorCompra', { hoja: SHEETS.INVENTARIO, datos: { items } });
   }
 
+  async function actualizarMinMaxInventario(items) {
+    return escribirViaScript('actualizarMinMaxInventario', { hoja: SHEETS.INVENTARIO, datos: { items } });
+  }
+
   async function getCategorias() {
     const rows = await leerHoja(SHEETS.CATEGORIAS);
     if (!rows) return [];
@@ -3472,6 +3476,7 @@ const LS_API = (() => {
     registrarFactura, registrarFacturaCompleta, actualizarFactura, borrarFactura,
     registrarProveedor, registrarCliente, actualizarProveedor, borrarProveedor, actualizarCatalogoArticulo, borrarCatalogoArticulo,
     registrarArticuloDetalle, registrarCatalogoArticulo, registrarCliente, guardarInventarioFisico, sumarStockPorCompra,
+    actualizarMinMaxInventario,
     // Agregaciones
     getKPIsDashboard, getTopArticulos, getTopProveedores,
     getTopComprados, getProductosVendidos,
@@ -6996,12 +7001,120 @@ async function abrirGenerarOrden(sucursal) {
       window.open(url, '_blank');
     }
   
-    // API pública del módulo UI
+        function _estInv(r) {
+                var min = parseFloat(r.stockMinimo) || 0;
+                var max = parseFloat(r.stockSugerido) || 0;
+                var st = parseFloat(r.stockFisico) || 0;
+        if (st < min) return 'critico';
+        if (max > 0 && st > max) return 'sobre';
+        return 'ok';
+  }
+      function _estInvBadge(e) {
+        if (e === 'critico') return '<span class="badge err">Crítico</span>';
+        if (e === 'sobre') return '<span class="badge warn">Sobre-inventariado</span>';
+        return '<span class="badge">Controlado</span>';
+      }
+      function _estGrupoInv(g) {
+        var es = g.filas.map(_estInv);
+        if (es.includes('critico')) return 'critico';
+        if (es.includes('sobre')) return 'sobre';
+        return 'ok';
+  }
+      async function abrirCatalogoInventario() {
+              var datos = await LS_API.getInventario();
+              var mapa = {};
+              datos.forEach(function(r) {
+                        var k = _norm(r.articulo || '');
+          if (!mapa[k]) mapa[k] = { articulo: r.articulo, filas: [] };
+          mapa[k].filas.push(r);
+        });
+        var lista = Object.keys(mapa).map(function(k) { return mapa[k]; });
+        lista.sort(function(a, b) { return a.articulo.localeCompare(b.articulo); });
+        lista.forEach(function(g, i) { g._i = i; });
+        window._invCatBase = lista;
+        window._invCatFiltro = 'todos';
+        _modal(`<div class="modal" style="max-width:900px">
+          <div class="modal-header"><div><div class="modal-title"><i class="ti ti-search" style="margin-right:6px"></i>Catálogo de inventario</div>
+          <div class="modal-sub">${lista.length} artículo(s) único(s)</div></div>
+          <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button></div>
+          <div class="modal-body" style="max-height:65vh;overflow:auto">
+          <input type="text" id="inv-cat-buscar" placeholder="Buscar artículo..." style="width:100%;padding:9px 12px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none" oninput="LS_UI.buscarCatalogoInventario(this.value)">
+          <div class="seg" style="margin:12px 0"><button class="on" onclick="LS_UI.filtrarCatalogoInventario('todos', this)">Todos</button><button onclick="LS_UI.filtrarCatalogoInventario('critico', this)">Stock crítico</button><button onclick="LS_UI.filtrarCatalogoInventario('sobre', this)">Sobre-inventariado</button><button onclick="LS_UI.filtrarCatalogoInventario('ok', this)">Niveles controlados</button></div>
+          <table class="tbl"><thead><tr><th>Artículo</th><th>Sucursales</th><th>Estado</th><th></th></tr></thead>
+          <tbody id="inv-cat-tbody"></tbody></table>
+</div></div>`);
+        _pintarCatalogoInventario(lista);
+  }
+      function _pintarCatalogoInventario(lista) {
+              if (!lista.length) {
+                        setEl('inv-cat-tbody', '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(--tx-4)">Sin resultados</td></tr>');
+          return;
+  }
+        setEl('inv-cat-tbody', lista.map(function(g) {
+          var e = _estGrupoInv(g);
+          return '<tr><td style="font-weight:500">' + g.articulo + '</td><td style="color:var(--tx-3)">' + g.filas.length + '</td><td>' + _estInvBadge(e) + '</td><td style="white-space:nowrap"><button class="icon-btn" title="Ver" onclick="LS_UI.verArticuloInventario(' + g._i + ')"><i class="ti ti-eye"></i></button><button class="icon-btn" title="Editar" onclick="LS_UI.editarArticuloInventario(' + g._i + ')"><i class="ti ti-pencil"></i></button></td></tr>';
+        }).join(''));
+      }
+      function _aplicarFiltroInv(lista) {
+              var f = window._invCatFiltro || 'todos';
+              if (f === 'todos') return lista;
+              return lista.filter(function(g) { return _estGrupoInv(g) === f; });
+      }
+      function buscarCatalogoInventario(q) {
+              var base = window._invCatBase || [];
+        var t = _norm(q || '');
+        var filtrada = t ? base.filter(function(g) { return _norm(g.articulo).includes(t); }) : base;
+        _pintarCatalogoInventario(_aplicarFiltroInv(filtrada));
+  }
+      function filtrarCatalogoInventario(f, btnEl) {
+        window._invCatFiltro = f;
+        if (btnEl && btnEl.parentElement) {
+          Array.from(btnEl.parentElement.children).forEach(function(b) { b.classList.remove('on'); });
+          btnEl.classList.add('on');
+  }
+        var q = document.getElementById('inv-cat-buscar');
+        buscarCatalogoInventario(q ? q.value : '');
+      }
+      function verArticuloInventario(idx) {
+              var g = (window._invCatBase || [])[idx];
+              if (!g) return;
+              var filas = g.filas.map(function(r) {
+                        return '<tr><td>' + r.sucursal + '</td><td style="font-family:var(--mono)">' + r.stockFisico + ' ' + (r.unidad || '') + '</td><td style="font-family:var(--mono)">' + (r.stockMinimo || 0) + '</td><td style="font-family:var(--mono)">' + (r.stockSugerido || 0) + '</td><td>' + _estInvBadge(_estInv(r)) + '</td></tr>';
+  }).join('');
+        _modal2('<div class="modal" style="max-width:640px"><div class="modal-header"><div class="modal-title"><i class="ti ti-package" style="margin-right:6px"></i>' + g.articulo + '</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body"><table class="tbl"><thead><tr><th>Sucursal</th><th>Stock actual</th><th>Mínimo</th><th>Máximo</th><th>Estado</th></tr></thead><tbody>' + filas + '</tbody></table></div><div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal2()">Cerrar</button><button class="btn-save" onclick="_cerrarModal2();LS_UI.editarArticuloInventario(' + idx + ')">Editar</button></div></div>');
+  }
+      function editarArticuloInventario(idx) {
+              var g = (window._invCatBase || [])[idx];
+              if (!g) return;
+              var filas = g.filas.map(function(r) {
+                        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)"><div style="flex:1">' + r.sucursal + '<div style="color:var(--tx-4);font-size:12px">Stock actual: ' + r.stockFisico + ' ' + (r.unidad || '') + '</div></div><div class="ff" style="width:110px"><label>Mínimo</label><input type="number" step="any" class="einv-min" data-fila="' + r.fila + '" value="' + (r.stockMinimo || 0) + '"></div><div class="ff" style="width:110px"><label>Máximo</label><input type="number" step="any" class="einv-max" data-fila="' + r.fila + '" value="' + (r.stockSugerido || 0) + '"></div></div>';
+  }).join('');
+        _modal2('<div class="modal" style="max-width:640px"><div class="modal-header"><div class="modal-title"><i class="ti ti-pencil" style="margin-right:6px"></i>Editar ' + g.articulo + '</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body">' + filas + '</div><div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarMinMaxInventario(' + idx + ')">Guardar cambios</button></div></div>');
+  }
+      async function guardarMinMaxInventario(idx) {
+        var mins = document.querySelectorAll('.einv-min');
+        var maxs = document.querySelectorAll('.einv-max');
+        var items = [];
+        mins.forEach(function(el, i) {
+          items.push({ fila: el.getAttribute('data-fila'), minimo: el.value, maximo: maxs[i] ? maxs[i].value : '' });
+  });
+        try {
+          await LS_API.actualizarMinMaxInventario(items);
+          toast('Guardado', 'Mínimo y máximo actualizados', 'ok');
+          _cerrarModal2();
+          try { renderInventario(); } catch (e) {}
+          await abrirCatalogoInventario();
+        } catch (e) {
+          toast('Error', 'No se pudo guardar', 'err');
+  }
+  }
+  // API pública del módulo UI
   return {
     renderDashboard, renderConciliacion, renderIngresos,
     renderFacturas, renderArticulos, renderRentabilidad,
     renderGastos, renderBalance, renderInventario, renderProveedores, renderCatalogo,
     abrirRegistrarInventario, filtrarArticulosInventarioModal, guardarRegistroInventario, enviarRegistroInventarioWhatsApp, abrirStockCritico, abrirGenerarOrden, imprimirOrdenCompra, enviarOrdenWhatsApp,
+    abrirCatalogoInventario, buscarCatalogoInventario, filtrarCatalogoInventario, verArticuloInventario, editarArticuloInventario, guardarMinMaxInventario,
     buscarProveedores, verProveedor, editarProveedor, nuevoProveedor, guardarProveedor, confirmarBorrarProveedor, ejecutarBorrarProveedor,
     buscarCatalogo, verArticulo, editarArticulo, nuevoArticulo, guardarArticulo, setModoArticulos, confirmarBorrarArticulo, ejecutarBorrarArticulo,
     onPageChange, reloadPage, invalidarCacheYRecargar, recargarPagina,
