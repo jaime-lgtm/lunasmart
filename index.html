@@ -7062,21 +7062,23 @@ async function abrirGenerarOrden(sucursal) {
           <input type="text" id="inv-cat-buscar" placeholder="Buscar artículo..." style="width:100%;padding:9px 12px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none" oninput="LS_UI.buscarCatalogoInventario(this.value)">
                     <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="LS_UI.abrirAgregarArticuloInventario()"><i class="ti ti-plus"></i> Agregar artículo</button>
           <div class="seg" style="margin:12px 0"><button class="on" onclick="LS_UI.filtrarCatalogoInventario('todos', this)">Todos</button><button onclick="LS_UI.filtrarCatalogoInventario('critico', this)">Stock crítico</button><button onclick="LS_UI.filtrarCatalogoInventario('sobre', this)">Sobre-inventariado</button><button onclick="LS_UI.filtrarCatalogoInventario('ok', this)">Niveles controlados</button></div>
-          <table class="tbl"><thead><tr><th>Artículo</th><th>Sucursales</th><th>Estado</th><th></th></tr></thead>
+          <table class="tbl"><thead><tr><th>Artículo</th><th>Categoría</th><th>Presentación</th><th>Unidad</th><th class="num">Stock total</th><th>Sucursales</th>><th>Estado</th><th></th></tr></thead>
           <tbody id="inv-cat-tbody"></tbody></table>
 </div></div>`);
         _pintarCatalogoInventario(lista);
   }
       function _pintarCatalogoInventario(lista) {
               if (!lista.length) {
-                        setEl('inv-cat-tbody', '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(--tx-4)">Sin resultados</td></tr>');
+                        setEl('inv-cat-tbody', '<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--tx-4)">Sin resultados</td></tr>');
           return;
   }
-        setEl('inv-cat-tbody', lista.map(function(g) {
+setEl('inv-cat-tbody', lista.map(function(g) {
           var e = _estGrupoInv(g);
-          return '<tr><td style="font-weight:500">' + g.articulo + '</td><td style="color:var(--tx-3)">' + g.filas.length + '</td><td>' + _estInvBadge(e) + '</td><td style="white-space:nowrap"><button class="icon-btn" title="Ver" onclick="LS_UI.verArticuloInventario(' + g._i + ')"><i class="ti ti-eye"></i></button><button class="icon-btn" title="Editar" onclick="LS_UI.editarArticuloInventario(' + g._i + ')"><i class="ti ti-pencil"></i></button></td></tr>';
-        }).join(''));
-      }
+                  var r0 = g.filas[0] || {};
+                          var stockTotal = g.filas.reduce(function(s,r){ return s + (parseFloat(r.stockFisico)||0); }, 0);
+                                  return '<tr><td style="font-weight:500">' + g.articulo + '</td><td style="color:var(--tx-3)">' + (r0.categoria || '-') + '</td><td style="color:var(--tx-3)">' + (r0.presentacion || '-') + '</td><td style="color:var(--tx-3)">' + (r0.unidad || '-') + '</td><td class="num" style="font-family:var(--mono)">' + stockTotal + ' ' + (r0.unidad || '') + '</td><td style="color:var(--tx-3)">' + g.filas.length + '</td><td>' + _estInvBadge(e) + '</td><td style="white-space:nowrap"><button class="icon-btn" title="Ver" onclick="LS_UI.verArticuloInventario(' + g._i + ')"><i class="ti ti-eye"></i></button><button class="icon-btn" title="Editar" onclick="LS_UI.editarArticuloInventario(' + g._i + ')"><i class="ti ti-pencil"></i></button></td></tr>';
+                                        }).join(''));
+}
       function _aplicarFiltroInv(lista) {
               var f = window._invCatFiltro || 'todos';
               if (f === 'todos') return lista;
