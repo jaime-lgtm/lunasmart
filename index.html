@@ -1155,6 +1155,7 @@
         <div class="nav-item" data-page="proveedores" onclick="go('proveedores',this)"><i class="ti ti-truck-delivery"></i><span class="nav-lbl">Proveedores</span></div>
         <div class="nav-item" data-page="catalogo" onclick="go('catalogo',this)"><i class="ti ti-package"></i><span class="nav-lbl">Artículos</span></div>
         <div class="nav-item" data-page="recetas" onclick="go('recetas',this)"><i class="ti ti-chef-hat"></i><span class="nav-lbl">Recetas</span></div>
+        <div class="nav-item" onclick="LS_UI.abrirCatalogoInventario()"><i class="ti ti-clipboard-data"></i><span class="nav-lbl">Catálogo de inventario</span></div>
       </nav>
 
       <div class="sb-foot">
@@ -1535,7 +1536,7 @@
     <div class="kpi"><div class="kpi-top"><div class="kpi-label">Valor inventario</div><div class="kpi-ico d"><i class="ti ti-coin"></i></div></div><div class="kpi-val" id="inv-valor">—</div><div class="kpi-sub">Costo de reposición</div></div>
   </div>
   <div class="card">
-    <div class="card-head"><div><div class="card-title"><i class="ti ti-alert-octagon"></i>Alertas de stock crítico</div><div class="card-sub">Insumos por debajo del mínimo</div></div><div class="card-actions"><span class="filter-note" id="fn-inventario"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><button class="btn btn-outline btn-sm" onclick="LS_UI.abrirCatalogoInventario()"><i class="ti ti-package"></i>Catálogo de inventario</button><button class="btn btn-outline btn-sm" onclick="LS_UI.abrirRegistrarInventario()"><i class="ti ti-clipboard-list"></i>Registrar inventario</button><button class="btn btn-primary btn-sm" onclick="LS_UI.abrirGenerarOrden()"><i class="ti ti-shopping-cart-plus"></i>Generar orden</button></div></div>
+    <div class="card-head"><div><div class="card-title"><i class="ti ti-alert-octagon"></i>Alertas de stock crítico</div><div class="card-sub">Insumos por debajo del mínimo</div></div><div class="card-actions"><span class="filter-note" id="fn-inventario"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><div class="seg" style="margin-right:6px"><button class="on" data-inv-filtro="critico" onclick="LS_UI.filtrarInventarioEstado('critico')">Stock crítico</button><button data-inv-filtro="sobre" onclick="LS_UI.filtrarInventarioEstado('sobre')">Sobre inventariado</button><button data-inv-filtro="ok" onclick="LS_UI.filtrarInventarioEstado('ok')">Niveles controlado</button></div><button class="btn btn-outline btn-sm" onclick="LS_UI.abrirRegistrarInventario()"><i class="ti ti-clipboard-list"></i>Registrar inventario</button><button class="btn btn-primary btn-sm" onclick="LS_UI.abrirGenerarOrden()"><i class="ti ti-shopping-cart-plus"></i>Generar orden</button></div></div>
     <div class="tbl-wrap">
       <table class="tbl" data-sortable data-filterable="inventario">
         <thead><tr>
@@ -2750,6 +2751,7 @@ const LS_API = (() => {
         sucursal:       r[COLS.INVENTARIO.SUCURSAL]        || '',
         categoria:      r[COLS.INVENTARIO.CATEGORIA]       || '',
         articulo:       r[COLS.INVENTARIO.ARTICULO]        || '',
+        presentacion:   r[COLS.INVENTARIO.PRESENTACION]      || '',
         stockFisico:    parseNum(r[COLS.INVENTARIO.STOCK_FISICO]),
         faltante:       parseNum(r[COLS.INVENTARIO.FALTANTE]),
         stockSugerido:  parseNum(r[COLS.INVENTARIO.STOCK_SUGERIDO]),       
@@ -4790,40 +4792,46 @@ const LS_UI = (() => {
   // ══════════════════════════════════════════════════════════
   // INVENTARIO
   // ══════════════════════════════════════════════════════════
-  async function renderInventario() {
+  async function renderInventario(filtroEstado = 'critico') {
     const containerId = 'tabla-inventario';
     showLoading(containerId);
 
     try {
-      const alertas = await LS_API.getAlertasInventario();
-      const inventario = await LS_API.getInventario();
+const inventario = await LS_API.getInventario();
+const clasificados = inventario.map(function(i) {
+var urgente = i.stockFisico === 0 || (i.stockMinimo > 0 && i.stockFisico / i.stockMinimo < 0.2);
+return Object.assign({}, i, { estado: _estInv(i), urgente: urgente });
+});
 
-      setTxt('inv-total-articulos', inventario.length);
-      setTxt('inv-criticos', alertas.filter(a => a.urgente).length);
-      setTxt('inv-registros', inventario.length);
-      const valorTotal = inventario.reduce((s, i) => s + (i.stockFisico * i.costoUnit), 0);
-      setTxt('inv-valor', fmt(valorTotal));
+setTxt('inv-total-articulos', inventario.length);
+setTxt('inv-criticos', clasificados.filter(function(i) { return i.estado === 'critico'; }).length);
+setTxt('inv-registros', inventario.length);
+const valorTotal = inventario.reduce((s, i) => s + (i.stockFisico * i.costoUnit), 0);
+setTxt('inv-valor', fmt(valorTotal));
 
-      if (alertas.length === 0) {
-        setEl(containerId, '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--verde)"><i class="ti ti-check"></i> Inventario en orden</td></tr>');
-        return;
-      }
+document.querySelectorAll('[data-inv-filtro]').forEach(function(b) {
+b.classList.toggle('on', b.dataset.invFiltro === filtroEstado);
+});
 
-      setEl(containerId, alertas.slice(0, 30).map(a => {
-        const cls = a.urgente ? 'err' : 'warn';
-        const txt = a.urgente ? 'Urgente' : 'Reponer';
-        return `<tr>
-          <td style="font-weight:500">${a.articulo}</td>
-          <td style="color:var(--tx-3)">${a.categoria}</td>
-          <td>${a.sucursal}</td>
-          <td style="font-family:var(--mono);color:${a.urgente ? 'var(--rojo)' : 'var(--ambar)'};font-weight:600">
-            ${a.stockFisico} ${a.unidad}
-          </td>
-          <td style="font-family:var(--mono);color:var(--tx-3)">${a.stockSugerido} ${a.unidad}</td>
-          <td style="font-family:var(--mono)">${fmt(a.costoResurtido)}</td>
-          <td><span class="badge ${cls}">${txt}</span></td>
-        </tr>`;
-      }).join(''));
+const alertas = clasificados.filter(function(i) { return i.estado === filtroEstado; });
+
+if (alertas.length === 0) {
+setEl(containerId, '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--verde)"><i class="ti ti-check"></i> Sin artículos en este filtro</td></tr>');
+return;
+}
+
+setEl(containerId, alertas.map(a => {
+const cls = a.estado === 'critico' ? (a.urgente ? 'err' : 'warn') : (a.estado === 'sobre' ? 'warn' : '');
+const txt = a.estado === 'critico' ? (a.urgente ? 'Urgente' : 'Reponer') : (a.estado === 'sobre' ? 'Sobre-inventariado' : 'Controlado');
+return `<tr>
+<td style="font-weight:500">${a.articulo}</td>
+<td style="color:var(--tx-3)">${a.categoria}</td>
+<td>${a.sucursal}</td>
+<td style="font-family:var(--mono);font-weight:600">${a.stockFisico} ${a.unidad}</td>
+<td style="font-family:var(--mono);color:var(--tx-3)">${a.stockMinimo} ${a.unidad}</td>
+<td><span class="badge ${cls}">${txt}</span></td>
+</tr>`;
+}).join(''));
 
     } catch (err) {
       showError(containerId, 'Error cargando inventario');
@@ -6717,10 +6725,10 @@ async function guardarVentaDirecta() {
           <div class="tbl-wrap" style="max-height:400px;overflow:auto">
             <table class="tbl">
               <thead><tr>
-                <th>Artículo</th><th>Unidad de medida</th><th style="text-align:right">Mínimo</th><th style="text-align:right">Stock sugerido</th><th style="text-align:right">Stock físico</th>
+                <th>Artículo</th><th>Presentación</th><th>Unidad de medida <span onclick="LS_UI.mostrarTipConteo()" style="cursor:pointer;color:var(--terra-claro)" title="¿Cómo contar?"><i class="ti ti-help-circle"></i></span></th><th style="text-align:right">Mínimo</th><th style="text-align:right">Stock sugerido</th><th style="text-align:right">Stock físico</th>
               </tr></thead>
               <tbody id="reginv-tbody">
-                <tr><td colspan="5" style="text-align:center;padding:28px;color:var(--tx-4)">Selecciona una sucursal para ver sus artículos</td></tr>
+                <tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)">Selecciona una sucursal para ver sus artículos</td></tr>
               </tbody>
             </table>
           </div>
@@ -6745,21 +6753,30 @@ async function guardarVentaDirecta() {
     }
   }
 
-  async function filtrarArticulosInventarioModal(sucursal) {
+  function mostrarTipConteo() {
+    _modal(`<div class="modal" style="max-width:480px">
+    <div class="modal-header"><div><div class="modal-title"><i class="ti ti-help-circle" style="margin-right:6px;color:var(--terra-claro)"></i>¿Cómo contar el stock físico?</div></div><button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body" style="font-size:13px;line-height:1.6;color:var(--tx-2)">
+    <p><strong>Piezas</strong> (cajas, paquetes, latas o botellas cerradas): cuenta las piezas completas que tienes físicamente. Ejemplo: si hay 3 cajas de galletas sin abrir, captura 3.</p>
+    <p style="margin-top:10px"><strong>Gramos / Mililitros</strong> (garrafones, costales, botes a granel): captura la fracción decimal de qué tan lleno está el contenedor, de 0 a 1. Ejemplo: un garrafón de agua a la mitad se captura como 0.5; lleno, como 1.</p>
+    </div></div>`);
+    }
+    
+    async function filtrarArticulosInventarioModal(sucursal) {
     const tbody = document.getElementById('reginv-tbody');
     const btnGuardar = document.getElementById('reginv-btn-guardar');
     if (!tbody) return;
     if (!sucursal) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:28px;color:var(--tx-4)">Selecciona una sucursal para ver sus artículos</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)">Selecciona una sucursal para ver sus artículos</td></tr>';
       if (btnGuardar) btnGuardar.disabled = true;
       return;
     }
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:28px;color:var(--tx-3)"><i class="ti ti-loader-2 spin"></i> Cargando artículos...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-3)"><i class="ti ti-loader-2 spin"></i> Cargando artículos...</td></tr>';
     const inv = await LS_API.getInventario();
     const articulos = inv.filter(a => a.sucursal === sucursal);
     window.__reginvArticulos = articulos;
     if (articulos.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:28px;color:var(--tx-4)">No hay artículos para esta sucursal</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)">No hay artículos para esta sucursal</td></tr>';
       if (btnGuardar) btnGuardar.disabled = true;
       return;
     }
@@ -6774,12 +6791,12 @@ async function guardarVentaDirecta() {
       const cat = a.categoria || 'SIN CATEGORÍA';
       if (cat !== catActual) {
         catActual = cat;
-        html += `<tr class="reginv-cat-header"><td colspan="5" style="background:var(--cafe-card-hi);font-weight:600;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--tx-2);padding:8px 10px;border-top:1px solid var(--line)">${cat}</td></tr>`;
+        html += `<tr class="reginv-cat-header"><td colspan="6" style="background:var(--cafe-card-hi);font-weight:600;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--tx-2);padding:8px 10px;border-top:1px solid var(--line)">${cat}</td></tr>`;
       }
       html += `
       <tr data-id="${a.id}">
         <td style="font-weight:500">${a.articulo}</td>
-        <td style="color:var(--tx-3)">${a.unidad}</td>
+        <td style="color:var(--tx-3)">${a.presentacion || '—'}</td><td style="color:var(--tx-3)">${a.unidad}</td>
         <td style="text-align:right;color:var(--tx-3)">${a.stockMinimo || 0}</td><td style="text-align:right;color:var(--tx-3)">${a.stockSugerido || 0}</td>
         <td style="text-align:right">
           <input type="number" step="any" min="0" class="reginv-input" data-fila="${a.fila}" value="${a.stockFisico || 0}" style="width:110px;text-align:right">
@@ -7196,6 +7213,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     buscarCatalogo, verArticulo, editarArticulo, nuevoArticulo, guardarArticulo, setModoArticulos, confirmarBorrarArticulo, ejecutarBorrarArticulo,
     onPageChange, reloadPage, invalidarCacheYRecargar, recargarPagina,
     filtrarRentabilidad: (f) => renderRentabilidad(f),
+    filtrarInventarioEstado: (f) => renderInventario(f), mostrarTipConteo,
     buscarFacturas, verFactura, editarFactura, confirmarBorrarFactura, ejecutarBorrarFactura,
     verIngreso, editarIngreso, confirmarBorrarIngreso, ejecutarBorrarIngreso, buscarIngresos,
     calcIngreso, guardarIngreso, guardarFactura, agregarLineaVenta, calcVentaDetalle, autollenarPrecioVenta,
