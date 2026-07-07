@@ -7043,6 +7043,7 @@ async function abrirGenerarOrden(sucursal) {
   }
       async function abrirCatalogoInventario() {
               var datos = await LS_API.getInventario();
+              var sucursales = Array.from(new Set(datos.map(function(r){ return r.sucursal; }).filter(Boolean))).sort();
               var mapa = {};
               datos.forEach(function(r) {
                         var k = _norm(r.articulo || '');
@@ -7054,13 +7055,14 @@ async function abrirGenerarOrden(sucursal) {
         lista.forEach(function(g, i) { g._i = i; });
         window._invCatBase = lista;
         window._invCatFiltro = 'todos';
+        window._invCatSucursal = 'todas';
         _modal(`<div class="modal" style="max-width:900px">
           <div class="modal-header"><div><div class="modal-title"><i class="ti ti-search" style="margin-right:6px"></i>Catálogo de inventario</div>
           <div class="modal-sub">${lista.length} artículo(s) único(s)</div></div>
           <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button></div>
           <div class="modal-body" style="max-height:65vh;overflow:auto">
           <input type="text" id="inv-cat-buscar" placeholder="Buscar artículo..." style="width:100%;padding:9px 12px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none" oninput="LS_UI.buscarCatalogoInventario(this.value)">
-                    <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="LS_UI.abrirAgregarArticuloInventario()"><i class="ti ti-plus"></i> Agregar artículo</button>
+                    <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" onclick="LS_UI.abrirAgregarArticuloInventario()"><i class="ti ti-plus"></i> Agregar artículo</button><select id="inv-cat-sucursal" onchange="LS_UI.filtrarSucursalCatalogo(this.value)" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none;margin-left:auto"><option value="todas">Todas las sucursales</option>${sucursales.map(function(s){ return '<option value="'+s+'">'+s+'</option>'; }).join('')}</select></div>>
           <div class="seg" style="margin:12px 0"><button class="on" onclick="LS_UI.filtrarCatalogoInventario('todos', this)">Todos</button><button onclick="LS_UI.filtrarCatalogoInventario('critico', this)">Stock crítico</button><button onclick="LS_UI.filtrarCatalogoInventario('sobre', this)">Sobre-inventariado</button><button onclick="LS_UI.filtrarCatalogoInventario('ok', this)">Niveles controlados</button></div>
           <table class="tbl"><thead><tr><th>Artículo</th><th>Categoría</th><th>Presentación</th><th>Unidad</th><th class="num">Stock total</th><th>Sucursales</th>><th>Estado</th><th></th></tr></thead>
           <tbody id="inv-cat-tbody"></tbody></table>
@@ -7088,6 +7090,10 @@ setEl('inv-cat-tbody', lista.map(function(g) {
               var base = window._invCatBase || [];
         var t = _norm(q || '');
         var filtrada = t ? base.filter(function(g) { return _norm(g.articulo).includes(t); }) : base;
+        var suc = window._invCatSucursal || 'todas';
+        if (suc !== 'todas') {
+        filtrada = filtrada.map(function(g) { return { articulo: g.articulo, _i: g._i, filas: g.filas.filter(function(r) { return r.sucursal === suc; }) }; }).filter(function(g) { return g.filas.length > 0; });
+        }
         _pintarCatalogoInventario(_aplicarFiltroInv(filtrada));
   }
       function filtrarCatalogoInventario(f, btnEl) {
@@ -7098,6 +7104,11 @@ setEl('inv-cat-tbody', lista.map(function(g) {
   }
         var q = document.getElementById('inv-cat-buscar');
         buscarCatalogoInventario(q ? q.value : '');
+      }
+      function filtrarSucursalCatalogo(v) {
+      window._invCatSucursal = v;
+      var q = document.getElementById('inv-cat-buscar');
+      buscarCatalogoInventario(q ? q.value : '');
       }
       function verArticuloInventario(idx) {
               var g = (window._invCatBase || [])[idx];
@@ -7210,7 +7221,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderFacturas, renderArticulos, renderRentabilidad,
     renderGastos, renderBalance, renderInventario, renderProveedores, renderCatalogo,
     abrirRegistrarInventario, filtrarArticulosInventarioModal, guardarRegistroInventario, enviarRegistroInventarioWhatsApp, abrirStockCritico, abrirGenerarOrden, imprimirOrdenCompra, enviarOrdenWhatsApp,
-    abrirCatalogoInventario, buscarCatalogoInventario, filtrarCatalogoInventario, verArticuloInventario, editarArticuloInventario, guardarMinMaxInventario, abrirAgregarArticuloInventario, guardarNuevoArticuloInventario,
+    abrirCatalogoInventario, buscarCatalogoInventario, filtrarCatalogoInventario, filtrarSucursalCatalogo, verArticuloInventario, editarArticuloInventario, guardarMinMaxInventario, abrirAgregarArticuloInventario, guardarNuevoArticuloInventario,
     buscarProveedores, verProveedor, editarProveedor, nuevoProveedor, guardarProveedor, confirmarBorrarProveedor, ejecutarBorrarProveedor,
     buscarCatalogo, verArticulo, editarArticulo, nuevoArticulo, guardarArticulo, setModoArticulos, confirmarBorrarArticulo, ejecutarBorrarArticulo,
     onPageChange, reloadPage, invalidarCacheYRecargar, recargarPagina,
