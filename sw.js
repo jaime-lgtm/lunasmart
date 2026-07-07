@@ -6,7 +6,7 @@
      - Datos de Google Sheets / Apps Script: SIEMPRE de red (nunca cacheados)
    ══════════════════════════════════════════════════════════════ */
 
-const CACHE = 'lunasmart-v2';
+const CACHE = 'lunasmart-v3';
 const SHELL = [
   '/index.html',
   '/manifest.json',
@@ -51,7 +51,7 @@ self.addEventListener('fetch', (e) => {
 
   // 3. App shell y assets: network-first con fallback a cache (funciona offline)
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'reload' })
       .then((resp) => {
         // Guardar copia fresca en cache
         const copy = resp.clone();
