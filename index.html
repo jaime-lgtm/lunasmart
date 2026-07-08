@@ -1155,7 +1155,7 @@
         <div class="nav-item" data-page="proveedores" onclick="go('proveedores',this)"><i class="ti ti-truck-delivery"></i><span class="nav-lbl">Proveedores</span></div>
         <div class="nav-item" data-page="catalogo" onclick="go('catalogo',this)"><i class="ti ti-package"></i><span class="nav-lbl">Artículos</span></div>
         <div class="nav-item" data-page="recetas" onclick="go('recetas',this)"><i class="ti ti-chef-hat"></i><span class="nav-lbl">Recetas</span></div>
-        <div class="nav-item" onclick="LS_UI.abrirCatalogoInventario()"><i class="ti ti-clipboard-data"></i><span class="nav-lbl">Catálogo de inventario</span></div>
+        <div class="nav-item" data-page="catalogo-inventario" onclick="go('catalogo-inventario',this)"><i class="ti ti-clipboard-data"></i><span class="nav-lbl">Catálogo de inventario</span></div>
       </nav>
 
       <div class="sb-foot">
@@ -1624,7 +1624,35 @@
   </div>
 </div>
 
-<!-- ════════ PROVEEDORES ════════ -->
+<!-- ════════ CATÁLOGO DE INVENTARIO (página) ════════ -->
+ <div id="p-catalogo-inventario" class="page" data-screen-label="Catálogo de Inventario">
+   <div class="card">
+       <div class="card-head"><div><div class="card-title"><i class="ti ti-clipboard-data"></i>Catálogo de inventario</div><div class="card-sub" id="catinv-pag-sub">Cargando...</div></div><div class="card-actions"><button class="btn btn-primary btn-sm" onclick="LS_UI.abrirAgregarArticuloInventario()"><i class="ti ti-plus"></i>Agregar artículo</button></div></div>
+           <div style="padding:0 18px 12px">
+                 <div style="position:relative;max-width:420px">
+                         <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--tx-4);font-size:16px"></i>
+                                 <input type="text" id="catinv-pag-buscar" placeholder="Buscar artículo..." oninput="LS_UI.buscarCatalogoInventarioPagina(this.value)" style="width:100%;padding:9px 12px 9px 36px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none">
+                                       </div>
+                                             <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
+                                                     <select id="catinv-pag-sucursal" onchange="LS_UI.filtrarSucursalCatalogoPagina(this.value)" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none"><option value="todas">Todas las sucursales</option></select>
+                                                           </div>
+                                                                 <div class="seg" style="margin:12px 0">
+                                                                         <button class="on" onclick="LS_UI.filtrarCatalogoInventarioPagina('todos', this)">Todos</button>
+                                                                                 <button onclick="LS_UI.filtrarCatalogoInventarioPagina('critico', this)">Stock crítico</button>
+                                                                                         <button onclick="LS_UI.filtrarCatalogoInventarioPagina('sobre', this)">Sobre-inventariado</button>
+                                                                                                 <button onclick="LS_UI.filtrarCatalogoInventarioPagina('ok', this)">Niveles controlados</button>
+                                                                                                       </div>
+                                                                                                           </div>
+                                                                                                               <div class="tbl-wrap">
+                                                                                                                     <table class="tbl">
+                                                                                                                             <thead><tr><th>Artículo</th><th>Categoría</th><th>Presentación</th><th>Unidad</th><th class="num">Stock total</th><th>Sucursales</th><th>Estado</th><th style="text-align:center">Acciones</th></tr></thead>
+                                                                                                                                     <tbody id="catinv-pag-tbody"><tr><td colspan="8" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+                                                                                                                                           </table>
+                                                                                                                                               </div>
+                                                                                                                                                 </div>
+                                                                                                                                                 </div>
+                                                                                                                                                 
+                                                                                                                                                 <!-- ════════ PROVEEDORES ════════ -->
 <div id="p-proveedores" class="page" data-screen-label="Proveedores">
   <div class="card">
     <div class="card-head"><div><div class="card-title"><i class="ti ti-truck-delivery"></i>Directorio de proveedores</div><div class="card-sub" id="prov-sub">Cargando...</div></div><div class="card-actions"><button class="btn btn-primary btn-sm" onclick="LS_UI.nuevoProveedor()"><i class="ti ti-plus"></i>Nuevo proveedor</button></div></div>
@@ -1776,6 +1804,7 @@ const PAGES = {
   proveedores:  { title: 'Proveedores',           sub: 'Directorio de proveedores' },
   catalogo:     { title: 'Artículos (Catálogo)',  sub: 'Catálogo Maestro de productos' },
   recetas:      { title: 'Recetas',               sub: 'Gestiona recetas y costos de elaboración' },
+    'catalogo-inventario': { title: 'Catálogo de Inventario', sub: 'Listado completo de artículos y stock' },
 };
 
 const BRANCHES = {
@@ -6683,6 +6712,7 @@ async function guardarVentaDirecta() {
       case 'proveedores':  await renderProveedores();   break;
       case 'catalogo':     await renderCatalogo();      break;
       case 'recetas':      await renderRecetas();       break;
+            case 'catalogo-inventario': await abrirCatalogoInventarioPagina(); break;
     }
   }
 
@@ -7110,7 +7140,69 @@ setEl('inv-cat-tbody', lista.map(function(g) {
       var q = document.getElementById('inv-cat-buscar');
       buscarCatalogoInventario(q ? q.value : '');
       }
-      function verArticuloInventario(idx) {
+async function abrirCatalogoInventarioPagina() {
+  var datos = await LS_API.getInventario();
+  var sucursales = Array.from(new Set(datos.map(function(r){ return r.sucursal; }).filter(Boolean))).sort();
+  var mapa = {};
+  datos.forEach(function(r) {
+  var k = _norm(r.articulo || '');
+  if (!mapa[k]) mapa[k] = { articulo: r.articulo, filas: [] };
+  mapa[k].filas.push(r);
+  });
+  var lista = Object.keys(mapa).map(function(k) { return mapa[k]; });
+  lista.sort(function(a, b) { return a.articulo.localeCompare(b.articulo); });
+  lista.forEach(function(g, i) { g._i = i; });
+  window._invCatBasePag = lista;
+  window._invCatFiltroPag = 'todos';
+  window._invCatSucursalPag = 'todas';
+  setEl('catinv-pag-sub', lista.length + ' artículo(s) único(s)');
+  var sel = document.getElementById('catinv-pag-sucursal');
+  if (sel) { sel.innerHTML = '<option value="todas">Todas las sucursales</option>' + sucursales.map(function(s){ return '<option value="'+s+'">'+s+'</option>'; }).join(''); }
+  _pintarCatalogoInventarioPagina(lista);
+  }
+  function _pintarCatalogoInventarioPagina(lista) {
+  if (!lista.length) {
+  setEl('catinv-pag-tbody', '<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--tx-4)">Sin resultados</td></tr>');
+  return;
+  }
+  setEl('catinv-pag-tbody', lista.map(function(g) {
+  var e = _estGrupoInv(g);
+  var r0 = g.filas[0] || {};
+  var stockTotal = g.filas.reduce(function(s,r){ return s + (parseFloat(r.stockFisico)||0); }, 0);
+  return '<tr><td style="font-weight:500">' + g.articulo + '</td><td style="color:var(--tx-3)">' + (r0.categoria || '-') + '</td><td style="color:var(--tx-3)">' + (r0.presentacion || '-') + '</td><td style="color:var(--tx-3)">' + (r0.unidad || '-') + '</td><td class="num" style="font-family:var(--mono)">' + stockTotal + ' ' + (r0.unidad || '') + '</td><td style="color:var(--tx-3)">' + g.filas.length + '</td><td>' + _estInvBadge(e) + '</td><td style="white-space:nowrap"><button class="icon-btn" title="Ver" onclick="LS_UI.verArticuloInventario(' + g._i + ')"><i class="ti ti-eye"></i></button><button class="icon-btn" title="Editar" onclick="LS_UI.editarArticuloInventario(' + g._i + ')"><i class="ti ti-pencil"></i></button></td></tr>';
+  }).join(''));
+  }
+  function _aplicarFiltroInvPag(lista) {
+  var f = window._invCatFiltroPag || 'todos';
+  if (f === 'todos') return lista;
+  return lista.filter(function(g) { return _estGrupoInv(g) === f; });
+  }
+  function buscarCatalogoInventarioPagina(q) {
+  var base = window._invCatBasePag || [];
+  var t = _norm(q || '');
+  var filtrada = t ? base.filter(function(g) { return _norm(g.articulo).includes(t); }) : base;
+  var suc = window._invCatSucursalPag || 'todas';
+  if (suc !== 'todas') {
+  filtrada = filtrada.map(function(g) { return { articulo: g.articulo, _i: g._i, filas: g.filas.filter(function(r) { return r.sucursal === suc; }) }; }).filter(function(g) { return g.filas.length > 0; });
+  }
+  _pintarCatalogoInventarioPagina(_aplicarFiltroInvPag(filtrada));
+  }
+  function filtrarCatalogoInventarioPagina(f, btnEl) {
+  window._invCatFiltroPag = f;
+  if (btnEl && btnEl.parentElement) {
+  Array.from(btnEl.parentElement.children).forEach(function(b) { b.classList.remove('on'); });
+  btnEl.classList.add('on');
+  }
+  var q = document.getElementById('catinv-pag-buscar');
+  buscarCatalogoInventarioPagina(q ? q.value : '');
+  }
+  function filtrarSucursalCatalogoPagina(v) {
+  window._invCatSucursalPag = v;
+  var q = document.getElementById('catinv-pag-buscar');
+  buscarCatalogoInventarioPagina(q ? q.value : '');
+  }
+
+function verArticuloInventario(idx) {
               var g = (window._invCatBase || [])[idx];
               if (!g) return;
               var filas = g.filas.map(function(r) {
@@ -7221,7 +7313,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderFacturas, renderArticulos, renderRentabilidad,
     renderGastos, renderBalance, renderInventario, renderProveedores, renderCatalogo,
     abrirRegistrarInventario, filtrarArticulosInventarioModal, guardarRegistroInventario, enviarRegistroInventarioWhatsApp, abrirStockCritico, abrirGenerarOrden, imprimirOrdenCompra, enviarOrdenWhatsApp,
-    abrirCatalogoInventario, buscarCatalogoInventario, filtrarCatalogoInventario, filtrarSucursalCatalogo, verArticuloInventario, editarArticuloInventario, guardarMinMaxInventario, abrirAgregarArticuloInventario, guardarNuevoArticuloInventario,
+    abrirCatalogoInventario, buscarCatalogoInventario, filtrarCatalogoInventario,  abrirCatalogoInventarioPagina, buscarCatalogoInventarioPagina, filtrarCatalogoInventarioPagina, filtrarSucursalCatalogoPagina, filtrarSucursalCatalogo, verArticuloInventario, editarArticuloInventario, guardarMinMaxInventario, abrirAgregarArticuloInventario, guardarNuevoArticuloInventario,
     buscarProveedores, verProveedor, editarProveedor, nuevoProveedor, guardarProveedor, confirmarBorrarProveedor, ejecutarBorrarProveedor,
     buscarCatalogo, verArticulo, editarArticulo, nuevoArticulo, guardarArticulo, setModoArticulos, confirmarBorrarArticulo, ejecutarBorrarArticulo,
     onPageChange, reloadPage, invalidarCacheYRecargar, recargarPagina,
