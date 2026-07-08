@@ -7202,6 +7202,7 @@ async function abrirCatalogoInventarioPagina() {
   buscarCatalogoInventarioPagina(q ? q.value : '');
   }
 
+  async function _refrescarCatalogoInventarioTrasGuardar() { var elPag = document.getElementById('p-catalogo-inventario'); var enPagina = !!(elPag && elPag.classList.contains('active')); var pref = enPagina ? '_invCatFiltroPag' : '_invCatFiltro'; var prefS = enPagina ? '_invCatSucursalPag' : '_invCatSucursal'; var idBuscar = enPagina ? 'catinv-pag-buscar' : 'inv-cat-buscar'; var idSucursal = enPagina ? 'catinv-pag-sucursal' : 'inv-cat-sucursal'; var idSeg = enPagina ? '#p-catalogo-inventario .seg button' : '#ls-modal-2 .seg button'; var filtroPrev = window[pref] || 'todos'; var sucursalPrev = window[prefS] || 'todas'; var qEl = document.getElementById(idBuscar); var buscarPrev = qEl ? qEl.value : ''; if (enPagina) { await abrirCatalogoInventarioPagina(); } else { await abrirCatalogoInventario(); } window[pref] = filtroPrev; window[prefS] = sucursalPrev; var sel = document.getElementById(idSucursal); if (sel) sel.value = sucursalPrev; var q2 = document.getElementById(idBuscar); if (q2) q2.value = buscarPrev; document.querySelectorAll(idSeg).forEach(function(b) { var oc = b.getAttribute('onclick') || ''; b.classList.toggle('on', oc.indexOf("'" + filtroPrev + "'") !== -1); }); if (enPagina) { buscarCatalogoInventarioPagina(buscarPrev); } else { buscarCatalogoInventario(buscarPrev); } }
 function verArticuloInventario(idx) {
               var g = (window._invCatBase || [])[idx];
               if (!g) return;
@@ -7230,7 +7231,7 @@ function verArticuloInventario(idx) {
           toast('Guardado', 'Mínimo y máximo actualizados', 'ok');
           _cerrarModal2();
           try { renderInventario(); } catch (e) {}
-          await abrirCatalogoInventario();
+          await _refrescarCatalogoInventarioTrasGuardar();
         } catch (e) {
           toast('Error', 'No se pudo guardar', 'err');
   }
@@ -7298,7 +7299,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
             toast('Listo', 'Artículo agregado a inventario', 'ok');
             _cerrarModal2();
             try { renderInventario(); } catch(e) {}
-            await abrirCatalogoInventario();
+            await _refrescarCatalogoInventarioTrasGuardar();
   } else {
             toast('Error', (r && r.msg) || 'No se pudo agregar el artículo', 'err');
           }
