@@ -2323,7 +2323,7 @@ const LS_API = (() => {
       ID: 0, SUCURSAL: 1, CONTEO_VISUAL: 2, CATEGORIA: 3, UBICACION: 4,
       ARTICULO: 5, STOCK_FISICO: 6, FALTANTE: 7,
       STOCK_SUGERIDO: 8, UNIDAD: 9, PRESENTACION: 10,
-      COSTO_UNIT: 11, CONVERSION: 12, COSTO_RESURTIDO: 13, TIMESTAMP: 14, STOCK_MINIMO: 15,
+      COSTO_UNIT: 11, CONVERSION: 12, COSTO_RESURTIDO: 13, TIMESTAMP: 14, STOCK_MINIMO: 15, TIPO_REGISTRO: 16,
     },
   };
 
@@ -2788,7 +2788,7 @@ const LS_API = (() => {
         unidad:         r[COLS.INVENTARIO.UNIDAD]          || '',
         costoUnit:      parseNum(r[COLS.INVENTARIO.COSTO_UNIT]),
         costoResurtido: parseNum(r[COLS.INVENTARIO.COSTO_RESURTIDO]),
-          ultimaActualizacion: r[COLS.INVENTARIO.TIMESTAMP] || '',
+          ultimaActualizacion: r[COLS.INVENTARIO.TIMESTAMP] || '', tipoRegistro: r[COLS.INVENTARIO.TIPO_REGISTRO] || '',
         }); });
       }
 
@@ -6826,7 +6826,7 @@ async function guardarVentaDirecta() {
       html += `
       <tr data-id="${a.id}">
         <td style="font-weight:500">${a.articulo}</td>
-        <td style="color:var(--tx-3)">${a.presentacion || '—'}</td><td style="color:var(--tx-3)">${a.unidad}</td>
+        <td style="color:var(--tx-3)">${a.presentacion || '-'}</td><td style="color:var(--tx-3)">${a.unidad}${a.tipoRegistro ? '<br><small style=\"color:var(--tx-4)\">'+a.tipoRegistro+'</small>' : ''}</td>>
         <td style="text-align:right;color:var(--tx-3)">${a.stockMinimo || 0}</td><td style="text-align:right;color:var(--tx-3)">${a.stockSugerido || 0}</td>
         <td style="text-align:right">
           <input type="number" step="any" min="0" class="reginv-input" data-fila="${a.fila}" value="${a.stockFisico || 0}" style="width:110px;text-align:right">
@@ -7214,17 +7214,22 @@ function verArticuloInventario(idx) {
       function editarArticuloInventario(idx) {
               var g = (window._invCatBase && window._invCatBase[idx]) || (window._invCatBasePag && window._invCatBasePag[idx]);
               if (!g) return;
+              var _tiposReg = ['Pesaje (kg/g)','Conteo por piezas/unidades','Volumen (ml/L)','Estimado por porcentaje (%)','Otro / Manual'];
+              var _tipoActual = (g.filas.filter(function(r){ return r.tipoRegistro; })[0] || {}).tipoRegistro || '';
+              var tipoRegHtml = '<div class="ff" style="margin-bottom:12px"><label>Tipo de registro</label><select id="einv-tiporegistro"><option value="">— Sin definir —</option>' + _tiposReg.map(function(o){ return '<option value="' + o + '"' + (o === _tipoActual ? ' selected' : '') + '>' + o + '</option>'; }).join('') + '</select></div>';
               var filas = g.filas.map(function(r) {
                         return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)"><div style="flex:1">' + r.sucursal + '<div style="color:var(--tx-4);font-size:12px">Stock actual: ' + r.stockFisico + ' ' + (r.unidad || '') + '</div></div><div class="ff" style="width:110px"><label>Mínimo</label><input type="number" step="any" class="einv-min" data-fila="' + r.fila + '" value="' + (r.stockMinimo || 0) + '"></div><div class="ff" style="width:110px"><label>Máximo</label><input type="number" step="any" class="einv-max" data-fila="' + r.fila + '" value="' + (r.stockSugerido || 0) + '"></div></div>';
   }).join('');
-        _modal2('<div class="modal" style="max-width:640px"><div class="modal-header"><div class="modal-title"><i class="ti ti-pencil" style="margin-right:6px"></i>Editar ' + g.articulo + '</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body">' + filas + '</div><div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarMinMaxInventario(' + idx + ')">Guardar cambios</button></div></div>');
+        _modal2('<div class="modal" style="max-width:640px"><div class="modal-header"><div class="modal-title"><i class="ti ti-pencil" style="margin-right:6px"></i>Editar ' + g.articulo + '</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body">' + tipoRegHtml + filas + '</div><div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarMinMaxInventario(' + idx + ')">Guardar cambios</button></div></div>');
   }
       async function guardarMinMaxInventario(idx) {
         var mins = document.querySelectorAll('.einv-min');
         var maxs = document.querySelectorAll('.einv-max');
+        var _elTipoReg = document.getElementById('einv-tiporegistro');
+        var _tipoRegSel = _elTipoReg ? _elTipoReg.value : '';
         var items = [];
         mins.forEach(function(el, i) {
-          items.push({ fila: el.getAttribute('data-fila'), minimo: el.value, maximo: maxs[i] ? maxs[i].value : '' });
+          items.push({ fila: el.getAttribute('data-fila'), minimo: el.value, maximo: maxs[i] ? maxs[i].value : ', tipoRegistro: _tipoRegSel' });
   });
         try {
           await LS_API.actualizarMinMaxInventario(items);
@@ -7264,6 +7269,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
             '<div style="display:flex;gap:10px"><div class="ff" style="flex:1"><label>Stock inicial</label><input id="agr-stock" type="number" step="any" value="0"></div>' +
             '<div class="ff" style="flex:1"><label>Mínimo</label><input id="agr-minimo" type="number" step="any" value="0"></div>' +
             '<div class="ff" style="flex:1"><label>Máximo (sugerido)</label><input id="agr-maximo" type="number" step="any" value="0"></div></div>' +
+            '<div class="ff" style="margin-top:14px"><label>Tipo de registro</label><select id="agr-tiporegistro"><option value="">— Sin definir —</option><option value="Pesaje (kg/g)">Pesaje (kg/g)</option><option value="Conteo por piezas/unidades">Conteo por piezas/unidades</option><option value="Volumen (ml/L)">Volumen (ml/L)</option><option value="Estimado por porcentaje (%)">Estimado por porcentaje (%)</option><option value="Otro / Manual">Otro / Manual</option></select></div>' +
   
             '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">' +
             '<button class="btn" onclick="_cerrarModal2()">Cancelar</button>' +
@@ -7287,7 +7293,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
         if (!sucursal) { toast('Falta información', 'Selecciona una sucursal', 'err'); return; }
         try {
           var r = await LS_API.agregarArticuloInventario({
-            articulo: articulo,
+            articulo: articulo, tipoRegistro: (document.getElementById('agr-tiporegistro')||{}).value || '',
             sucursal: sucursal,
             ubicacion: elU ? elU.value : '',
             stockInicial: elSt ? elSt.value : 0,
