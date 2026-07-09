@@ -7248,7 +7248,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
             base.forEach(function(g){ g.filas.forEach(function(r){ if (r.sucursal) setS[r.sucursal] = true; }); });
             sucursales = Object.keys(setS).sort();
   } catch(e2) {}
-          if (!sucursales.length) sucursales = ['COFFEE ROASTERS','MATRIZ','EVENTOS','SUC. CASA DE LA CULTURA'];
+          if (!sucursales.length) sucursales = ['COFFEE & ROASTERS','CASA DE LA CULTURA','HELFY FÜ','BARBACOA Y MENUDO','EVENTOS'];
   
           var body = document.getElementById('agr-art-body');
           if (!body) return;
