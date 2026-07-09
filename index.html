@@ -7229,8 +7229,8 @@ function verArticuloInventario(idx) {
         var _tipoRegSel = _elTipoReg ? _elTipoReg.value : '';
         var items = [];
         mins.forEach(function(el, i) {
-          items.push({ fila: el.getAttribute('data-fila'), minimo: el.value, maximo: maxs[i] ? maxs[i].value : ', tipoRegistro: _tipoRegSel' });
-  });
+          items.push({ fila: el.getAttribute('data-fila'), minimo: el.value, maximo: maxs[i] ? maxs[i].value : '', tipoRegistro: _tipoRegSel });
+          });
         try {
           await LS_API.actualizarMinMaxInventario(items);
           toast('Guardado', 'Mínimo y máximo actualizados', 'ok');
