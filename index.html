@@ -1532,7 +1532,7 @@
   <div class="kpis">
     <div class="kpi" onclick="LS_UI.abrirCatalogoInventario()" style="cursor:pointer" title="Buscar y editar artículos"><div class="kpi-top"><div class="kpi-label">Artículos catálogo</div><div class="kpi-ico"><i class="ti ti-packages"></i></div></div><div class="kpi-val" id="inv-total-articulos">—</div><div class="kpi-sub">Insumos y productos</div></div>
     <div class="kpi" onclick="LS_UI.abrirStockCritico()" style="cursor:pointer" title="Ver artículos críticos"><div class="kpi-top"><div class="kpi-label">Stock crítico</div><div class="kpi-ico r"><i class="ti ti-alert-octagon"></i></div></div><div class="kpi-val dn" id="inv-criticos">—</div><div class="kpi-sub">Bajo mínimo</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Registros inventario</div><div class="kpi-ico a"><i class="ti ti-clipboard-list"></i></div></div><div class="kpi-val am" id="inv-registros">—</div><div class="kpi-sub">En BD_INVENTARIO</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Valor por surtir</div><div class="kpi-ico a"><i class="ti ti-shopping-cart"></i></div></div><div class="kpi-val am" id="inv-porsurtir">—</div><div class="kpi-sub">Costo estimado de compra</div></div>
     <div class="kpi"><div class="kpi-top"><div class="kpi-label">Valor inventario</div><div class="kpi-ico d"><i class="ti ti-coin"></i></div></div><div class="kpi-val" id="inv-valor">—</div><div class="kpi-sub">Costo de reposición</div></div>
   </div>
   <div class="card">
@@ -4835,7 +4835,8 @@ return Object.assign({}, i, { estado: _estInv(i), urgente: urgente });
 
 setTxt('inv-total-articulos', inventario.length);
 setTxt('inv-criticos', clasificados.filter(function(i) { return i.estado === 'critico'; }).length);
-setTxt('inv-registros', inventario.length);
+const valorPorSurtir = inventario.reduce((s, i) => s + (i.costoResurtido || 0), 0);
+    setTxt('inv-porsurtir', fmt(valorPorSurtir));
 const valorTotal = inventario.reduce((s, i) => s + (i.stockFisico * i.costoUnit), 0);
 setTxt('inv-valor', fmt(valorTotal));
 
