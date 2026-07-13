@@ -1787,6 +1787,7 @@ const USERS = {
   'admin@suenodeluna.com.mx':   { pass: 'Admin2026!',   name: 'Administrador',    role: 'Gerente General', ini: 'AG' },
   'gerente@suenodeluna.com.mx': { pass: 'Gerente2026!', name: 'Gerente Sucursal', role: 'Gerente',         ini: 'GS' },
   'cajero@suenodeluna.com.mx':  { pass: 'Cajero2026!',  name: 'Personal Caja',    role: 'Cajero',          ini: 'PC' },
+  'almacen@suenodeluna.com.mx': { pass: 'Almacen2026!Kv9', name: '', role: 'Inventario', ini: 'IN' },
 };
 
 const PAGES = {
@@ -7391,11 +7392,13 @@ const PERMISOS = {
              verFinanzas: false, verFacturas: true,  inicio: 'dashboard' },
   cajero:  { pages: ['conciliacion','inventario','ingresos'],
              verFinanzas: false, verFacturas: false, inicio: 'ingresos' },
+             inventarioSolo: { pages: ['inventario'], verFinanzas: false, verFacturas: false, inicio: 'inventario' },
 };
 
 function _rolTier(role) {
   const r = String(role || '').trim().toUpperCase();
   if (r.indexOf('CAJER') === 0) return 'cajero';
+  if (r === 'INVENTARIO') return 'inventarioSolo';
   if (r === 'GERENTE' || r === 'GERENTE SUCURSAL') return 'gerente';
   // Administrador, Gerente General, ADMIN → admin
   return 'admin';
