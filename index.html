@@ -1154,6 +1154,7 @@
         <div class="nav-item" data-page="proveedores" onclick="go('proveedores',this)"><i class="ti ti-truck-delivery"></i><span class="nav-lbl">Proveedores</span></div>
         <div class="nav-item" data-page="catalogo" onclick="go('catalogo',this)"><i class="ti ti-package"></i><span class="nav-lbl">Artículos</span></div>
         <div class="nav-item" data-page="recetas" onclick="go('recetas',this)"><i class="ti ti-chef-hat"></i><span class="nav-lbl">Recetas</span></div>
+        <div class="nav-item" data-page="catalogopos" onclick="go('catalogopos',this)"><i class="ti ti-cash-register"></i><span class="nav-lbl">Catálogo POS</span></div>
       </nav>
 
       <div class="sb-foot">
@@ -1557,13 +1558,16 @@
   <div class="card">
     <div class="card-head"><div><div class="card-title"><i class="ti ti-cash"></i>Cortes registrados <span id="ing-titulo-periodo"></span></div><div class="card-sub">Desglose de caja por turno</div></div><div class="card-actions"><span class="filter-note" id="fn-ingresos"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><button class="btn btn-primary btn-sm" onclick="openRegister('corte')"><i class="ti ti-plus"></i>Nuevo corte</button></div></div>
     <!-- Buscador -->
-    <div style="padding:0 18px 12px">
-      <div style="position:relative;max-width:460px">
+    <div style="padding:0 18px 12px;display:flex;gap:12px;align-items:flex-start">
+      <div style="position:relative;flex:1">
         <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--tx-4);font-size:16px"></i>
         <input type="text" id="ing-buscar" placeholder="Buscar en TODOS los cortes: fecha, sucursal o turno..."
           oninput="LS_UI.buscarIngresos(this.value)"
           style="width:100%;padding:9px 12px 9px 36px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none">
       </div>
+      <button class="btn btn-sm" style="background:#d4685e;color:#fff;border:none;cursor:pointer;margin-top:0" onclick="limpiarDatosEquivocados()" title="Elimina los 4 cortes equivocados de Coffee & Roasters (20, 22, 23 junio) del almacenamiento local">
+        <i class="ti ti-trash"></i> Limpiar
+      </button>
     </div>
     <div class="tbl-wrap">
       <table class="tbl" data-sortable data-filterable="ingresos">
@@ -1708,6 +1712,42 @@
   </div>
 </div>
 
+<!-- PÁGINA: CATÁLOGO POS -->
+<div id="p-catalogopos" class="page" data-screen-label="Catálogo POS">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title"><i class="ti ti-cash-register"></i>Catálogo del POS</div>
+        <div class="card-sub">Productos en venta por sucursal, en vivo desde Firebase — vincula cada uno con su receta</div>
+      </div>
+      <div class="card-actions">
+        <button class="btn btn-primary btn-sm" onclick="LS_UI.abrirNuevoProductoPOS()"><i class="ti ti-plus"></i>Nuevo producto</button>
+      </div>
+    </div>
+    <div style="padding:14px 18px 0;display:flex;gap:8px;flex-wrap:wrap" id="catpos-sucursales"></div>
+    <div style="padding:12px 18px 12px">
+      <div style="position:relative;max-width:460px">
+        <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--tx-4);font-size:16px"></i>
+        <input type="text" id="catpos-buscar" placeholder="Buscar por nombre o ID..." oninput="LS_UI.buscarCatalogoPOS(this.value)"
+          style="width:100%;padding:9px 12px 9px 36px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none">
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl" data-sortable>
+        <thead><tr>
+          <th class="sortable" data-type="text">ID<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th class="sortable" data-type="text">Producto<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th>Categoría</th>
+          <th class="num">Precio</th>
+          <th>Receta vinculada</th>
+          <th>Acciones</th>
+        </tr></thead>
+        <tbody id="tabla-catalogopos"><tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
         </div>
       </div>
     </main>
@@ -1748,10 +1788,32 @@
 <!-- TOAST -->
 <div class="toast-stack" id="toast-stack"></div>
 
+<!-- Firebase (mismo proyecto que usan el POS y el sitio de pedidos) -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════
    LUNA SMART — APP LOGIC
 ═══════════════════════════════════════════════════════ */
+
+// Mismo proyecto Firebase que pos.html y pedidos.suenodeluna.com.mx -- el
+// admin gana acceso de lectura/escritura al catalogo/{sucursal} del POS.
+var fbDb = null, fbAuthReady = Promise.resolve();
+try {
+  firebase.initializeApp({
+    apiKey: "AIzaSyAylUrEQGXad-DAZrTCWVrrXeq1rrLVTwM",
+    authDomain: "luna-smart-pos.firebaseapp.com",
+    databaseURL: "https://luna-smart-pos-default-rtdb.firebaseio.com",
+    projectId: "luna-smart-pos",
+    storageBucket: "luna-smart-pos.firebasestorage.app",
+    messagingSenderId: "29167679041",
+    appId: "1:29167679041:web:0959c2161d86552ded38c0"
+  });
+  fbDb = firebase.database();
+  fbAuthReady = firebase.auth().signInAnonymously().catch(function(e){ console.error('Firebase auth', e); });
+} catch(e) { console.error('No se pudo inicializar Firebase', e); }
+
 const USERS = {
   'jaime@suenodeluna.com.mx':   { pass: 'Luna2026!',    name: 'Jaime Sáenz',      role: 'Administrador',   ini: 'JS' },
   'admin@suenodeluna.com.mx':   { pass: 'Admin2026!',   name: 'Administrador',    role: 'Gerente General', ini: 'AG' },
@@ -1774,6 +1836,7 @@ const PAGES = {
   proveedores:  { title: 'Proveedores',           sub: 'Directorio de proveedores' },
   catalogo:     { title: 'Artículos (Catálogo)',  sub: 'Catálogo Maestro de productos' },
   recetas:      { title: 'Recetas',               sub: 'Gestiona recetas y costos de elaboración' },
+  catalogopos:  { title: 'Catálogo POS',          sub: 'Productos en venta y su receta vinculada' },
 };
 
 const BRANCHES = {
@@ -2515,6 +2578,97 @@ const LS_API = (() => {
     if (/COFFEE|ROASTER|SUENO DE LUNA/.test(t)) return 'coffee';
     return 'otro';
   }
+
+  // ── FUNCIÓN PARA LIMPIAR DATOS EQUIVOCADOS DEL NAVEGADOR ────────────────
+  // Elimina los 4 cortes equivocados de Coffee & Roasters (20, 22, 23 junio)
+  // que están cacheados en localStorage/IndexedDB
+  function limpiarDatosEquivocados() {
+    console.log('🗑️ Limpiando datos equivocados de Luna Smart...');
+
+    try {
+      // 1) Limpiar localStorage
+      const keys = Object.keys(localStorage);
+      let eliminados = 0;
+
+      keys.forEach(key => {
+        try {
+          const data = JSON.parse(localStorage.getItem(key) || '{}');
+
+          // Si es array de ingresos, filtrar
+          if (Array.isArray(data)) {
+            const filtered = data.filter(item => {
+              // Criterios: eliminar si es Coffee & Roasters de 20, 22, 23 junio
+              if (item.sucursal && item.sucursal.toUpperCase().includes('COFFEE')) {
+                if (item.fecha && (
+                  item.fecha.includes('20-06') ||
+                  item.fecha.includes('22-06') ||
+                  item.fecha.includes('23-06')
+                )) {
+                  console.log('  ❌ Eliminando: ' + item.fecha + ' | ' + item.sucursal);
+                  eliminados++;
+                  return false; // NO incluir en el nuevo array
+                }
+              }
+              return true; // Mantener
+            });
+
+            if (filtered.length !== data.length) {
+              localStorage.setItem(key, JSON.stringify(filtered));
+            }
+          }
+        } catch(e) { /* ignorar errores de parseo */ }
+      });
+
+      // 2) Limpiar IndexedDB si existe
+      if (window.indexedDB) {
+        const req = indexedDB.databases();
+        req.then(dbs => {
+          dbs.forEach(db => {
+            try {
+              const dbReq = indexedDB.open(db.name);
+              dbReq.onsuccess = () => {
+                const database = dbReq.result;
+                const stores = Array.from(database.objectStoreNames);
+                stores.forEach(storeName => {
+                  try {
+                    const tx = database.transaction([storeName], 'readwrite');
+                    tx.objectStore(storeName).clear();
+                    console.log('  ✓ IndexedDB store limpiado: ' + storeName);
+                  } catch(e) { }
+                });
+              };
+            } catch(e) { }
+          });
+        }).catch(() => { /* ignorar si no está disponible */ });
+      }
+
+      // 3) Limpiar Service Worker cache
+      if ('caches' in window) {
+        caches.keys().then(names => {
+          names.forEach(name => {
+            caches.delete(name);
+            console.log('  ✓ Cache limpiado: ' + name);
+          });
+        });
+      }
+
+      console.log('✅ COMPLETADO: ' + eliminados + ' cortes eliminados del navegador');
+      console.log('🔄 Recargando Luna Smart en 1 segundo...');
+
+      // Mostrar confirmación
+      alert('✅ Se eliminaron ' + eliminados + ' cortes equivocados del almacenamiento local.\n\nLuna Smart se recargará automáticamente.');
+
+      // Recargar la página después de 1 segundo
+      setTimeout(() => {
+        location.reload();
+      }, 1000);
+
+    } catch(err) {
+      console.error('❌ Error al limpiar datos:', err);
+      alert('❌ Error: ' + err.message);
+    }
+  }
+
   // ¿pasa el filtro de sucursal activo? (texto = sucursal o unidad de negocio)
   function _pasaBranch(texto) {
     return _branchActivo === 'all' || _branchOf(texto) === _branchActivo;
@@ -5813,6 +5967,249 @@ const LS_UI = (() => {
   }
 
   // ══════════════════════════════════════════════════════════
+  // CATÁLOGO POS (Firebase) — productos en venta + vínculo a receta
+  // ══════════════════════════════════════════════════════════
+  const CATPOS_SUCURSALES = [
+    {id:'cafeteria', nombre:'Casa de la Cultura'},
+    {id:'grano',     nombre:'Venta café en grano'},
+    {id:'helfy',     nombre:'Helfy Fu'},
+    {id:'eventos',   nombre:'Sueño de Luna Eventos'},
+    {id:'barbacoa',  nombre:'Barbacoa y Menudo'},
+  ];
+  const CATPOS_PREFIJO = {cafeteria:'cc', grano:'g', helfy:'h', eventos:'e', barbacoa:'b'};
+  let _catposSucursal = 'cafeteria';
+  let _catposProductos = [];
+  let _catposRecetas = [];
+
+  function _h(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  async function renderCatalogoPOS() {
+    const cont = document.getElementById('catpos-sucursales');
+    if (cont) {
+      cont.innerHTML = CATPOS_SUCURSALES.map(s => `<button class="btn ${s.id===_catposSucursal?'btn-primary':''} btn-sm" onclick="LS_UI.cambiarSucursalCatalogoPOS('${s.id}')">${s.nombre}</button>`).join('');
+    }
+    await _catposCargar();
+  }
+
+  async function _catposCargar() {
+    showLoading('tabla-catalogopos');
+    try {
+      if (!fbDb) throw new Error('Firebase no disponible');
+      await fbAuthReady;
+      const [snap, recetas] = await Promise.all([
+        fbDb.ref('catalogo/' + _catposSucursal).once('value'),
+        LS_API.getRecetas().catch(() => []),
+      ]);
+      const val = snap.val() || {};
+      _catposProductos = Object.keys(val).map(id => val[id]).sort((a,b) => (a.name||'').localeCompare(b.name||''));
+      _catposRecetas = recetas;
+      _pintarCatalogoPOS(_catposProductos);
+    } catch(e) {
+      console.error('Error cargando catálogo POS:', e);
+      showError('tabla-catalogopos', 'Error cargando el catálogo (revisa la conexión con Firebase)');
+    }
+  }
+
+  function _catposRecetaNombre(idReceta) {
+    if (!idReceta) return null;
+    const r = (_catposRecetas || []).find(x => x.id === idReceta);
+    return r ? r.nombre : idReceta;
+  }
+
+  function _pintarCatalogoPOS(lista) {
+    const tbody = document.getElementById('tabla-catalogopos');
+    if (!tbody) return;
+    if (!lista || !lista.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)">Sin productos en esta sucursal</td></tr>';
+      return;
+    }
+    tbody.innerHTML = lista.map(p => {
+      const precio = p.prices ? Object.entries(p.prices).map(([k,v]) => `${k}: ${LS_API.formatMXNDec(v)}`).join(' / ') : LS_API.formatMXNDec(p.price || 0);
+      const recNombre = _catposRecetaNombre(p.idReceta);
+      return `<tr>
+        <td style="font-family:var(--mono);color:var(--tx-3)">${_h(p.id)}</td>
+        <td style="font-weight:500">${_h(p.name)}</td>
+        <td style="color:var(--tx-2)">${_h(p.menu||'')}${p.sub ? ' · '+_h(p.sub) : ''}</td>
+        <td class="num" style="font-family:var(--mono)">${precio}</td>
+        <td>${recNombre ? `<span class="badge b-s"><span class="bdot"></span>${_h(recNombre)}</span>` : `<span class="badge b-w"><span class="bdot"></span>Sin receta</span>`}</td>
+        <td style="white-space:nowrap">
+          <button class="icon-btn" title="Editar" onclick="LS_UI.editarProductoPOS('${p.id}')"><i class="ti ti-pencil"></i></button>
+          <button class="icon-btn" title="Eliminar" onclick="LS_UI.confirmarBorrarProductoPOS('${p.id}')"><i class="ti ti-trash"></i></button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function buscarCatalogoPOS(q) {
+    const t = _norm(q), l = _catposProductos || [];
+    if (!t) { _pintarCatalogoPOS(l); return; }
+    _pintarCatalogoPOS(l.filter(p => _norm(p.name||'').includes(t) || _norm(p.id||'').includes(t)));
+  }
+
+  function cambiarSucursalCatalogoPOS(sucId) {
+    _catposSucursal = sucId;
+    renderCatalogoPOS();
+  }
+
+  function _catposSiguienteId() {
+    const prefijo = CATPOS_PREFIJO[_catposSucursal] || 'x';
+    let max = 0;
+    (_catposProductos || []).forEach(p => {
+      const m = String(p.id||'').match(new RegExp('^' + prefijo + '(\\d+)$'));
+      if (m) max = Math.max(max, parseInt(m[1], 10));
+    });
+    return prefijo + (max + 1);
+  }
+
+  function abrirNuevoProductoPOS() { _formProductoPOS(null); }
+  function editarProductoPOS(id) {
+    const p = (_catposProductos || []).find(x => x.id === id);
+    if (p) _formProductoPOS(p);
+  }
+
+  function _formProductoPOS(producto) {
+    const esEdicion = !!producto;
+    const sizedInicial = producto ? !!producto.sized : false;
+    const recetasOpts = (_catposRecetas || []).map(r => `<option value="${r.id}" ${producto && producto.idReceta===r.id ? 'selected' : ''}>${_h(r.nombre)}${r.costo_elaboracion ? ' — '+LS_API.formatMXNDec(r.costo_elaboracion) : ''}</option>`).join('');
+    const precioSimple = producto && !producto.sized ? (producto.price || '') : '';
+    const preciosSized = producto && producto.prices ? producto.prices : {};
+    const sizeKeys = Object.keys(preciosSized);
+    const sucNombre = (CATPOS_SUCURSALES.find(s=>s.id===_catposSucursal) || {}).nombre || '';
+
+    openModal(`
+    <div class="modal-overlay" id="modal-producto-pos" onclick="if(event.target===this)_cerrarModal()">
+      <div class="modal" style="max-width:560px;max-height:90vh;overflow-y:auto">
+        <div class="modal-header">
+          <div>
+            <div class="modal-title">${esEdicion ? 'Editar producto' : 'Nuevo producto'}</div>
+            <div class="modal-sub">${sucNombre}</div>
+          </div>
+          <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="ff"><label>Nombre *</label><input type="text" id="pp-nombre" value="${_h(producto ? producto.name : '')}"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="ff"><label>Categoría (menú)</label><input type="text" id="pp-menu" value="${_h(producto ? producto.menu : '')}" placeholder="Bebidas, Alimentos..."></div>
+            <div class="ff"><label>Subcategoría</label><input type="text" id="pp-sub" value="${_h(producto ? producto.sub : '')}" placeholder="Cafés Calientes..."></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="ff"><label>Área de preparación</label>
+              <select id="pp-area">
+                <option value="barra" ${!producto || producto.area==='barra' ? 'selected':''}>Barra</option>
+                <option value="cocina" ${producto && producto.area==='cocina' ? 'selected':''}>Cocina</option>
+              </select>
+            </div>
+            <div class="ff"><label>¿Tiene tamaños?</label>
+              <select id="pp-sized" onchange="LS_UI._toggleSizedProductoPOS(this.value==='si')">
+                <option value="no" ${!sizedInicial ? 'selected':''}>No, precio único</option>
+                <option value="si" ${sizedInicial ? 'selected':''}>Sí, por tamaño</option>
+              </select>
+            </div>
+          </div>
+          <div id="pp-precio-simple" style="display:${sizedInicial ? 'none':'block'}">
+            <div class="ff"><label>Precio</label><input type="number" id="pp-precio" value="${precioSimple}" inputmode="decimal"></div>
+          </div>
+          <div id="pp-precio-sized" style="display:${sizedInicial ? 'block':'none'}">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="ff"><label>Nombre tamaño 1</label><input type="text" id="pp-t1-nombre" value="${sizeKeys[0] ? _h(sizeKeys[0]) : 'El Chico'}"></div>
+              <div class="ff"><label>Precio</label><input type="number" id="pp-t1-precio" value="${sizeKeys[0] ? preciosSized[sizeKeys[0]] : ''}" inputmode="decimal"></div>
+              <div class="ff"><label>Nombre tamaño 2</label><input type="text" id="pp-t2-nombre" value="${sizeKeys[1] ? _h(sizeKeys[1]) : 'El Mayor'}"></div>
+              <div class="ff"><label>Precio</label><input type="number" id="pp-t2-precio" value="${sizeKeys[1] ? preciosSized[sizeKeys[1]] : ''}" inputmode="decimal"></div>
+            </div>
+          </div>
+          <div class="ff"><label>Receta vinculada (opcional)</label>
+            <select id="pp-receta"><option value="">— Sin receta —</option>${recetasOpts}</select>
+          </div>
+          ${esEdicion ? `<div class="ff" style="margin-top:2px"><label style="text-transform:none;font-size:11px;color:var(--tx-4);font-weight:400">ID: <span style="font-family:var(--mono)">${producto.id}</span> — los modificadores (leche, extras, etc.) no se editan aquí, se conservan tal cual</label></div>` : ''}
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
+          <button class="btn-save" id="pp-guardar" onclick="LS_UI.guardarProductoPOS(${esEdicion ? `'${producto.id}'` : 'null'})">${esEdicion ? 'Guardar cambios' : 'Crear producto'}</button>
+        </div>
+      </div>
+    </div>`);
+  }
+
+  function _toggleSizedProductoPOS(sized) {
+    document.getElementById('pp-precio-simple').style.display = sized ? 'none' : 'block';
+    document.getElementById('pp-precio-sized').style.display = sized ? 'block' : 'none';
+  }
+
+  async function guardarProductoPOS(idExistente) {
+    const nombre = document.getElementById('pp-nombre').value.trim();
+    if (!nombre) { toast('Falta el nombre', 'Escribe el nombre del producto', 'err', 'ti-alert-triangle'); return; }
+    const menu = document.getElementById('pp-menu').value.trim();
+    const sub = document.getElementById('pp-sub').value.trim();
+    const area = document.getElementById('pp-area').value;
+    const sized = document.getElementById('pp-sized').value === 'si';
+    const idRecetaSel = document.getElementById('pp-receta').value;
+
+    const btn = document.getElementById('pp-guardar');
+    btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i> Guardando...';
+
+    try {
+      if (!fbDb) throw new Error('Firebase no disponible');
+      const id = idExistente || _catposSiguienteId();
+      const payload = { id, name: nombre, menu, sub, area, idReceta: idRecetaSel || null };
+      if (sized) {
+        const t1n = document.getElementById('pp-t1-nombre').value.trim() || 'El Chico';
+        const t1p = parseFloat(document.getElementById('pp-t1-precio').value) || 0;
+        const t2n = document.getElementById('pp-t2-nombre').value.trim() || 'El Mayor';
+        const t2p = parseFloat(document.getElementById('pp-t2-precio').value) || 0;
+        payload.sized = true;
+        payload.prices = { [t1n]: t1p, [t2n]: t2p };
+        payload.price = t1p;
+      } else {
+        payload.sized = false;
+        payload.price = parseFloat(document.getElementById('pp-precio').value) || 0;
+        payload.prices = null;
+      }
+
+      await fbAuthReady;
+      await fbDb.ref('catalogo/' + _catposSucursal + '/' + id).update(payload);
+      _cerrarModal();
+      toast(idExistente ? 'Producto actualizado' : 'Producto creado', nombre, 'ok', 'ti-check');
+      await _catposCargar();
+    } catch(e) {
+      console.error(e);
+      toast('Error al guardar', 'No se pudo guardar el producto', 'err', 'ti-alert-triangle');
+      btn.disabled = false; btn.innerHTML = idExistente ? 'Guardar cambios' : 'Crear producto';
+    }
+  }
+
+  function confirmarBorrarProductoPOS(id) {
+    const p = (_catposProductos || []).find(x => x.id === id);
+    if (!p) return;
+    openModal(`
+    <div class="modal-overlay" id="modal-del-prodpos" onclick="if(event.target===this)_cerrarModal()">
+      <div class="modal" style="max-width:420px">
+        <div class="modal-header">
+          <div class="modal-title">¿Eliminar "${_h(p.name)}"?</div>
+          <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-body"><p style="color:var(--tx-2);font-size:13px">Esta acción no se puede deshacer. Deja de aparecer en el POS de inmediato.</p></div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
+          <button class="btn-save" style="background:var(--rojo)" onclick="LS_UI.ejecutarBorrarProductoPOS('${id}')">Eliminar</button>
+        </div>
+      </div>
+    </div>`);
+  }
+
+  async function ejecutarBorrarProductoPOS(id) {
+    try {
+      await fbAuthReady;
+      await fbDb.ref('catalogo/' + _catposSucursal + '/' + id).remove();
+      _cerrarModal();
+      toast('Producto eliminado', '', 'ok', 'ti-check');
+      await _catposCargar();
+    } catch(e) {
+      console.error(e);
+      toast('Error', 'No se pudo eliminar', 'err', 'ti-alert-triangle');
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════
   // FORMULARIO — NUEVA FACTURA
   // ══════════════════════════════════════════════════════════
   async function buildFormFactura(editData) {
@@ -6602,6 +6999,7 @@ const LS_UI = (() => {
       case 'proveedores':  await renderProveedores();   break;
       case 'catalogo':     await renderCatalogo();      break;
       case 'recetas':      await renderRecetas();       break;
+      case 'catalogopos':  await renderCatalogoPOS();   break;
     }
   }
 
@@ -6638,6 +7036,8 @@ const LS_UI = (() => {
     calcIngreso, guardarIngreso, guardarFactura, agregarLineaVenta, calcVentaDetalle, autollenarPrecioVenta,
     agregarLineaVentaDirect, calcVentaDirectaTotal, agregarVendedor, guardarVentaDirecta, registrarNuevoCliente,
     abrirNuevaReceta, agregarLineaReceta, actualizarIngrediente, calcRecetaCosto, guardarReceta, renderRecetas,
+    renderCatalogoPOS, buscarCatalogoPOS, cambiarSucursalCatalogoPOS, abrirNuevoProductoPOS, editarProductoPOS,
+    guardarProductoPOS, _toggleSizedProductoPOS, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS,
     closeModal,
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },
