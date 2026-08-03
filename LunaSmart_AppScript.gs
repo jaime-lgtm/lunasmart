@@ -39,13 +39,10 @@ const HOJAS = {
   CONCILIACION:   'CONCILIACION',
   DATA_INGRESOS:  'DATA_INGRESOS',
   VENTAS_PARROT:  'VENTAS_PARROT',        // ventas por artículo (de Parrot)
-  RECETAS:        'RECETAS',
-  RECETAS_DET:    'RECETAS DETALLES',
+  CLIENTES_DOM:   'CLIENTES_DOMICILIO',   // clientes de domicilio (POS)
 };
 
 // ── JSON OUTPUT ─────────────────────────────────────────────────────────────
-// Apps Script agrega CORS automáticamente en despliegues públicos ("Cualquier persona").
-// No se necesita setHeader — de hecho no está disponible en todos los runtimes.
 function _json(data) {
   return ContentService
     .createTextOutput(JSON.stringify(data))
@@ -64,7 +61,6 @@ function _getSheet(nombre) {
   return sh;
 }
 
-/** Lee todos los valores de una hoja como array de arrays, normalizando fechas a DD/MM/YYYY. */
 function _leerTodo(nombre) {
   const sh = _getSheet(nombre);
   const vals = sh.getDataRange().getValues();
@@ -79,7 +75,6 @@ function _leerTodo(nombre) {
   });
 }
 
-/** Devuelve filas como array de arrays (incluyendo encabezado). */
 function _hoja(nombre) {
   try {
     return { status: 'ok', data: _leerTodo(nombre) };
@@ -88,42 +83,27 @@ function _hoja(nombre) {
   }
 }
 
-/**
- * Devuelve la fila donde escribir el PRÓXIMO registro.
- * Escanea desde el FINAL hacia arriba buscando la última fila con dato
- * real en la columna `col` (base 1), y devuelve esa fila + 1.
- *
- * Ventaja vs buscar la primera vacía: ignora filas con formato/validación
- * que quedan después del último registro real, y siempre escribe
- * inmediatamente después del dato más reciente.
- */
 function _siguienteFilaLibre(sh, col) {
   var col0 = col - 1;
   var vals = sh.getDataRange().getValues();
   for (var i = vals.length - 1; i >= 1; i--) {
     var cell = String(vals[i][col0]).trim();
     if (cell !== '' && cell !== '0' && cell !== '$0.00') {
-      return i + 2; // fila Sheets = i+1, siguiente = i+2
+      return i + 2;
     }
   }
-  return 2; // solo hay encabezado
+  return 2;
 }
 
-/**
- * Escribe datos inmediatamente después del último registro real.
- * Col B (FECHA) es el indicador de fila con dato en todas las hojas principales.
- */
 function _escribirFila(sh, datos) {
   var fila = _siguienteFilaLibre(sh, 2);
   sh.getRange(fila, 1, 1, datos.length).setValues([datos]);
 }
 
-/** Genera un ID incremental del tipo PREFIX-NNNNN */
 function _nextId(hoja, prefix) {
   try {
     const sh = _getSheet(hoja);
     const vals = sh.getDataRange().getValues();
-    // Buscar IDs existentes con ese prefijo en col A
     const ids = vals.slice(1)
       .map(function(r) { return String(r[0]); })
       .filter(function(v) { return v.indexOf(prefix) === 0; });
@@ -167,11 +147,10 @@ function doGet(e) {
     return _json(_hoja(map[accion]));
   }
 
-  // Sin acción: devuelve info de salud
   return _json({ status: 'ok', app: 'LunaSmart', version: '4.0', timestamp: new Date().toISOString() });
 }
 
-// ── doPost: escritura y sincronización ────────────────────────────────────
+// ── doPost: escritura ──────────────────────────────────────────────────────
 function doPost(e) {
   let body = {};
   try {
@@ -182,14 +161,23 @@ function doPost(e) {
 
   const accion = body.accion || '';
 
-  // ── SEGURIDAD: toda ESCRITURA requiere el token compartido ──────────────
-  // Bloquea que alguien con la URL del Apps Script escriba/borre sin la clave.
-  if (body.token !== WRITE_TOKEN) {
+  // ── SEGURIDAD: Verificar token (puede venir en diferentes lugares) ──────
+  // El token puede venir en:
+  // 1. body.token (forma estándar)
+  // 2. body.datos.token (si viene anidado)
+  // 3. Fallback: rechazar si no está en ningún lado
+  const tokenEnviadoEnBody = body.token || '';
+  const tokenEnviadoEnDatos = (body.datos && body.datos.token) || '';
+  const tokenRecibido = tokenEnviadoEnBody || tokenEnviadoEnDatos;
+
+  if (tokenRecibido !== WRITE_TOKEN) {
+    Logger.log('❌ Intento de acceso NO AUTORIZADO');
+    Logger.log('  Token esperado: ' + WRITE_TOKEN);
+    Logger.log('  Token recibido: ' + (tokenRecibido || 'NINGUNO'));
+    Logger.log('  Acción: ' + accion);
     return _err('No autorizado');
   }
 
-  // El frontend envía los datos dentro de body.datos. Desenvolvemos aquí
-  // (con fallback a body por compatibilidad con llamadas directas/planas).
   const datos = body.datos || body;
 
   switch (accion) {
@@ -208,30 +196,41 @@ function doPost(e) {
     case 'actualizarCatalogoArticulo': return _actualizarCatalogoArticulo(datos);
     case 'borrarCatalogoArticulo':     return _borrarCatalogoArticulo(datos);
     case 'registrarCliente':           return _registrarCliente(datos);
-    case 'registrarReceta':            return _registrarReceta(datos);
-    case 'borrarIngresosPorFecha':      return _borrarIngresosPorFecha(datos);
-    case 'sincronizarParrot':          return _sincronizarParrot(body.sucursal || datos.sucursal || 'CASA DE LA CULTURA', body.desde || datos.desde, body.hasta || datos.hasta);
     case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(datos);
+    case 'buscarClienteDom':           return _buscarClienteDom(datos);
+    case 'registrarClienteDom':        return _registrarClienteDom(datos);
+    case 'obtenerCorteDia':            return _obtenerCorteDia(datos);
     default: return _err('Acción desconocida: ' + accion);
   }
 }
 
-// ── REGISTRAR INGRESO + DETALLE DE VENTA ───────────────────────────────────
-// Escribe el corte en INGRESOS y, si vienen, las líneas de qué se vendió en
-// INGRESOS DETALLES (ligadas por ID_INGRESO en col B). Para conciliar manual.
+// ── REGISTRAR INGRESO + DETALLE ────────────────────────────────────────────
 function _registrarIngresoCompleto(b) {
   try {
     var sh = _getSheet(HOJAS.INGRESOS);
     var id = _nextId(HOJAS.INGRESOS, 'INGRESOS');
     var efectivo      = parseFloat(b.efectivo      || 0);
     var tarjeta       = parseFloat(b.tarjeta       || 0);
+    var mercadopago   = parseFloat(b.mercadopago   || 0);
     var transferencia = parseFloat(b.transferencia || 0);
     var rappi         = parseFloat(b.rappi         || 0);
-    var total         = efectivo + tarjeta + transferencia + rappi;
+    var total         = efectivo + tarjeta + mercadopago + transferencia + rappi;
     var inicioCaja    = parseFloat(b.inicioCaja    || 0);
     var retiros       = parseFloat(b.retiros       || 0);
     var ventaTotal    = parseFloat(b.ventaTotal    || total);
+    var puntosCanjeados = parseFloat(b.puntosCanjeados || 0);
     var fecha         = b.fecha || _fechaHoy();
+
+    // Migración additiva: la hoja ya existía sin estas columnas -- se agregan
+    // los encabezados solo si aún no están, sin tocar las columnas A-O existentes.
+    if (!sh.getRange(1, 16).getValue()) { sh.getRange(1, 16).setValue('Puntos Canjeados ($)'); }
+    if (!sh.getRange(1, 17).getValue()) { sh.getRange(1, 17).setValue('Mercado Pago ($)'); }
+    if (!sh.getRange(1, 18).getValue()) { sh.getRange(1, 18).setValue('Efectivo Declarado ($)'); }
+    if (!sh.getRange(1, 19).getValue()) { sh.getRange(1, 19).setValue('Efectivo Diferencia ($)'); }
+    if (!sh.getRange(1, 20).getValue()) { sh.getRange(1, 20).setValue('Terminal Declarado ($)'); }
+    if (!sh.getRange(1, 21).getValue()) { sh.getRange(1, 21).setValue('Terminal Diferencia ($)'); }
+    if (!sh.getRange(1, 22).getValue()) { sh.getRange(1, 22).setValue('Transferencia Declarado ($)'); }
+    if (!sh.getRange(1, 23).getValue()) { sh.getRange(1, 23).setValue('Transferencia Diferencia ($)'); }
 
     _escribirFila(sh, [
       id, fecha, b.sucursal || '', b.cliente || '',
@@ -239,9 +238,16 @@ function _registrarIngresoCompleto(b) {
       efectivo, tarjeta, transferencia, rappi,
       total, ventaTotal, total - ventaTotal,
       b.observaciones || 'MANUAL',
+      puntosCanjeados,
+      mercadopago,
+      (typeof b.cajaDeclarada === 'number') ? b.cajaDeclarada : '',
+      (typeof b.cajaDiferencia === 'number') ? b.cajaDiferencia : '',
+      (typeof b.terminalDeclarada === 'number') ? b.terminalDeclarada : '',
+      (typeof b.terminalDiferencia === 'number') ? b.terminalDiferencia : '',
+      (typeof b.transferenciaDeclarada === 'number') ? b.transferenciaDeclarada : '',
+      (typeof b.transferenciaDiferencia === 'number') ? b.transferenciaDiferencia : '',
     ]);
 
-    // Detalle de venta → INGRESOS DETALLES
     var nDet = 0;
     var detalles = b.detalles || [];
     if (detalles.length) {
@@ -250,19 +256,19 @@ function _registrarIngresoCompleto(b) {
         var cant = parseFloat(d.cantidad || 0) || 0;
         var precio = parseFloat(d.precio || 0) || 0;
         return [
-          Utilities.getUuid().substring(0, 8), // A ID_CONCEPTO
-          id,                                   // B ID_INGRESOS (liga al corte)
-          fecha,                                // C FECHA
-          d.articulo,                           // D ARTICULO
-          cant,                                 // E CANTIDAD
-          precio,                               // F PRECIO UNIT
-          cant * precio,                        // G SUBTOTAL_LINEA
-          '',                                   // H ¿APLICA IVA?
-          0,                                    // I IVA MONTO
+          Utilities.getUuid().substring(0, 8),
+          id,
+          fecha,
+          d.articulo,
+          cant,
+          precio,
+          cant * precio,
+          '',
+          0,
         ];
       });
       if (filas.length) {
-        var filaInicio = _siguienteFilaLibre(shD, 4); // col D ARTICULO como indicador
+        var filaInicio = _siguienteFilaLibre(shD, 4);
         shD.getRange(filaInicio, 1, filas.length, 9).setValues(filas);
         nDet = filas.length;
       }
@@ -274,7 +280,33 @@ function _registrarIngresoCompleto(b) {
   }
 }
 
-// ── ACTUALIZAR / BORRAR INGRESO (corte) ────────────────────────────────────
+// ── Consultar el corte ya registrado de un turno del día (para acumulado) ──
+function _obtenerCorteDia(b) {
+  try {
+    var sh = _getSheet(HOJAS.INGRESOS);
+    var vals = sh.getDataRange().getValues();
+    var fecha = b.fecha || _fechaHoy();
+    var sucursal = b.sucursal || '';
+    var turno = b.turno || 'TURNO MAÑANA';
+    for (var i = vals.length - 1; i >= 1; i--) {
+      var r = vals[i];
+      if (String(r[1]) === String(fecha) && String(r[2]) === String(sucursal) && String(r[3]) === String(turno)) {
+        return _json({
+          ok: true, encontrado: true,
+          fecha: r[1], sucursal: r[2], turno: r[3],
+          efectivo: r[7], tarjeta: r[8], transferencia: r[9], rappi: r[10],
+          totalDeclarado: r[11], ventaTotal: r[12],
+          puntosCanjeados: r[15] || 0, mercadopago: r[16] || 0,
+        });
+      }
+    }
+    return _json({ ok: true, encontrado: false });
+  } catch (e) {
+    return _err('Error al buscar corte del día: ' + e.message);
+  }
+}
+
+// ── ACTUALIZAR INGRESO ─────────────────────────────────────────────────────
 function _actualizarIngreso(b) {
   try {
     var id = String(b.id || '').trim();
@@ -294,7 +326,6 @@ function _actualizarIngreso(b) {
     var total         = efectivo + tarjeta + transferencia + rappi;
     var ventaTotal    = parseFloat(b.ventaTotal || total);
 
-    // Actualizar cols B..O (fecha..observaciones)
     sh.getRange(fila, 2, 1, 14).setValues([[
       b.fecha || vals[fila-1][1],
       b.sucursal || '',
@@ -307,7 +338,6 @@ function _actualizarIngreso(b) {
       b.observaciones || 'MANUAL',
     ]]);
 
-    // Reemplazar detalle de venta (INGRESOS DETALLES col B = ID_INGRESOS)
     if (b.detalles) {
       var shD = _getSheet(HOJAS.ING_DETALLES);
       var dvals = shD.getDataRange().getValues();
@@ -327,6 +357,7 @@ function _actualizarIngreso(b) {
   } catch (e) { return _err(e.message); }
 }
 
+// ── BORRAR INGRESO ─────────────────────────────────────────────────────────
 function _borrarIngreso(b) {
   try {
     var id = String(b.id || '').trim();
@@ -345,7 +376,6 @@ function _borrarIngreso(b) {
   } catch (e) { return _err(e.message); }
 }
 
-// Asigna ID a los cortes históricos que no tienen (para poder editarlos)
 function asignarIdsIngresos() {
   var sh = _getSheet(HOJAS.INGRESOS);
   var vals = sh.getDataRange().getValues();
@@ -384,7 +414,7 @@ function _registrarIngreso(b) {
       id,
       b.fecha || _fechaHoy(),
       b.sucursal || '',
-      b.cliente  || '',          // turno ID
+      b.cliente  || '',
       inicioCaja,
       retiros,
       parseFloat(b.depositos || 0),
@@ -405,9 +435,6 @@ function _registrarIngreso(b) {
 }
 
 // ── REGISTRAR FACTURA ──────────────────────────────────────────────────────
-// Estructura real del Sheet FACTURAS (7 cols, sin TIPO):
-// A=ID_FACTURA | B=FECHA | C=UNIDAD DE NEGOCIO | D=PROVEEDOR |
-// E=FOLIO/TICKET | F=FOTO COMPROBANTE | G=TOTAL FACTURA
 function _registrarFactura(b) {
   try {
     const sh = _getSheet(HOJAS.FACTURAS);
@@ -418,7 +445,7 @@ function _registrarFactura(b) {
       b.fecha     || _fechaHoy(),
       b.unidad    || '',
       b.proveedor || '',
-      b.folio     || '',   // col E (sin TIPO intermedio)
+      b.folio     || '',
       b.foto      || '',
       parseFloat(b.total || 0),
     ]);
@@ -429,8 +456,7 @@ function _registrarFactura(b) {
   }
 }
 
-// ── REGISTRAR FACTURA COMPLETA (cabecera + todos los artículos en 1 escritura) ──
-// Mucho más rápido que registrar artículo por artículo.
+// ── REGISTRAR FACTURA COMPLETA ────────────────────────────────────────────
 function _registrarFacturaCompleta(b) {
   try {
     var shF = _getSheet(HOJAS.FACTURAS);
@@ -450,8 +476,7 @@ function _registrarFacturaCompleta(b) {
         var sub = qty * precio;
         return [ Utilities.getUuid().substring(0,8), id, b.fecha || '', l.articulo || '', qty, precio, 'NO', 0, sub ];
       });
-      shD.getRange(filaInicio, 1, filas.length, 9).setValues(filas);  // UNA sola escritura
-      // Costos dinámicos en lote (lee el catálogo 1 vez)
+      shD.getRange(filaInicio, 1, filas.length, 9).setValues(filas);
       var mapa = {};
       lineas.forEach(function(l){ if (l.articulo) mapa[String(l.articulo).trim().toLowerCase()] = parseFloat(l.precioUnit) || 0; });
       _actualizarCostosDinamicos(mapa);
@@ -462,7 +487,6 @@ function _registrarFacturaCompleta(b) {
   }
 }
 
-// Actualiza el costo dinámico de varios artículos leyendo el catálogo una sola vez
 function _actualizarCostosDinamicos(mapaArticuloPrecio) {
   try {
     var sh = _getSheet(HOJAS.CATALOGO);
@@ -470,13 +494,13 @@ function _actualizarCostosDinamicos(mapaArticuloPrecio) {
     for (var i = 1; i < datos.length; i++) {
       var nombre = String(datos[i][0]).trim().toLowerCase();
       if (mapaArticuloPrecio.hasOwnProperty(nombre) && mapaArticuloPrecio[nombre] > 0) {
-        sh.getRange(i + 1, 3).setValue(mapaArticuloPrecio[nombre]); // col C = Costo Dinámico
+        sh.getRange(i + 1, 3).setValue(mapaArticuloPrecio[nombre]);
       }
     }
   } catch(_) {}
 }
 
-// ── ACTUALIZAR FACTURA (editar cabecera + reemplazar artículos) ────────────
+// ── ACTUALIZAR FACTURA ────────────────────────────────────────────────────
 function _actualizarFactura(b) {
   try {
     var idF = String(b.id || '').trim();
@@ -489,17 +513,15 @@ function _actualizarFactura(b) {
     }
     if (fila === -1) return _err('Factura no encontrada: ' + idF);
 
-    // Actualizar cabecera (cols B..G)
     sh.getRange(fila, 2, 1, 6).setValues([[
       b.fecha     || vals[fila-1][1],
       b.unidad    || '',
       b.proveedor || '',
       b.folio     || '',
-      vals[fila-1][5] || '',                 // FOTO (se conserva)
+      vals[fila-1][5] || '',
       parseFloat(b.total || 0)
     ]]);
 
-    // Reemplazar artículos: borrar los existentes de esta factura y reinsertar
     if (b.lineas) {
       var shD = _getSheet(HOJAS.ART_DETALLES);
       var dvals = shD.getDataRange().getValues();
@@ -526,7 +548,7 @@ function _actualizarFactura(b) {
   }
 }
 
-// ── BORRAR FACTURA (cabecera + sus artículos) ──────────────────────────────
+// ── BORRAR FACTURA ────────────────────────────────────────────────────────
 function _borrarFactura(b) {
   try {
     var idF = String(b.id || '').trim();
@@ -547,11 +569,7 @@ function _borrarFactura(b) {
   }
 }
 
-// ── REGISTRAR ARTÍCULO DETALLE ─────────────────────────────────────────────
-// Estructura real del Sheet ARTICULOS DETALLES (9 cols):
-// A=Z(auto) | B=ID_FACTURA | C=FECHA | D=ARTICULO | E=CANTIDAD |
-// F=PRECIO UNIT | G=¿APLICA IVA? | H=IVA MONTO | I=TOTAL
-// → Escribimos desde col B (dejamos col A para el contador automático del Sheet)
+// ── REGISTRAR ARTÍCULO DETALLE ────────────────────────────────────────────
 function _registrarArticuloDetalle(b) {
   try {
     const sh = _getSheet(HOJAS.ART_DETALLES);
@@ -562,20 +580,18 @@ function _registrarArticuloDetalle(b) {
     const iva   = aplica ? sub * 0.16 : 0;
     const total = sub + iva;
 
-    // Escribir después del último registro con dato en col B (ID_FACTURA)
     var fila = _siguienteFilaLibre(sh, 2);
     sh.getRange(fila, 2, 1, 8).setValues([[
-      b.idFactura  || '',   // B
-      b.fecha      || _fechaHoy(), // C
-      b.articulo   || '',   // D
-      qty,                  // E
-      precio,               // F
-      aplica ? 'SI' : 'NO', // G
-      iva,                  // H
-      total,                // I
+      b.idFactura  || '',
+      b.fecha      || _fechaHoy(),
+      b.articulo   || '',
+      qty,
+      precio,
+      aplica ? 'SI' : 'NO',
+      iva,
+      total,
     ]]);
 
-    // Actualizar Costo Dinámico en Catálogo Maestro
     _actualizarCostoDinamico(b.articulo, precio);
 
     return _json({ status: 'ok', idDetalle: 'ARTDET-' + fila });
@@ -584,9 +600,6 @@ function _registrarArticuloDetalle(b) {
   }
 }
 
-// _siguienteFilaLibre reemplaza a _primeraFilaVaciaDesdeCol en todos los usos.
-
-/** Actualiza la columna Costo Dinámico (col C) en Catálogo Maestro */
 function _actualizarCostoDinamico(nombreArticulo, nuevoCosto) {
   if (!nombreArticulo || !nuevoCosto) return;
   try {
@@ -594,15 +607,14 @@ function _actualizarCostoDinamico(nombreArticulo, nuevoCosto) {
     const datos = sh.getDataRange().getValues();
     for (let i = 1; i < datos.length; i++) {
       if (String(datos[i][0]).trim().toLowerCase() === String(nombreArticulo).trim().toLowerCase()) {
-        sh.getRange(i + 1, 3).setValue(parseFloat(nuevoCosto)); // col C = Costo Dinámico
+        sh.getRange(i + 1, 3).setValue(parseFloat(nuevoCosto));
         break;
       }
     }
   } catch(_) {}
 }
 
-// ── REGISTRAR PROVEEDOR ────────────────────────────────────────────────────
-// Actualizar proveedor existente (por ID en col A)
+// ── PROVEEDOR ─────────────────────────────────────────────────────────────
 function _actualizarProveedor(b) {
   try {
     var id = String(b.id || '').trim();
@@ -622,7 +634,6 @@ function _actualizarProveedor(b) {
   } catch (e) { return _err(e.message); }
 }
 
-// Actualizar artículo del Catálogo Maestro (por nombre clave)
 function _actualizarCatalogoArticulo(b) {
   try {
     var clave = String(b.articuloKey || b.articulo || '').trim().toLowerCase();
@@ -635,7 +646,6 @@ function _actualizarCatalogoArticulo(b) {
         var merma = parseFloat(b.merma || 0);
         var costoFinal = merma > 0 ? costo / (1 - merma / 100) : costo;
         var cant = (b.cantidad != null && b.cantidad !== '') ? parseFloat(b.cantidad) : (vals[i][3] || 1);
-        // A=articulo B=costoBase C=costoDinamico(conserva) D=cantidad E..J
         sh.getRange(i + 1, 1, 1, 2).setValues([[b.articulo || vals[i][0], costo]]);
         sh.getRange(i + 1, 4, 1, 7).setValues([[
           cant, b.unidad || '', merma, costoFinal,
@@ -648,7 +658,6 @@ function _actualizarCatalogoArticulo(b) {
   } catch (e) { return _err(e.message); }
 }
 
-// Borrar artículo del Catálogo Maestro (por nombre en col A)
 function _borrarCatalogoArticulo(b) {
   try {
     var clave = String(b.articulo || b.articuloKey || '').trim().toLowerCase();
@@ -663,7 +672,6 @@ function _borrarCatalogoArticulo(b) {
   } catch (e) { return _err(e.message); }
 }
 
-// Borrar proveedor (por ID en col A)
 function _borrarProveedor(b) {
   try {
     var id = String(b.id || '').trim();
@@ -680,14 +688,12 @@ function _borrarProveedor(b) {
 function _registrarProveedor(b) {
   try {
     const sh = _getSheet(HOJAS.PROVEEDORES);
-    // Evitar duplicados
     const datos = sh.getDataRange().getValues();
     for (let i = 1; i < datos.length; i++) {
       if (String(datos[i][1]).trim().toLowerCase() === String(b.nombre || '').trim().toLowerCase()) {
         return _json({ status: 'ok', msg: 'El proveedor ya existe', idProveedor: datos[i][0] });
       }
     }
-    // Usar prefijo SL- para continuar la numeración histórica de proveedores
     const id = _nextId(HOJAS.PROVEEDORES, 'SL');
     _escribirFila(sh, [
       id,
@@ -732,830 +738,81 @@ function _registrarCliente(b) {
   }
 }
 
-function _borrarIngresosPorFecha(b) {
+// ── CLIENTES DE DOMICILIO (POS) ────────────────────────────────────────────
+// Hoja aparte, exclusiva del POS. No toca ninguna hoja usada por Luna Smart admin.
+function _getOrCrearSheetClientesDom() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sh = ss.getSheetByName(HOJAS.CLIENTES_DOM);
+  if (!sh) {
+    sh = ss.insertSheet(HOJAS.CLIENTES_DOM);
+    sh.appendRow(['Teléfono', 'Nombre', 'Dirección', 'Referencia', 'Sucursal', 'Última actualización', 'Cumpleaños', 'Puntos', 'Etiqueta']);
+  } else if (sh.getLastColumn() < 9) {
+    // Migración additiva: la hoja ya existía con el esquema viejo (6 columnas).
+    sh.getRange(1, 7, 1, 3).setValues([['Cumpleaños', 'Puntos', 'Etiqueta']]);
+  }
+  return sh;
+}
+
+function _normTel(tel) {
+  return String(tel || '').replace(/\D/g, '');
+}
+
+function _buscarClienteDom(b) {
   try {
-    const sh = _getSheet(HOJAS.INGRESOS);
-    const datos = sh.getDataRange().getValues();
-    const filasABorrar = [];
-
-    // Buscar filas que coincidan con los criterios
-    // Esperamos un array de objetos: [{fecha, sucursal, turno}, ...]
-    const criterios = b.criterios || [];
-
-    for (let i = 1; i < datos.length; i++) {
-      const fila = datos[i];
-      const fechaFila = String(fila[0] || '').trim();
-      const sucursalFila = String(fila[1] || '').trim().toUpperCase();
-      const turnoFila = String(fila[2] || '').trim();
-
-      // Verificar si esta fila cumple con alguno de los criterios
-      for (let crit of criterios) {
-        if (
-          fechaFila === crit.fecha &&
-          sucursalFila === crit.sucursal.toUpperCase() &&
-          turnoFila === crit.turno
-        ) {
-          filasABorrar.push(i + 1); // +1 porque deleteRows usa índice 1-based
-          break;
-        }
+    var tel = _normTel(b.telefono);
+    if (!tel) return _json({ status: 'ok', ok: false });
+    var sh = _getOrCrearSheetClientesDom();
+    var vals = sh.getDataRange().getValues();
+    for (var i = 1; i < vals.length; i++) {
+      if (_normTel(vals[i][0]) === tel) {
+        return _json({
+          status: 'ok', ok: true,
+          cliente: {
+            nombre: vals[i][1] || '', direccion: vals[i][2] || '', referencia: vals[i][3] || '',
+            cumpleanos: vals[i][6] || '', puntos: vals[i][7] || 0, etiqueta: vals[i][8] || '',
+          }
+        });
       }
     }
-
-    // Borrar filas de mayor a menor índice (para no cambiar los índices)
-    filasABorrar.sort((a, b) => b - a);
-    for (let idx of filasABorrar) {
-      sh.deleteRow(idx);
-    }
-
-    return _json({
-      status: 'ok',
-      msg: `Se borraron ${filasABorrar.length} ingresos`,
-      filasEliminadas: filasABorrar.length
-    });
+    return _json({ status: 'ok', ok: false });
   } catch(e) {
     return _err(e.message);
   }
 }
 
-function _registrarReceta(b) {
+function _registrarClienteDom(b) {
   try {
-    const shRecetas = _getSheet(HOJAS.RECETAS);
-    const shDetalles = _getSheet(HOJAS.RECETAS_DET);
-
-    // Verificar si la receta ya existe
-    const datos = shRecetas.getDataRange().getValues();
-    for (let i = 1; i < datos.length; i++) {
-      if (String(datos[i][1]).trim().toLowerCase() === String(b.nombre || '').trim().toLowerCase()) {
-        return _json({ status: 'ok', msg: 'La receta ya existe', idReceta: datos[i][0] });
+    var tel = _normTel(b.telefono);
+    if (!tel) return _err('Falta el teléfono');
+    var sh = _getOrCrearSheetClientesDom();
+    var vals = sh.getDataRange().getValues();
+    var fecha = _fechaHoy();
+    for (var i = 1; i < vals.length; i++) {
+      if (_normTel(vals[i][0]) === tel) {
+        sh.getRange(i + 1, 1, 1, 9).setValues([[
+          b.telefono || vals[i][0], b.nombre || vals[i][1], b.direccion || vals[i][2],
+          b.referencia || vals[i][3], b.sucursal || vals[i][4] || '', fecha,
+          b.cumpleanos || vals[i][6] || '', (b.puntos != null ? b.puntos : vals[i][7]) || 0,
+          b.etiqueta || vals[i][8] || '',
+        ]]);
+        return _json({ status: 'ok' });
       }
     }
-
-    // Generar ID para la receta
-    const id = _nextId(HOJAS.RECETAS, 'INGRESOS');
-
-    // Calcular costo total de ingredientes
-    let costoTotal = 0;
-    if (b.ingredientes && Array.isArray(b.ingredientes)) {
-      // TODO: Buscar costos de ingredientes desde Catálogo
-      // Por ahora, simplemente guardar los ingredientes
-    }
-
-    // Insertar receta en hoja RECETAS
-    _escribirFila(shRecetas, [
-      id,
-      b.nombre           || '',
-      b.categoria        || '',
-      b.tipo             || '',
-      b.tamano           || 0,
-      b.porciones        || 1,
-      b.clase            || '',
-      b.fecha            || '',
-      costoTotal,        // costo_elaboracion
+    sh.appendRow([
+      b.telefono || tel, b.nombre || '', b.direccion || '', b.referencia || '', b.sucursal || '', fecha,
+      b.cumpleanos || '', b.puntos || 0, b.etiqueta || '',
     ]);
-
-    // Insertar detalles de ingredientes en hoja RECETAS_DETALLES
-    if (b.ingredientes && Array.isArray(b.ingredientes)) {
-      for (let ing of b.ingredientes) {
-        _escribirFila(shDetalles, [
-          id,              // id_receta
-          ing.articulo     || '',
-          ing.cantidad     || 0,
-          ing.unidad       || '',
-          0,               // costo_en_receta (se calcula después)
-        ]);
-      }
-    }
-
-    return _json({ status: 'ok', idReceta: id });
+    return _json({ status: 'ok' });
   } catch(e) {
     return _err(e.message);
   }
-}
-
-// ── DIAGNÓSTICO PARROT ─────────────────────────────────────────────────────
-// Ejecuta esta función desde el editor y copia TODO el "Registro de ejecución".
-// Sirve para ver qué devuelve la API de Parrot y si trae el detalle de productos
-// vendidos (para poder construir "Ventas por artículo / Artículos estrella").
-// DIAGNÓSTICO: vuelca TODAS las sesiones de caja de un día para entender
-// cómo Parrot distingue "corte de turno" vs "cierre del día". Edita la fecha.
-function dumpSesionesDia() {
-  var FECHA = '2026-06-02';   // ← edita el día a inspeccionar (con varios turnos)
-  var ini = _isoToDate(FECHA, false);
-  var fin = _isoToDate(FECHA, true);
-  var ses = _parrotGet('/v1/cashier-sessions', ini, fin, 50, 0);
-  Logger.log('Sesiones encontradas el ' + FECHA + ': ' + ses.length);
-  ses.forEach(function(s, i) {
-    Logger.log('─────────── SESIÓN ' + (i+1) + ' ───────────');
-    // Campos clave para distinguir turno vs cierre del día
-    Logger.log('uuid: ' + s.uuid);
-    Logger.log('name/alias: ' + (s.name || s.alias || s.cashRegisterName || '—'));
-    Logger.log('type/kind: ' + (s.type || s.kind || s.sessionType || '—'));
-    Logger.log('startedAt: ' + s.startedAt + '  finishedAt: ' + s.finishedAt);
-    Logger.log('isMain/isDayClose/closeType: ' + s.isMain + ' / ' + s.isDayClose + ' / ' + (s.closeType||'—'));
-    Logger.log('totalSales: ' + (s.sales && s.sales.totalSales));
-    Logger.log('cashMovements: ' + JSON.stringify(s.cashMovements || {}));
-    // JSON completo (recortado) para ver todos los campos disponibles
-    Logger.log('TODOS LOS CAMPOS: ' + JSON.stringify(s).substring(0, 900));
-  });
-}
-
-/**
- * BÚSQUEDA RÁPIDA DE RANGO: resumible (pausa antes de 6 min).
- * Busca día a día, muestra resumen de cuáles días tienen datos.
- * Si timeout: ejecuta de nuevo para continuar donde se pausó.
- */
-function dumpSesionesRango() {
-  var DESDE = '2026-01-01';   // ← edita la fecha de inicio
-  var HASTA = '2026-05-31';   // ← edita la fecha de fin
-  var props = PropertiesService.getScriptProperties();
-  var cursor = props.getProperty('dumpRango_cursor') || DESDE;
-  var diasStr = props.getProperty('dumpRango_dias') || '';
-  var diasConDatos = diasStr ? diasStr.split(',') : [];
-  var t0 = Date.now();
-  var dias = 0;
-
-  Logger.log('🔍 Buscando datos de Parrot desde ' + cursor + ' hasta ' + HASTA + '...');
-  if (diasConDatos.length > 0) {
-    Logger.log('(continuando desde búsqueda anterior: ' + diasConDatos.length + ' días ya encontrados)');
-  }
-  Logger.log('');
-
-  var fecha = cursor;
-  while (fecha <= HASTA) {
-    var ini = _isoToDate(fecha, false);
-    var fin = _isoToDate(fecha, true);
-    var ses = _parrotGet('/v1/cashier-sessions', ini, fin, 50, 0);
-    if (ses.length > 0) {
-      diasConDatos.push(fecha);
-      Logger.log('✅ ' + fecha + ': ' + ses.length + ' sesiones');
-    }
-    fecha = _siguienteDiaISO(fecha);
-    dias++;
-    props.setProperty('dumpRango_cursor', fecha);
-    props.setProperty('dumpRango_dias', diasConDatos.join(','));
-
-    // Rate limit de Parrot: máx 15 req/min → 4 seg entre peticiones
-    Utilities.sleep(4000);
-
-    // Pausa si se acerca al límite de 6 min (deja margen antes de timeout)
-    if (Date.now() - t0 > 4 * 60 * 1000) {
-      Logger.log('');
-      Logger.log('⏸ Pausado. Procesados ' + dias + ' día(s) en esta corrida.');
-      Logger.log('→ Vuelve a ejecutar dumpSesionesRango para continuar desde ' + fecha + '.');
-      return;
-    }
-  }
-
-  // Limpiar propiedades cuando termina
-  props.deleteProperty('dumpRango_cursor');
-  props.deleteProperty('dumpRango_dias');
-
-  Logger.log('');
-  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  Logger.log('📊 RESUMEN FINAL');
-  Logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  Logger.log('Rango buscado: ' + DESDE + ' a ' + HASTA);
-  Logger.log('Días totales con datos: ' + diasConDatos.length);
-  if (diasConDatos.length > 0) {
-    Logger.log('Primer día: ' + diasConDatos[0]);
-    Logger.log('Último día: ' + diasConDatos[diasConDatos.length-1]);
-    Logger.log('');
-    Logger.log('✅ Parrot tiene datos. Para importar, usa en backfillParrot:');
-    Logger.log('   var DESDE = \'' + diasConDatos[0] + '\';');
-    Logger.log('   var HASTA = \'' + diasConDatos[diasConDatos.length-1] + '\';');
-  } else {
-    Logger.log('⚠️ NO se encontraron datos en este rango.');
-  }
-}
-
-function dumpSesionesRangoReset() {
-  var props = PropertiesService.getScriptProperties();
-  props.deleteProperty('dumpRango_cursor');
-  props.deleteProperty('dumpRango_dias');
-  Logger.log('🔄 Búsqueda reiniciada. La próxima ejecución empieza desde el inicio.');
-}
-
-function diagnosticarParrot() {
-  // Ventana de 24h (la API exige máximo 48h entre start y end)
-  var hoy = new Date();
-  var ayer = new Date(hoy - 24 * 60 * 60 * 1000);
-  var tz = 'America/Mexico_City';
-  var ini = Utilities.formatDate(ayer, tz, "yyyy-MM-dd'T'HH:mm:ssXXX");
-  var fin = Utilities.formatDate(hoy,  tz, "yyyy-MM-dd'T'HH:mm:ssXXX");
-  var qParams = '?startTimestamp=' + encodeURIComponent(ini) + '&endTimestamp=' + encodeURIComponent(fin) +
-                '&storeUUID=' + PARROT_STORE_UUID + '&pageSize=5';
-
-  // Endpoints oficiales (base: api.parrot.rest/external)
-  var endpoints = [
-    { nom: 'List Orders',           url: PARROT_BASE_URL + '/v1/orders' + qParams },
-    { nom: 'List Order Items v2',   url: PARROT_BASE_URL + '/v2/order-items' + qParams },
-    { nom: 'List Order Items v1',   url: PARROT_BASE_URL + '/v1/order-items' + qParams },
-    { nom: 'List Cashier Sessions', url: PARROT_BASE_URL + '/v1/cashier-sessions' + qParams },
-  ];
-  var headers = { 'Authorization': 'Bearer ' + PARROT_API_KEY };
-
-  endpoints.forEach(function(ep) {
-    Logger.log('═══════════════════════════════════════════');
-    Logger.log('PROBANDO: ' + ep.nom);
-    Logger.log(ep.url);
-    try {
-      var resp = UrlFetchApp.fetch(ep.url, { headers: headers, muteHttpExceptions: true });
-      var code = resp.getResponseCode();
-      Logger.log('HTTP ' + code);
-      var body = resp.getContentText();
-      if (code !== 200) {
-        Logger.log('Respuesta: ' + body.substring(0, 300));
-        return;
-      }
-      var data = JSON.parse(body);
-      var items = data.data || data.results || (Array.isArray(data) ? data : []);
-      Logger.log('✅ Registros: ' + items.length);
-      if (items.length > 0) {
-        Logger.log('── Campos: ' + Object.keys(items[0]).join(', '));
-        Logger.log('── PRIMER REGISTRO COMPLETO:');
-        Logger.log(JSON.stringify(items[0], null, 2).substring(0, 2500));
-      }
-    } catch(e) {
-      Logger.log('Error: ' + e.message);
-    }
-  });
-  Logger.log('═══════════════════════════════════════════');
-  Logger.log('FIN. Cópiame TODO este registro.');
-}
-
-// ── PARROT POS — API api.parrot.rest/external ──────────────────────────────
-// Sucursales con Parrot: CASA DE LA CULTURA (principal), HELFY FÜ (multimarca).
-// Modelo (igual que AppSheet):
-//   cashier-session  → 1 fila en INGRESOS (corte: pagos + venta + diferencia)
-//   order-items      → filas en INGRESOS DETALLES con el ID_INGRESO del corte
-
-// GET autenticado a Parrot. Ventana [ini, fin] máx 48h. pageSize máx 100.
-function _parrotGet(path, ini, fin, pageSize, page) {
-  var tz = 'America/Mexico_City';
-  var qs = '?startTimestamp=' + encodeURIComponent(Utilities.formatDate(ini, tz, "yyyy-MM-dd'T'HH:mm:ssXXX"))
-         + '&endTimestamp='   + encodeURIComponent(Utilities.formatDate(fin, tz, "yyyy-MM-dd'T'HH:mm:ssXXX"))
-         + '&storeUUID=' + PARROT_STORE_UUID
-         + '&pageSize=' + Math.min(pageSize || 100, 100)
-         + '&page=' + (page || 0);
-  var resp = UrlFetchApp.fetch(PARROT_BASE_URL + path + qs, {
-    headers: { 'Authorization': 'Bearer ' + PARROT_API_KEY },
-    muteHttpExceptions: true
-  });
-  var code = resp.getResponseCode();
-  if (code !== 200) {
-    throw new Error('Parrot ' + path + ' HTTP ' + code + ': ' + resp.getContentText().substring(0, 150));
-  }
-  var d = JSON.parse(resp.getContentText());
-  return d.data || d.results || [];
-}
-
-function _isoToDate(iso, finDelDia) {
-  var p = String(iso).split('-');
-  return new Date(parseInt(p[0],10), parseInt(p[1],10) - 1, parseInt(p[2],10),
-                  finDelDia ? 23 : 0, finDelDia ? 59 : 0, 0);
-}
-
-// Sincroniza Parrot al modelo INGRESOS + INGRESOS DETALLES. Chunks de 24h.
-function _sincronizarParrot(sucursal, desdeISO, hastaISO) {
-  sucursal = sucursal || 'CASA DE LA CULTURA';
-  try {
-    var fin = hastaISO ? _isoToDate(hastaISO, true)  : new Date();
-    var ini = desdeISO ? _isoToDate(desdeISO, false) : new Date(fin - 2 * 24 * 60 * 60 * 1000);
-
-    var shIng = _getSheet(HOJAS.INGRESOS);
-    var shDet = _getSheet(HOJAS.ING_DETALLES);
-    var tz = Session.getScriptTimeZone();
-
-    // Turno por horario MX: 8:00–13:59 = MAÑANA, 14:00+ = TARDE
-    var turnoDe = function(d){
-      var h = parseInt(Utilities.formatDate(d, 'America/Mexico_City', 'HH'), 10);
-      return h < 14 ? 'TURNO MAÑANA' : 'TURNO TARDE';
-    };
-
-    // Dedup: sesiones ya importadas (UUID en OBSERVACIONES como "PARROT:uuid")
-    var sesVistas = {};
-    shIng.getDataRange().getValues().slice(1).forEach(function(r){
-      var m = String(r[14] || '').match(/PARROT:([a-f0-9-]+)/i);
-      if (m) sesVistas[m[1]] = r[0];   // uuid → ID_INGRESO
-    });
-    // Dedup: items ya importados (UUID en ID_CONCEPTO = col A)
-    var itemVistos = {};
-    shDet.getDataRange().getValues().slice(1).forEach(function(r){ if (r[0]) itemVistos[String(r[0])] = true; });
-
-    var nCortes = 0, nItems = 0;
-    var cursor = new Date(ini);
-    while (cursor < fin) {
-      var chunkFin = new Date(Math.min(cursor.getTime() + 24*60*60*1000, fin.getTime()));
-
-      // Negocio cerrado los DOMINGOS → saltar (no hay ventas, evita llamadas)
-      // 'u' = día ISO de la semana (1=Lun ... 7=Dom) en hora de México
-      if (Utilities.formatDate(cursor, 'America/Mexico_City', 'u') === '7') {
-        cursor = chunkFin;
-        continue;
-      }
-
-      // 1) CORTES (cashier-sessions) → INGRESOS. Mapa turno → ID_INGRESO del día.
-      var sesiones = [];
-      try { sesiones = _parrotGet('/v1/cashier-sessions', cursor, chunkFin, 50, 0); }
-      catch(e){ Logger.log('sesiones: ' + e.message); }
-      Utilities.sleep(4500);
-
-      var corteDeTurno = {};   // 'TURNO MAÑANA' → ID_INGRESO, 'TURNO TARDE' → ID_INGRESO
-      var ventanasTurno = [];  // [{ini, fin, idIng}] — ventana horaria real de cada corte
-      // SOLO cortes de turno (SHIFT_CLOSING). El DAILY_CLOSING suma ambos turnos → se ignora.
-      var esSabado = (Utilities.formatDate(cursor, 'America/Mexico_City', 'u') === '6');
-      var shifts = sesiones.filter(function(s){ return s.closingType !== 'DAILY_CLOSING'; });
-      shifts.sort(function(a,b){ return new Date(a.startedAt||a.finishedAt) - new Date(b.startedAt||b.finishedAt); });
-      shifts.forEach(function(s, idx){
-        // Turno por ORDEN cronológico (más confiable que la hora de apertura):
-        // 1er corte del día = MAÑANA, 2º = TARDE. Sábado con 1 solo corte = ambos.
-        var turno;
-        if (shifts.length === 1) {
-          turno = esSabado ? 'TURNO MAÑANA & TARDE' : turnoDe(new Date(s.startedAt || s.finishedAt));
-        } else {
-          turno = (idx === 0) ? 'TURNO MAÑANA' : 'TURNO TARDE';
-        }
-        var winIni = new Date(s.startedAt || s.finishedAt);
-        var winFin = new Date(s.finishedAt || s.startedAt);
-        if (s.uuid && sesVistas[s.uuid]) {
-          if (!corteDeTurno[turno]) corteDeTurno[turno] = sesVistas[s.uuid];
-          ventanasTurno.push({ ini: winIni, fin: winFin, idIng: sesVistas[s.uuid] });
-          return;
-        }
-        var pay = {};
-        (s.sessionByPaymentType || []).forEach(function(p){ pay[p.paymentType] = (pay[p.paymentType]||0) + (p.reportedAmount||0); });
-        var cm = s.cashMovements || {};
-        var efectivo = pay['CASH'] || 0;
-        var tarjeta  = (pay['DEBIT_CARD']||0) + (pay['CREDIT_CARD']||0) + (pay['PAY']||0);
-        var transfer = pay['THIRD_PARTY'] || 0;
-        var ventaParrot = (s.sales && s.sales.totalSales) || cm.expectedAmount || 0;
-        var declarado = cm.reportedAmount || 0;
-        var dif = (cm.differenceAmount != null) ? cm.differenceAmount : (declarado - ventaParrot);
-        var estado = Math.abs(dif) < 1 ? 'CUADRA' : (dif < 0 ? 'FALTANTE $' + Math.abs(dif) : 'SOBRANTE $' + dif);
-        var idIng = Utilities.getUuid().substring(0, 8);
-        // ISO yyyy-MM-dd para que Google Sheets NO invierta día/mes
-        var fecha = Utilities.formatDate(new Date(s.finishedAt || s.startedAt), tz, 'yyyy-MM-dd');
-        _escribirFila(shIng, [
-          idIng, fecha, sucursal, turno,
-          cm.startingAmount || 0, cm.withdrawals || 0, cm.deposits || 0,
-          efectivo, tarjeta, transfer, 0,
-          declarado, ventaParrot, dif,
-          estado + ' | PARROT:' + s.uuid
-        ]);
-        sesVistas[s.uuid] = idIng;
-        if (!corteDeTurno[turno]) corteDeTurno[turno] = idIng;
-        ventanasTurno.push({ ini: winIni, fin: winFin, idIng: idIng });
-        nCortes++;
-      });
-
-      // Fallback: si solo hay un corte en el día, sirve para cualquier turno
-      var unicoCorte = null;
-      for (var k in corteDeTurno) { unicoCorte = unicoCorte || corteDeTurno[k]; }
-
-      // 2) VENTAS POR ARTÍCULO → INGRESOS DETALLES (ligado al corte del MISMO turno)
-      if (unicoCorte) {
-        var page = 0, hayMas = true, guard = 0;
-        while (hayMas && guard < 25) {
-          var items = [];
-          try { items = _parrotGet('/v2/order-items', cursor, chunkFin, 100, page); }
-          catch(e){ Logger.log('items p' + page + ': ' + e.message); break; }
-          Utilities.sleep(4500);
-          items.forEach(function(it){
-            if (it.uuid && itemVistos[it.uuid]) return;  // ya importado
-            var t = new Date(it.createdAt);
-            // PRECISIÓN: ligar al corte cuya VENTANA real (apertura→cierre) contiene la venta
-            var idIng = null;
-            for (var w = 0; w < ventanasTurno.length; w++) {
-              if (t >= ventanasTurno[w].ini && t <= ventanasTurno[w].fin) { idIng = ventanasTurno[w].idIng; break; }
-            }
-            if (!idIng) idIng = corteDeTurno[turnoDe(t)] || unicoCorte;  // respaldo
-            var fecha = Utilities.formatDate(t, tz, 'yyyy-MM-dd');  // ISO (evita inversión)
-            var total = parseFloat(it.total) || 0;
-            _escribirFila(shDet, [
-              it.uuid || Utilities.getUuid().substring(0,8),  // A=ID_CONCEPTO (dedup)
-              idIng,                                           // B=ID_INGRESOS (corte del turno)
-              fecha,                                           // C=FECHA
-              it.itemName || '',                               // D=ARTICULO
-              parseFloat(it.quantity) || 0,                    // E=CANTIDAD
-              parseFloat(it.unitPrice) || 0,                   // F=PRECIO UNIT
-              total,                                           // G=SUBTOTAL
-              'NO',                                            // H=APLICA IVA
-              parseFloat(it.taxAmount) || 0,                   // I=IVA
-              total                                            // J=TOTAL
-            ]);
-            if (it.uuid) itemVistos[it.uuid] = true;
-            nItems++;
-          });
-          hayMas = items.length === 100;
-          page++;
-        }
-      }
-      cursor = chunkFin;
-    }
-
-    return _json({ status: 'ok', msg: 'Parrot sincronizado',
-                   registros: nCortes + nItems, cortes: nCortes, articulos: nItems });
-  } catch (e) {
-    return _err('Parrot: ' + e.message);
-  }
-}
-
-// ════════════════════════════════════════════════════════════════
-// FACTURAS rechaza setNumberFormat por un formato pegado en la columna.
-// Esta función: (1) pone el spreadsheet en es_MX para que las fechas NUEVAS
-// salgan dd/mm, (2) limpia el formato de la columna y reescribe las fechas
-// reales (serial) como texto ISO yyyy-mm-dd. Ejecútala UNA VEZ.
-// ════════════════════════════════════════════════════════════════
-function arreglarFechasFacturas() {
-  var ss = SpreadsheetApp.openById(SHEET_ID);
-  var tz = ss.getSpreadsheetTimeZone();
-  var log = [];
-
-  // 1) Locale a México (las fechas NUEVAS saldrán dd/mm en vez de m/d)
-  try { ss.setSpreadsheetLocale('es_MX'); log.push('locale → es_MX ✅'); }
-  catch (e) { log.push('locale ERROR: ' + e.message); }
-
-  var sh = ss.getSheetByName('FACTURAS');
-  var n = sh.getLastRow() - 1;
-  var rng = sh.getRange(2, 2, n, 1);
-  var vals = rng.getValues();   // fechas reales como Date objects
-
-  var out = vals.map(function(r){
-    var v = r[0];
-    if (v === '' || v == null) return [''];
-    var d = (Object.prototype.toString.call(v) === '[object Date]') ? v : new Date(v);
-    if (isNaN(d.getTime())) return [v];
-    return [Utilities.formatDate(d, tz, 'yyyy-MM-dd')];
-  });
-
-  // 2) Limpiar el formato pegado y reescribir como texto ISO
-  var ok = false;
-  try {
-    rng.clearFormat();
-    SpreadsheetApp.flush();
-    rng.setNumberFormat('@');
-    rng.setValues(out);
-    ok = true;
-    log.push('FACTURAS → ' + n + ' fechas a ISO texto ✅');
-  } catch (e) {
-    log.push('estrategia texto falló: ' + e.message);
-  }
-
-  // 3) Fallback: dejarlas como fechas reales con formato dd/mm/yyyy
-  if (!ok) {
-    try {
-      rng.clearFormat();
-      SpreadsheetApp.flush();
-      rng.setNumberFormat('dd/mm/yyyy');
-      log.push('FACTURAS → formato dd/mm/yyyy (fallback) ✅');
-    } catch (e2) {
-      log.push('fallback dd/mm falló: ' + e2.message);
-    }
-  }
-
-  Logger.log('Resultado arreglarFechasFacturas:\n  ' + log.join('\n  '));
-}
-
-// ════════════════════════════════════════════════════════════════
-// FECHAS: normaliza el FORMATO de las columnas de fecha a ISO yyyy-mm-dd
-// Soluciona que Google las devuelva en formato gringo M/D/YYYY (que el
-// sistema malinterpretaba: 6/12 = 12-jun se leía como 6-dic).
-// Solo cambia el FORMATO de despliegue, NO reescribe los valores → 100% seguro.
-// Ejecuta esta función UNA VEZ desde el editor.
-// ════════════════════════════════════════════════════════════════
-function formatearFechasISO() {
-  var ss = SpreadsheetApp.openById(SHEET_ID);
-  var tz = ss.getSpreadsheetTimeZone();
-  // [nombreHoja, columna 1-based de la FECHA]
-  var cols = [
-    ['INGRESOS', 2],
-    ['FACTURAS', 2],
-    ['ARTICULOS DETALLES', 3],
-    ['INGRESOS DETALLES', 3],
-    ['CONCILIACION', 1]
-  ];
-  var log = [];
-  cols.forEach(function(c){
-    try {
-      var sh = ss.getSheetByName(c[0]);
-      if (!sh) { log.push(c[0] + ': (no existe)'); return; }
-      var n = sh.getLastRow() - 1;
-      if (n < 1) { log.push(c[0] + ': vacía'); return; }
-      var rng = sh.getRange(2, c[1], n, 1);
-      var vals = rng.getValues();
-      var conv = 0;
-      var out = vals.map(function(r){
-        var v = r[0];
-        if (v === '' || v == null) return [''];
-        // El serial (Date real) es la verdad — lo convertimos a ISO sin ambigüedad
-        var d = (Object.prototype.toString.call(v) === '[object Date]') ? v : null;
-        if (!d) {
-          // por si alguna quedó como texto: intentar parsear
-          var s = String(v).trim();
-          if (/^\d{4}-\d{2}-\d{2}/.test(s)) return [s.substring(0,10)]; // ya ISO
-          return [v]; // se queda igual, no la tocamos
-        }
-        conv++;
-        return [Utilities.formatDate(d, tz, 'yyyy-MM-dd')];
-      });
-      // Formato texto a TODA la columna (incluye filas futuras) para que
-      // las facturas/ingresos nuevos también se guarden como ISO sin reinterpretar.
-      sh.getRange(2, c[1], sh.getMaxRows() - 1, 1).setNumberFormat('@');
-      rng.setValues(out);
-      log.push(c[0] + ': ' + conv + '/' + n + ' fechas → ISO texto ✅');
-    } catch (e) {
-      log.push(c[0] + ': ERROR ' + e.message);
-    }
-  });
-  Logger.log('Resultado formatearFechasISO:\n  ' + log.join('\n  '));
-}
-
-// Backfill manual desde el editor. Ej: sincronizarParrotDias(2)
-function sincronizarParrotDias(dias) {
-  dias = dias || 2;
-  var hasta = new Date();
-  var desde = new Date(hasta - dias * 24 * 60 * 60 * 1000);
-  var iso = function(d){ return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd'); };
-  var r = _sincronizarParrot('CASA DE LA CULTURA', iso(desde), iso(hasta));
-  Logger.log(r.getContent());
-}
-
-// BACKFILL JUNIO COMPLETO 2026 — pausable y resumible
-function backfillJunioCompleto() {
-  var DESDE = '2026-06-01';   // 1 de junio
-  var HASTA = '2026-06-30';   // 30 de junio
-  var props = PropertiesService.getScriptProperties();
-  var cursor = props.getProperty('backfill_junio_cursor') || DESDE;
-  var t0 = Date.now();
-  var dias = 0;
-
-  Logger.log('🔄 Sincronizando junio completo: ' + cursor + ' → ' + HASTA);
-
-  while (cursor <= HASTA) {
-    _sincronizarParrot('CASA DE LA CULTURA', cursor, cursor);  // 1 día
-    dias++;
-    cursor = _siguienteDiaISO(cursor);
-    props.setProperty('backfill_junio_cursor', cursor);
-
-    // Si se pasa de 4.5 minutos, pausar y guardar avance
-    if (Date.now() - t0 > 4.5 * 60 * 1000) {
-      Logger.log('⏸ Pausado. Procesados ' + dias + ' día(s).\n' +
-                 '→ Vuelve a ejecutar backfillJunioCompleto para continuar desde ' + cursor + '.');
-      return;
-    }
-  }
-
-  // Limpiar cuando termina
-  props.deleteProperty('backfill_junio_cursor');
-  Logger.log('✅ Junio 2026 completamente sincronizado (' + dias + ' día(s) en total).');
-}
-
-// Si necesitas reiniciar el backfill:
-function backfillJunioReset() {
-  PropertiesService.getScriptProperties().deleteProperty('backfill_junio_cursor');
-  Logger.log('🔄 Avance de junio reiniciado. La próxima ejecución empieza desde el 01-jun.');
-}
-
-// BACKFILL: jala un rango de fechas completo. EDITA DESDE/HASTA y ejecuta.
-// Máximo ~3 semanas por corrida (límite de 6 min de Apps Script).
-// ════════════════════════════════════════════════════════════════
-// ESTANDARIZAR SUCURSALES — deja UN solo nombre por sucursal y pone
-// menús desplegables en INGRESOS.SUCURSAL y FACTURAS.UNIDAD.
-// - Cortes de Parrot (OBS contiene PARROT) → CASA DE LA CULTURA
-// - Facturas con unidad vacía → CASA DE LA CULTURA
-// - Estandariza variantes/typos a los 5 nombres oficiales
-// Ejecútala UNA VEZ.
-// ════════════════════════════════════════════════════════════════
-var SUCURSALES_OFICIALES = ['COFFEE & ROASTERS','CASA DE LA CULTURA','HELFY FÜ','BARBACOA Y MENUDO','EVENTOS'];
-
-function _canonSucursal(v, vaciaDefault) {
-  var t = String(v == null ? '' : v).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
-  if (!t) return vaciaDefault || '';
-  // PARROT: Sueño de Luna (Coah) → CASA DE LA CULTURA
-  if (/SUENO DE LUNA|SUEÑO DE LUNA|\(COAH\)/.test(t)) return 'CASA DE LA CULTURA';
-  // MANUAL: Coffee & Roasters (solo cuando NO viene de Parrot)
-  if (/COFFEE|COOFFEE|ROASTER/.test(t)) return 'COFFEE & ROASTERS';
-  // Otras sucursales
-  if (/CULTURA/.test(t)) return 'CASA DE LA CULTURA';
-  if (/HELFY/.test(t)) return 'HELFY FÜ';
-  if (/BARBACOA|MENUDO|BENJAMIN|JAIME/.test(t)) return 'BARBACOA Y MENUDO';
-  if (/EVENTO/.test(t)) return 'EVENTOS';
-  return v; // desconocido: dejar igual
-}
-
-// Renombra el encabezado de FACTURAS: "UNIDAD DE NEGOCIO" → "SUCURSAL"
-function renombrarEncabezadoSucursal() {
-  var sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName('FACTURAS');
-  try {
-    sh.getRange('C1').setValue('SUCURSAL');
-    Logger.log('✅ FACTURAS!C1 renombrado a "SUCURSAL"');
-  } catch (e) {
-    Logger.log('❌ No se pudo por script: ' + e.message +
-               '\n→ Hazlo a mano: doble clic en la celda C1 de FACTURAS y escribe SUCURSAL.');
-  }
-}
-
-function estandarizarSucursales() {
-  var ss = SpreadsheetApp.openById(SHEET_ID);
-  var log = [];
-  var rule = SpreadsheetApp.newDataValidation().requireValueInList(SUCURSALES_OFICIALES, true).setAllowInvalid(true).build();
-
-  // ── INGRESOS: cortes de Parrot → CASA DE LA CULTURA (col C=3, OBS col O=15) ──
-  try {
-    var shI = ss.getSheetByName('INGRESOS');
-    var nI = shI.getLastRow() - 1;
-    if (nI > 0) {
-      var rngS = shI.getRange(2, 3, nI, 1);
-      var suc = rngS.getValues();
-      var obs = shI.getRange(2, 15, nI, 1).getValues();
-      var ch = 0;
-      for (var i = 0; i < suc.length; i++) {
-        var o = String(obs[i][0] || '').toUpperCase();
-        if (/PARROT/.test(o) && suc[i][0] !== 'CASA DE LA CULTURA') { suc[i][0] = 'CASA DE LA CULTURA'; ch++; }
-      }
-      try { rngS.clearDataValidations(); } catch (e) {}
-      rngS.setValues(suc);
-      log.push('INGRESOS: ' + ch + ' cortes Parrot → CASA DE LA CULTURA ✅');
-      try { rngS.setDataValidation(rule); log.push('INGRESOS: dropdown ✅'); }
-      catch (e) { log.push('INGRESOS dropdown omitido (' + e.message + ')'); }
-    }
-  } catch (e) { log.push('INGRESOS ERROR: ' + e.message); }
-
-  // ── FACTURAS: estandarizar UNIDAD (col C=3), vacías → CASA DE LA CULTURA ──
-  try {
-    var shF = ss.getSheetByName('FACTURAS');
-    var nF = shF.getLastRow() - 1;
-    if (nF > 0) {
-      var rngU = shF.getRange(2, 3, nF, 1);
-      var uni = rngU.getValues();
-      var ch2 = 0;
-      for (var j = 0; j < uni.length; j++) {
-        var canon = _canonSucursal(uni[j][0], 'CASA DE LA CULTURA');
-        if (uni[j][0] !== canon) { uni[j][0] = canon; ch2++; }
-      }
-      try { rngU.clearDataValidations(); } catch (e) {}
-      rngU.setValues(uni);
-      log.push('FACTURAS: ' + ch2 + ' unidades estandarizadas ✅');
-      try { rngU.setDataValidation(rule); log.push('FACTURAS: dropdown ✅'); }
-      catch (e) { log.push('FACTURAS dropdown omitido (' + e.message + ')'); }
-    }
-  } catch (e) { log.push('FACTURAS ERROR: ' + e.message); }
-
-  Logger.log('Resultado estandarizarSucursales:\n  ' + log.join('\n  '));
-}
-
-// Backfill RESUMIBLE: procesa día por día, se pausa antes del límite de 6 min
-// y guarda el avance. Solo vuelve a correr backfillParrot hasta que diga COMPLETO.
-function backfillParrot() {
-  var DESDE = '2026-01-02';   // ← CAMBIO: edita la fecha de inicio
-  var HASTA = '2026-05-30';   // ← CAMBIO: edita la fecha de fin
-  var props = PropertiesService.getScriptProperties();
-  var cursor = props.getProperty('backfill_cursor') || DESDE;
-  var t0 = Date.now();
-  var dias = 0;
-  while (cursor <= HASTA) {
-    _sincronizarParrot('CASA DE LA CULTURA', cursor, cursor);  // 1 día
-    dias++;
-    cursor = _siguienteDiaISO(cursor);
-    props.setProperty('backfill_cursor', cursor);
-    if (Date.now() - t0 > 4.5 * 60 * 1000) {   // ~4.5 min: deja margen
-      Logger.log('⏸ Pausado. Procesados ' + dias + ' día(s) en esta corrida.\n' +
-                 '→ Vuelve a EJECUTAR backfillParrot para continuar desde ' + cursor + '.');
-      return;
-    }
-  }
-  props.deleteProperty('backfill_cursor');
-  Logger.log('✅ Backfill COMPLETO hasta ' + HASTA + ' (' + dias + ' día(s) en esta corrida).');
-}
-
-// Reinicia el backfill desde el inicio (borra el avance guardado)
-// Borra los cortes MANUALES de Casa de la Cultura (genéricos "CONSUMO EN
-// ESTABLECIMIENTO") SOLO en los días que Parrot YA importó. Nunca borra un día
-// sin respaldo de Parrot, así no se pierde ningún ingreso.
-// Ejecútala DESPUÉS de importar Parrot del rango. Edita DESDE/HASTA.
-function borrarManualesCultura() {
-  var DESDE = '2026-01-01';   // ← rango a limpiar
-  var HASTA = '2026-05-31';
-  var ss = SpreadsheetApp.openById(SHEET_ID);
-  var sh = ss.getSheetByName('INGRESOS');
-  var tz = ss.getSpreadsheetTimeZone();
-  var vals = sh.getDataRange().getValues();
-
-  function fISO(v) {
-    if (Object.prototype.toString.call(v) === '[object Date]') return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
-    var s = String(v).trim();
-    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0,10);
-    var p = s.replace(/-/g,'/').split('/');
-    if (p.length===3 && p[2].length===4) return p[2]+'-'+('0'+p[1]).slice(-2)+'-'+('0'+p[0]).slice(-2);
-    return '';
-  }
-
-  // 1) Fechas que YA tienen corte de Parrot (Cultura)
-  var fechasParrot = {};
-  for (var i=1;i<vals.length;i++){
-    if (/PARROT/i.test(String(vals[i][14]||''))) fechasParrot[fISO(vals[i][1])] = true;
-  }
-  // 2) Marcar manuales de Cultura en el rango Y con respaldo Parrot ese día
-  var idsBorrar = {}, filas = [];
-  for (var k=1;k<vals.length;k++){
-    var suc = _canonSucursal(vals[k][2], '');
-    var obs = String(vals[k][14] || '');
-    var f = fISO(vals[k][1]);
-    if (suc === 'CASA DE LA CULTURA' && f >= DESDE && f <= HASTA &&
-        !/PARROT/i.test(obs) && fechasParrot[f]) {
-      var id = String(vals[k][0]).trim();
-      if (id) idsBorrar[id] = true;
-      filas.push(k+1);
-    }
-  }
-  // 3) Borrar detalles ligados (CONSUMO EN ESTABLECIMIENTO genérico)
-  var shD = ss.getSheetByName('INGRESOS DETALLES');
-  var dv = shD.getDataRange().getValues(), fd = [];
-  for (var j=1;j<dv.length;j++){ var r=String(dv[j][1]).trim(); if(r && idsBorrar[r]) fd.push(j+1); }
-  fd.sort(function(a,b){return b-a;}).forEach(function(x){shD.deleteRow(x);});
-  filas.sort(function(a,b){return b-a;}).forEach(function(x){sh.deleteRow(x);});
-  Logger.log('🗑️ Borrados ' + filas.length + ' cortes manuales de Cultura ('+DESDE+'→'+HASTA+
-             ') con respaldo Parrot, y ' + fd.length + ' detalles genéricos.');
-}
-
-function backfillParrotReset() {
-  PropertiesService.getScriptProperties().deleteProperty('backfill_cursor');
-  Logger.log('🔄 Avance reiniciado. La próxima corrida de backfillParrot empieza desde DESDE.');
-}
-
-function _siguienteDiaISO(iso) {
-  var p = String(iso).split('-');
-  var d = new Date(parseInt(p[0],10), parseInt(p[1],10) - 1, parseInt(p[2],10));
-  d.setDate(d.getDate() + 1);
-  return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-}
-
-// LIMPIEZA: borra TODOS los cortes importados de Parrot (INGRESOS con "PARROT:")
-// y sus productos en INGRESOS DETALLES. Útil para re-sincronizar limpio.
-// Borra SOLO los cortes fantasma del primer sync (formato viejo "PARROT-252",
-// mal fechados en ago/sep/oct). NO toca los cortes buenos ("PARROT:uuid").
-function borrarFantasmasParrot() {
-  var sh = _getSheet(HOJAS.INGRESOS);
-  var shD = _getSheet(HOJAS.ING_DETALLES);
-  var vals = sh.getDataRange().getValues();
-  var ids = {}, filas = [];
-  for (var i = 1; i < vals.length; i++) {
-    if (/PARROT-\d/i.test(String(vals[i][14] || ''))) {
-      var id = String(vals[i][0]).trim();
-      if (id) ids[id] = true;
-      filas.push(i + 1);
-    }
-  }
-  // borrar detalles ligados
-  var dv = shD.getDataRange().getValues(), fd = [];
-  for (var j = 1; j < dv.length; j++) { var r = String(dv[j][1]).trim(); if (r && ids[r]) fd.push(j + 1); }
-  fd.sort(function(a,b){return b-a;}).forEach(function(f){ shD.deleteRow(f); });
-  filas.sort(function(a,b){return b-a;}).forEach(function(f){ sh.deleteRow(f); });
-  Logger.log('🗑️ Borrados ' + filas.length + ' cortes fantasma (PARROT-### viejo) y ' + fd.length + ' detalles.');
-}
-
-function borrarCortesParrot() {
-  var shIng = _getSheet(HOJAS.INGRESOS);
-  var shDet = _getSheet(HOJAS.ING_DETALLES);
-
-  // 1) Identificar cortes de Parrot y sus ID_INGRESO
-  var ingVals = shIng.getDataRange().getValues();
-  var idsParrot = {};
-  var filasIng = [];
-  for (var i = 1; i < ingVals.length; i++) {
-    // Atrapa ambos formatos: "PARROT:uuid" (nuevo) y "PARROT-252" (viejo)
-    if (/PARROT[:\-]/i.test(String(ingVals[i][14] || ''))) {
-      var idC = String(ingVals[i][0]).trim();
-      if (idC) idsParrot[idC] = true;   // solo IDs no vacíos (evita borrar detalles ajenos)
-      filasIng.push(i + 1);             // la fila del corte se borra igual
-    }
-  }
-  // 2) Borrar detalles ligados a esos ID_INGRESO (col B), nunca con ID vacío
-  var detVals = shDet.getDataRange().getValues();
-  var filasDet = [];
-  for (var j = 1; j < detVals.length; j++) {
-    var ref = String(detVals[j][1]).trim();
-    if (ref && idsParrot[ref]) filasDet.push(j + 1);
-  }
-  // Borrar de abajo hacia arriba (para no correr índices)
-  filasDet.sort(function(a,b){return b-a;}).forEach(function(f){ shDet.deleteRow(f); });
-  filasIng.sort(function(a,b){return b-a;}).forEach(function(f){ shIng.deleteRow(f); });
-
-  // Reiniciar cursor de backfill
-  PropertiesService.getScriptProperties().deleteProperty('backfill_cursor');
-
-  Logger.log('🗑️ Borrados ' + filasIng.length + ' cortes y ' + filasDet.length + ' productos de Parrot.');
-  Logger.log('✅ Cursor de backfill reiniciado. Listo para re-importar.');
 }
 
 // ── REGISTRAR ARTÍCULO EN CATÁLOGO MAESTRO ────────────────────────────────
-// Columnas: ARTICULO | COSTO BASE | COSTO DINAMICO | CANTIDAD | UNIDA DE MEDIDA
-//           % MERMA  | COSTO FINAL | CATEGORIA | SUBCATEGORIA | PROVEEDOR
 function _registrarCatalogoArticulo(b) {
   try {
     var sh = _getSheet(HOJAS.CATALOGO);
     var vals = sh.getDataRange().getValues();
-    // Verificar duplicado (col A = ARTICULO)
     for (var i = 1; i < vals.length; i++) {
       if (String(vals[i][0]).trim().toLowerCase() === String(b.articulo || '').trim().toLowerCase()) {
         return _json({ status: 'ok', msg: 'El artículo ya existe en el Catálogo Maestro' });
@@ -1565,18 +822,18 @@ function _registrarCatalogoArticulo(b) {
     var merma = parseFloat(b.merma || 0);
     var costoFinal = merma > 0 ? costo / (1 - merma / 100) : costo;
 
-    var fila = _siguienteFilaLibre(sh, 1); // col A = ARTICULO
+    var fila = _siguienteFilaLibre(sh, 1);
     sh.getRange(fila, 1, 1, 10).setValues([[
       b.articulo     || '',
-      costo,                 // COSTO BASE
-      costo,                 // COSTO DINAMICO (igual al base al inicio)
-      (b.cantidad != null && b.cantidad !== '') ? parseFloat(b.cantidad) : 1, // CANTIDAD
-      b.unidad       || '',  // UNIDA DE MEDIDA
-      merma,                 // % MERMA
-      costoFinal,            // COSTO FINAL
-      b.categoria    || '',  // CATEGORIA
-      b.subcategoria || '',  // SUBCATEGORIA
-      b.proveedor    || '',  // PROVEEDOR
+      costo,
+      costo,
+      (b.cantidad != null && b.cantidad !== '') ? parseFloat(b.cantidad) : 1,
+      b.unidad       || '',
+      merma,
+      costoFinal,
+      b.categoria    || '',
+      b.subcategoria || '',
+      b.proveedor    || '',
     ]]);
     return _json({ status: 'ok', msg: 'Artículo registrado en Catálogo Maestro' });
   } catch(e) {
@@ -1584,16 +841,11 @@ function _registrarCatalogoArticulo(b) {
   }
 }
 
-// ── AUTENTICACIÓN DESDE USUARIOS_APP ──────────────────────────────────────
-// Permite al frontend verificar credenciales contra la hoja USUARIOS_APP
-// Llamada: GET ?accion=getUSUARIOS (devuelve lista sin contraseñas)
-//          POST { accion:'login', email, password }
-// NOTA: por seguridad real implementar OAuth; esto es suficiente para uso interno.
+// ── AUTENTICACIÓN ──────────────────────────────────────────────────────────
 function _getUsuarios() {
   try {
     var sh = _getSheet('USUARIOS_APP');
     var vals = sh.getDataRange().getValues();
-    // Devolver solo email, nombre, rol, sucursal (sin contraseñas)
     var users = vals.slice(1).filter(function(r){ return r[0]; }).map(function(r){
       return { email: r[0], nombre: r[1], rol: r[2], sucursal: r[3] };
     });
@@ -1601,174 +853,7 @@ function _getUsuarios() {
   } catch(e) { return _err(e.message); }
 }
 
-// ── LISTAR TIENDAS / TERMINALES PARROT ────────────────────────────────────
-// Ejecuta esta función desde el editor de Apps Script para ver todos los UUIDs.
-// 1. Selecciona "listarTiendasParrot" en el menú de funciones
-// 2. Haz clic en ▶ Ejecutar
-// 3. Lee el resultado en el panel "Registro de ejecución" abajo
-function listarTiendasParrot() {
-  var endpoints = [
-    'https://api.parrotsoftware.io/v2/stores/',
-    'https://api.parrotsoftware.io/v1/stores/',
-    'https://api.parrotsoftware.io/v2/restaurants/',
-    'https://api.parrotsoftware.io/v2/locations/',
-  ];
-  var headers = { 'Authorization': 'Bearer ' + PARROT_API_KEY, 'Content-Type': 'application/json' };
-
-  for (var i = 0; i < endpoints.length; i++) {
-    try {
-      var resp = UrlFetchApp.fetch(endpoints[i], { headers: headers, muteHttpExceptions: true });
-      var code = resp.getResponseCode();
-      var body = resp.getContentText();
-      Logger.log('Endpoint: ' + endpoints[i] + ' → HTTP ' + code);
-      if (code === 200) {
-        var data = JSON.parse(body);
-        var items = Array.isArray(data) ? data : (data.results || data.stores || data.data || []);
-        Logger.log('✅ Tiendas encontradas: ' + items.length);
-        items.forEach(function(s) {
-          Logger.log('  UUID: ' + (s.uuid || s.id || '?'));
-          Logger.log('  Nombre: ' + (s.name || s.display_name || s.title || '?'));
-          Logger.log('  Activa: ' + (s.is_active !== undefined ? s.is_active : s.active || '?'));
-          Logger.log('---');
-        });
-        return; // Si encontró, para aquí
-      }
-      Logger.log('  Respuesta: ' + body.substring(0, 200));
-    } catch(e) {
-      Logger.log('Error en ' + endpoints[i] + ': ' + e.message);
-    }
-  }
-  Logger.log('⚠️ No se encontraron tiendas. Verifica la API Key de Parrot.');
-  Logger.log('API Key usada: ' + PARROT_API_KEY.substring(0, 20) + '...');
-}
-
-// ── REORGANIZAR HOJAS ──────────────────────────────────────────────────────
-// Llamar una sola vez desde Apps Script editor: reorganizarHojas()
-// NO expuesto como endpoint web por seguridad.
-function reorganizarHojas() {
-  var ss = SpreadsheetApp.openById(SHEET_ID);
-
-  // Orden deseado (22 hojas)
-  var orden = [
-    // 📊 OPERACIONES DIARIAS
-    'INGRESOS',
-    'CONCILIACION',
-    'FACTURAS',
-    'ARTICULOS DETALLES',
-    'INGRESOS DETALLES',
-    // 🍽️ MENÚ Y COSTOS
-    'Catálogo Maestro',
-    'Recetas',
-    'Costo de Producto',
-    'Simulador Cotizador',
-    'DATA_INGRESOS',
-    // 📦 INVENTARIO
-    'BD_INVENTARIO_GENERAL',
-    // 👥 MAESTROS
-    'DATOS_CLIENTES',
-    'DATOS_PROVEEDORES',
-    'DATOS_CATEGORIASSUBCATEGORIAS',
-    'USUARIOS_APP',
-    // 📈 ANÁLISIS Y REPORTES
-    'Dashboard Anual',
-    'Analisis Financiero 💰',
-    'Planificación de Gastos',
-    // 🗄️ SISTEMA / COTIZACIONES
-    'DATA_COTIZACIONES_MAESTRO',
-    'ID_COTIZACION_DETALLE',
-    'DATA_APP',
-    // 🗂️ ARCHIVO LEGADO
-    'ZEGRESOS:VIEJO',
-  ];
-
-  for (var i = 0; i < orden.length; i++) {
-    var sh = ss.getSheetByName(orden[i]);
-    if (sh) {
-      ss.setActiveSheet(sh);
-      ss.moveActiveSheet(i + 1);
-      Utilities.sleep(100); // evitar rate limit
-    }
-  }
-
-  Logger.log('✅ Hojas reorganizadas correctamente.');
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// CATEGORIZACIÓN Y LISTAS DESPLEGABLES DEL CATÁLOGO MAESTRO
-// ══════════════════════════════════════════════════════════════════════════
-
-// ── 1) ASIGNAR CATEGORÍA/SUBCATEGORÍA A ARTÍCULOS SIN CLASIFICAR ───────────
-// Ejecuta esta función UNA VEZ desde el editor. Asigna las categorías a los
-// artículos que estaban vacíos (según clasificación revisada).
-function asignarCategoriasFaltantes() {
-  var sh = _getSheet(HOJAS.CATALOGO);
-  var datos = sh.getDataRange().getValues();
-
-  // Mapa ARTICULO → [CATEGORIA, SUBCATEGORIA]
-  var MAP = {
-    'ENDULZANTE NATURAL STEVIA':      ['COSTO DE VENTA', 'ABARROTES'],
-    'GARRAFÓN DE AGUA 19LTS':         ['COSTO DE VENTA', 'AGUAS Y REFRESCOS'],
-    'MANCHEGO DURANGUEÑO':            ['COSTO DE VENTA', 'LACTEOS'],
-    'TAPATÍO BOWL.':                  ['COSTO DE VENTA', 'ADEREZOS'],
-    'CARM SYRP':                      ['COSTO DE VENTA', 'CAFÉ E INSUMOS'],
-    'PIZZAS':                         ['COSTO DE VENTA', 'CONGELADOS'],
-    'ESPONJA CH':                     ['GASTO OPERATIVO', 'LIMPIEZA'],
-    'SALSA HUTS':                     ['COSTO DE VENTA', 'ADEREZOS'],
-    'CIABATTA RÚSTICA':               ['COSTO DE VENTA', 'PANADERIA Y REPOSTERIA'],
-    'ALITAS':                         ['COSTO DE VENTA', 'PROTEINAS'],
-    'PECHUGA C HUESO':                ['COSTO DE VENTA', 'PROTEINAS'],
-    'CIABATTA MULT':                  ['COSTO DE VENTA', 'PANADERIA Y REPOSTERIA'],
-    'QUESO AMERICANO':                ['COSTO DE VENTA', 'LACTEOS'],
-    'MANZANA GRANNY':                 ['COSTO DE VENTA', 'FRUTAS Y VERDURAS'],
-    'NUEX CORAZÓN':                   ['COSTO DE VENTA', 'ABARROTES'],
-    'HORNEADO ESP':                   ['COSTO DE VENTA', 'PANADERIA Y REPOSTERIA'],
-    'BAGUEL':                         ['COSTO DE VENTA', 'PANADERIA Y REPOSTERIA'],
-    'QUESO DURANG':                   ['COSTO DE VENTA', 'LACTEOS'],
-    'MEDIA BAGUETTE':                 ['COSTO DE VENTA', 'PANADERIA Y REPOSTERIA'],
-    'SERVICIO A DOMICILIO':           ['GASTO OPERATIVO', 'REPARTIDORES INDEPENDIENTES'],
-    // Estos 3 quedan a tu criterio (los dejo señalados en el log, NO se tocan):
-    // 'PIÑATAS CON DULCE PARA 24 PERSONAS', 'PREMIO PARA CONCURSO', 'Regular'
-  };
-
-  var asignados = 0, pendientes = [];
-  for (var i = 1; i < datos.length; i++) {
-    var art = String(datos[i][0]).trim();
-    if (!art) continue;
-    var catActual = String(datos[i][7] || '').trim();
-    if (catActual) continue; // ya tiene categoría
-    if (MAP[art]) {
-      sh.getRange(i + 1, 8).setValue(MAP[art][0]);  // col H = CATEGORIA
-      sh.getRange(i + 1, 9).setValue(MAP[art][1]);  // col I = SUBCATEGORIA
-      asignados++;
-    } else {
-      pendientes.push(art);
-    }
-  }
-  Logger.log('✅ Asignados automáticamente: ' + asignados);
-  Logger.log('⚠️ Quedan para revisar manualmente (' + pendientes.length + '): ' + pendientes.join(' | '));
-}
-
-// ── 2) PONER LISTAS DESPLEGABLES (validación) EN CATÁLOGO MAESTRO ──────────
-// Ejecuta una vez. Pone validación de lista en la columna CATEGORIA (H).
-// La SUBCATEGORIA (I) se llena en cascada con el trigger onEdit de abajo.
-function configurarValidacionCatalogo() {
-  var ss = SpreadsheetApp.openById(SHEET_ID);
-  var sh = _getSheet(HOJAS.CATALOGO);
-  var cats = _categoriasUnicas();
-  var ultima = Math.max(sh.getLastRow(), 2);
-
-  var regla = SpreadsheetApp.newDataValidation()
-    .requireValueInList(cats, true)
-    .setAllowInvalid(false)
-    .setHelpText('Elige una categoría de la lista')
-    .build();
-  // Aplicar a CATEGORIA (col 8) desde fila 2 hasta el final
-  sh.getRange(2, 8, ultima - 1, 1).setDataValidation(regla);
-  Logger.log('✅ Validación de CATEGORIA aplicada. Categorías: ' + cats.join(', '));
-  Logger.log('ℹ️ La SUBCATEGORIA se filtra sola al elegir categoría (trigger onEdit).');
-}
-
-// Devuelve las categorías únicas desde DATOS_CATEGORIASSUBCATEGORIAS
+// ── CATEGORIZACIÓN ────────────────────────────────────────────────────────
 function _categoriasUnicas() {
   var sh = _getSheet(HOJAS.CATEGORIAS);
   var vals = sh.getDataRange().getValues();
@@ -1780,7 +865,6 @@ function _categoriasUnicas() {
   return Object.keys(set).sort();
 }
 
-// Devuelve las subcategorías de una categoría dada
 function _subcategoriasDe(categoria) {
   var sh = _getSheet(HOJAS.CATEGORIAS);
   var vals = sh.getDataRange().getValues();
@@ -1794,8 +878,7 @@ function _subcategoriasDe(categoria) {
   return subs;
 }
 
-// ── 3) CASCADA: al cambiar CATEGORIA, filtrar SUBCATEGORIA ─────────────────
-// Trigger simple onEdit — se ejecuta solo al editar el Sheet.
+// ── TRIGGER onEdit ────────────────────────────────────────────────────────
 function onEdit(e) {
   try {
     if (!e || !e.range) return;
@@ -1803,10 +886,10 @@ function onEdit(e) {
     if (sh.getName() !== HOJAS.CATALOGO) return;
     var col = e.range.getColumn();
     var row = e.range.getRow();
-    if (col !== 8 || row < 2) return; // solo columna CATEGORIA (H)
+    if (col !== 8 || row < 2) return;
 
     var categoria = String(e.range.getValue() || '').trim();
-    var celdaSub = sh.getRange(row, 9); // col I = SUBCATEGORIA
+    var celdaSub = sh.getRange(row, 9);
     if (!categoria) { celdaSub.clearDataValidations(); return; }
 
     var subs = _subcategoriasDe(categoria);
@@ -1816,11 +899,255 @@ function onEdit(e) {
         .setAllowInvalid(false)
         .build();
       celdaSub.setDataValidation(regla);
-      celdaSub.clearContent(); // limpiar subcategoría anterior (era de otra categoría)
+      celdaSub.clearContent();
     } else {
       celdaSub.clearDataValidations();
     }
   } catch(err) {
-    // Silencioso para no interrumpir la edición
+    // Silencioso
   }
+}
+
+// ── FUNCIÓN PARA VER TODOS LOS CORTES DE COFFEE & ROASTERS ────────────────
+function listarCoffeRoasters() {
+  const sh = SpreadsheetApp.openById('1Dm5fcTs_URmtv8cwUDV6z_LxuGvdpJmf0ZkxszXzuCk').getSheetByName('INGRESOS');
+  const datos = sh.getDataRange().getValues();
+  const tz = Session.getScriptTimeZone();
+
+  const formatearFecha = function(celda) {
+    if (celda instanceof Date) {
+      return Utilities.formatDate(celda, tz, 'dd-MM-yyyy');
+    }
+    return String(celda || '').trim();
+  };
+
+  Logger.log('=== TODOS LOS CORTES DE COFFEE & ROASTERS ===');
+  Logger.log('');
+
+  let encontrados = 0;
+  for (let i = 1; i < datos.length; i++) {
+    const fila = datos[i];
+    const idFila = String(fila[0] || '').trim();
+    const fechaFila = formatearFecha(fila[1]);
+    const sucursalFila = String(fila[2] || '').trim().toUpperCase();
+    const turnoFila = String(fila[3] || '').trim();
+
+    if (sucursalFila.includes('COFFEE') || sucursalFila.includes('ROASTER')) {
+      encontrados++;
+      Logger.log('Fila ' + (i+1) + ': ' + idFila + ' | ' + fechaFila + ' | ' + sucursalFila + ' | ' + turnoFila);
+    }
+  }
+
+  Logger.log('');
+  Logger.log('Total encontrados: ' + encontrados);
+  if (encontrados === 0) {
+    Logger.log('No hay cortes de Coffee & Roasters en el Sheet.');
+    Logger.log('Nota: En Luna Smart ve "Coffee & Roasters" pero en el Sheet podría estar bajo otro nombre.');
+  }
+}
+
+// ── VERIFICAR QUE SE BORRARON LOS CORTES ────────────────────────────────────
+function verificarBorrado() {
+  const sh = SpreadsheetApp.openById('1Dm5fcTs_URmtv8cwUDV6z_LxuGvdpJmf0ZkxszXzuCk').getSheetByName('INGRESOS');
+  const datos = sh.getDataRange().getValues();
+  const tz = Session.getScriptTimeZone();
+
+  const formatearFecha = function(celda) {
+    if (celda instanceof Date) {
+      return Utilities.formatDate(celda, tz, 'dd-MM-yyyy');
+    }
+    return String(celda || '').trim();
+  };
+
+  Logger.log('=== VERIFICANDO: ¿SE BORRARON LAS 4 FILAS? ===');
+  Logger.log('');
+  Logger.log('Buscando las filas que DEBERÍAN estar borradas:');
+  Logger.log('  20-06-2026 | CASA DE LA CULTURA | TURNO MAÑANA & TARDE');
+  Logger.log('  22-06-2026 | CASA DE LA CULTURA | TURNO MAÑANA');
+  Logger.log('  23-06-2026 | CASA DE LA CULTURA | TURNO MAÑANA');
+  Logger.log('  23-06-2026 | CASA DE LA CULTURA | TURNO TARDE');
+  Logger.log('');
+
+  let encontrados = 0;
+  for (let i = 1; i < datos.length; i++) {
+    const fila = datos[i];
+    const fechaFila = formatearFecha(fila[1]);
+    const sucursalFila = String(fila[2] || '').trim();
+    const turnoFila = String(fila[3] || '').trim();
+
+    if ((fechaFila === '20-06-2026' || fechaFila === '22-06-2026' || fechaFila === '23-06-2026') &&
+        sucursalFila.includes('CULTURA')) {
+      encontrados++;
+      Logger.log('❌ ENCONTRADO (DEBERÍA ESTAR BORRADO): Fila ' + (i+1) + ' | ' + fechaFila + ' | ' + sucursalFila + ' | ' + turnoFila);
+    }
+  }
+
+  Logger.log('');
+  if (encontrados === 0) {
+    Logger.log('✅ CONFIRMADO: Las 4 filas fueron BORRADAS CORRECTAMENTE del Sheet.');
+    Logger.log('');
+    Logger.log('Si aún ves datos en Luna Smart, es que:');
+    Logger.log('  1. Luna Smart está cacheando en el navegador');
+    Logger.log('  2. O lee de otra hoja diferente a "INGRESOS"');
+    Logger.log('  3. O hay un delay de sincronización');
+    Logger.log('');
+    Logger.log('SOLUCIÓN: Presiona Ctrl+F5 en Luna Smart para limpiar caché');
+  } else {
+    Logger.log('⚠️ WARNING: Encontré ' + encontrados + ' fila(s) que NO deberían estar ahí.');
+  }
+}
+
+// ── LISTAR TODOS LOS CORTES DE JUNIO 2026 ────────────────────────────────
+function listarJunio2026() {
+  const sh = SpreadsheetApp.openById('1Dm5fcTs_URmtv8cwUDV6z_LxuGvdpJmf0ZkxszXzuCk').getSheetByName('INGRESOS');
+  const datos = sh.getDataRange().getValues();
+  const tz = Session.getScriptTimeZone();
+
+  const formatearFecha = function(celda) {
+    if (celda instanceof Date) {
+      return Utilities.formatDate(celda, tz, 'dd-MM-yyyy');
+    }
+    return String(celda || '').trim();
+  };
+
+  Logger.log('=== CORTES DE JUNIO 2026 (TODOS) ===');
+  Logger.log('');
+
+  let encontrados = [];
+  for (let i = 1; i < datos.length; i++) {
+    const fila = datos[i];
+    const idFila = String(fila[0] || '').trim();
+    const fechaFila = formatearFecha(fila[1]);
+    const sucursalFila = String(fila[2] || '').trim();
+    const turnoFila = String(fila[3] || '').trim();
+
+    // Buscar fechas que contengan "06-" (junio)
+    if (fechaFila.includes('-06-2026')) {
+      encontrados.push({
+        fila: i + 1,
+        id: idFila,
+        fecha: fechaFila,
+        sucursal: sucursalFila,
+        turno: turnoFila
+      });
+      Logger.log('Fila ' + (i+1) + ': ' + idFila + ' | ' + fechaFila + ' | ' + sucursalFila + ' | ' + turnoFila);
+    }
+  }
+
+  Logger.log('');
+  Logger.log('═══════════════════════════════════════════');
+  Logger.log('TOTAL ENCONTRADOS EN JUNIO 2026: ' + encontrados.length);
+  Logger.log('═══════════════════════════════════════════');
+
+  if (encontrados.length === 0) {
+    Logger.log('⚠️ No hay cortes de junio en el Sheet.');
+  }
+}
+
+// ── FUNCIÓN PARA BORRAR CORTES EQUIVOCADOS (VERSIÓN MEJORADA) ─────────────
+function borrarCortesEquivocados() {
+  const ss = SpreadsheetApp.openById('1Dm5fcTs_URmtv8cwUDV6z_LxuGvdpJmf0ZkxszXzuCk');
+  const sh = ss.getSheetByName('INGRESOS');
+
+  Logger.log('🗑️ BORRANDO CORTES EQUIVOCADOS DE JUNIO 2026');
+  Logger.log('');
+
+  try {
+    // Obtener los datos ANTES de borrar
+    let datos = sh.getDataRange().getValues();
+    Logger.log('Total de filas en Sheet: ' + datos.length);
+    Logger.log('');
+
+    // Identificar las filas a borrar por criterio (no por número de fila)
+    const filasABorrar = [];
+    const tz = Session.getScriptTimeZone();
+
+    const formatearFecha = function(celda) {
+      if (celda instanceof Date) {
+        return Utilities.formatDate(celda, tz, 'dd-MM-yyyy');
+      }
+      return String(celda || '').trim();
+    };
+
+    // BUSCAR las filas que cumplan los criterios
+    for (let i = 1; i < datos.length; i++) {
+      const fila = datos[i];
+      const fechaFila = formatearFecha(fila[1]);
+      const sucursalFila = String(fila[2] || '').trim();
+      const turnoFila = String(fila[3] || '').trim();
+
+      // Criterios a buscar
+      if ((fechaFila === '20-06-2026' || fechaFila === '22-06-2026' || fechaFila === '23-06-2026') &&
+          sucursalFila.includes('CULTURA') &&
+          (turnoFila.includes('MAÑANA') || turnoFila.includes('TARDE'))) {
+        filasABorrar.push({
+          num: i + 1,
+          fecha: fechaFila,
+          sucursal: sucursalFila,
+          turno: turnoFila
+        });
+      }
+    }
+
+    if (filasABorrar.length === 0) {
+      Logger.log('⚠️ NO se encontraron filas que cumplan los criterios.');
+      Logger.log('Esto es extraño, verifica los datos manualmente.');
+      return;
+    }
+
+    Logger.log('Encontradas ' + filasABorrar.length + ' filas para borrar:');
+    filasABorrar.forEach(f => {
+      Logger.log('  Fila ' + f.num + ': ' + f.fecha + ' | ' + f.sucursal + ' | ' + f.turno);
+    });
+    Logger.log('');
+
+    // Borrar de ATRÁS hacia ADELANTE para que no se corra el índice
+    filasABorrar.sort((a, b) => b.num - a.num);
+
+    Logger.log('🗑️ Borrando filas (de atrás hacia adelante):');
+    for (let f of filasABorrar) {
+      Logger.log('  Eliminando fila ' + f.num + '...');
+      sh.deleteRow(f.num);
+      Logger.log('    ✓ Fila ' + f.num + ' eliminada');
+      Utilities.sleep(500); // pequeña pausa para evitar race conditions
+    }
+
+    Logger.log('');
+    Logger.log('✅ COMPLETADO: Se borraron ' + filasABorrar.length + ' filas');
+    Logger.log('');
+
+    // Verificar que se borraron
+    const datosAfter = sh.getDataRange().getValues();
+    Logger.log('Total de filas después: ' + datosAfter.length + ' (antes eran ' + datos.length + ')');
+
+    if (datosAfter.length < datos.length) {
+      Logger.log('✅ Las filas fueron eliminadas exitosamente.');
+      Logger.log('⏳ Luna Smart debería actualizar automáticamente...');
+    } else {
+      Logger.log('⚠️ Parece que las filas NO se borraron. Verifica permisos.');
+    }
+
+  } catch(e) {
+    Logger.log('❌ ERROR durante ejecución: ' + e.message);
+    Logger.log('Stack: ' + e.stack);
+  }
+}
+
+// ── LIMPIAR CACHÉ DE APPS SCRIPT ────────────────────────────────────────────
+function actualizarAppsScript() {
+  // Limpiar todos los cachés disponibles
+  const cache = CacheService.getScriptCache();
+  cache.removeAll(['datos', 'ingresos', 'cache', 'facturas', 'clientes', 'proveedores']);
+
+  // Forzar que Google Sheets escriba todos los cambios al disco
+  SpreadsheetApp.flush();
+
+  Logger.log('✅ Cache de Apps Script limpiado completamente');
+  Logger.log('✅ Datos sincronizados con Google Sheets');
+  Logger.log('');
+  Logger.log('PRÓXIMOS PASOS:');
+  Logger.log('1. Cierra Luna Smart completamente');
+  Logger.log('2. En Chrome: Cmd+Shift+R (en Mac) o Ctrl+Shift+R (en Windows/Linux)');
+  Logger.log('3. O abre en incógnito: Cmd+Shift+N (en Mac)');
+  Logger.log('4. Verifica que desaparecieron los datos equivocados');
 }
