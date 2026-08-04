@@ -6124,6 +6124,20 @@ async function guardarVentaDirecta() {
     return r ? r.nombre : idReceta;
   }
 
+  function _catposRecetaBadge(p) {
+    if (p.sized) {
+      const sizeKeys = Object.keys(p.prices || {});
+      const partes = sizeKeys.map(sk => {
+        const nombre = _catposRecetaNombre(p.recetas && p.recetas[sk]);
+        return `${_h(sk)}: ${nombre ? _h(nombre) : 'sin receta'}`;
+      });
+      const faltan = sizeKeys.some(sk => !(p.recetas && p.recetas[sk]));
+      return `<span class="badge ${faltan ? 'b-w' : 'b-s'}"><span class="bdot"></span>${partes.join(' · ')}</span>`;
+    }
+    const recNombre = _catposRecetaNombre(p.idReceta);
+    return recNombre ? `<span class="badge b-s"><span class="bdot"></span>${_h(recNombre)}</span>` : `<span class="badge b-w"><span class="bdot"></span>Sin receta</span>`;
+  }
+
   function _pintarCatalogoPOS(lista) {
     const tbody = document.getElementById('tabla-catalogopos');
     if (!tbody) return;
@@ -6133,13 +6147,12 @@ async function guardarVentaDirecta() {
     }
     tbody.innerHTML = lista.map(p => {
       const precio = p.prices ? Object.entries(p.prices).map(([k,v]) => `${k}: ${LS_API.formatMXNDec(v)}`).join(' / ') : LS_API.formatMXNDec(p.price || 0);
-      const recNombre = _catposRecetaNombre(p.idReceta);
       return `<tr>
         <td style="font-family:var(--mono);color:var(--tx-3)">${_h(p.id)}</td>
         <td style="font-weight:500">${_h(p.name)}</td>
         <td style="color:var(--tx-2)">${_h(p.menu||'')}${p.sub ? ' · '+_h(p.sub) : ''}</td>
         <td class="num" style="font-family:var(--mono)">${precio}</td>
-        <td>${recNombre ? `<span class="badge b-s"><span class="bdot"></span>${_h(recNombre)}</span>` : `<span class="badge b-w"><span class="bdot"></span>Sin receta</span>`}</td>
+        <td>${_catposRecetaBadge(p)}</td>
         <td style="white-space:nowrap">
           <button class="icon-btn" title="Editar" onclick="LS_UI.editarProductoPOS('${p.id}')"><i class="ti ti-pencil"></i></button>
           <button class="icon-btn" title="Eliminar" onclick="LS_UI.confirmarBorrarProductoPOS('${p.id}')"><i class="ti ti-trash"></i></button>
@@ -6225,8 +6238,21 @@ async function guardarVentaDirecta() {
               <div class="ff"><label>Precio</label><input type="number" id="pp-t2-precio" value="${sizeKeys[1] ? preciosSized[sizeKeys[1]] : ''}" inputmode="decimal"></div>
             </div>
           </div>
-          <div class="ff"><label>Receta vinculada (opcional)</label>
-            <select id="pp-receta"><option value="">— Sin receta —</option>${recetasOpts}</select>
+          <div id="pp-receta-simple" style="display:${sizedInicial ? 'none':'block'}">
+            <div class="ff"><label>Receta vinculada (opcional)</label>
+              <select id="pp-receta"><option value="">— Sin receta —</option>${recetasOpts}</select>
+            </div>
+          </div>
+          <div id="pp-receta-sized" style="display:${sizedInicial ? 'block':'none'}">
+            <div class="ff" style="margin-bottom:2px"><label style="text-transform:none;font-size:11px;color:var(--tx-4);font-weight:400">Cada tamaño usa cantidades distintas de ingredientes, así que se vincula una receta por tamaño</label></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="ff"><label>Receta — tamaño 1</label>
+                <select id="pp-receta-t1"><option value="">— Sin receta —</option>${(_catposRecetas||[]).map(r=>`<option value="${r.id}" ${producto && producto.recetas && producto.recetas[sizeKeys[0]]===r.id ? 'selected':''}>${_h(r.nombre)}</option>`).join('')}</select>
+              </div>
+              <div class="ff"><label>Receta — tamaño 2</label>
+                <select id="pp-receta-t2"><option value="">— Sin receta —</option>${(_catposRecetas||[]).map(r=>`<option value="${r.id}" ${producto && producto.recetas && producto.recetas[sizeKeys[1]]===r.id ? 'selected':''}>${_h(r.nombre)}</option>`).join('')}</select>
+              </div>
+            </div>
           </div>
           ${esEdicion ? `<div class="ff" style="margin-top:2px"><label style="text-transform:none;font-size:11px;color:var(--tx-4);font-weight:400">ID: <span style="font-family:var(--mono)">${producto.id}</span> — los modificadores (leche, extras, etc.) no se editan aquí, se conservan tal cual</label></div>` : ''}
         </div>
@@ -6241,6 +6267,8 @@ async function guardarVentaDirecta() {
   function _toggleSizedProductoPOS(sized) {
     document.getElementById('pp-precio-simple').style.display = sized ? 'none' : 'block';
     document.getElementById('pp-precio-sized').style.display = sized ? 'block' : 'none';
+    document.getElementById('pp-receta-simple').style.display = sized ? 'none' : 'block';
+    document.getElementById('pp-receta-sized').style.display = sized ? 'block' : 'none';
   }
 
   async function guardarProductoPOS(idExistente) {
@@ -6250,7 +6278,6 @@ async function guardarVentaDirecta() {
     const sub = document.getElementById('pp-sub').value.trim();
     const area = document.getElementById('pp-area').value;
     const sized = document.getElementById('pp-sized').value === 'si';
-    const idRecetaSel = document.getElementById('pp-receta').value;
 
     const btn = document.getElementById('pp-guardar');
     btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i> Guardando...';
@@ -6258,19 +6285,26 @@ async function guardarVentaDirecta() {
     try {
       if (!fbDb) throw new Error('Firebase no disponible');
       const id = idExistente || _catposSiguienteId();
-      const payload = { id, name: nombre, menu, sub, area, idReceta: idRecetaSel || null };
+      const payload = { id, name: nombre, menu, sub, area };
       if (sized) {
         const t1n = document.getElementById('pp-t1-nombre').value.trim() || 'El Chico';
         const t1p = parseFloat(document.getElementById('pp-t1-precio').value) || 0;
         const t2n = document.getElementById('pp-t2-nombre').value.trim() || 'El Mayor';
         const t2p = parseFloat(document.getElementById('pp-t2-precio').value) || 0;
+        const idRecetaT1 = document.getElementById('pp-receta-t1').value;
+        const idRecetaT2 = document.getElementById('pp-receta-t2').value;
         payload.sized = true;
         payload.prices = { [t1n]: t1p, [t2n]: t2p };
         payload.price = t1p;
+        payload.recetas = { [t1n]: idRecetaT1 || null, [t2n]: idRecetaT2 || null };
+        payload.idReceta = null;
       } else {
+        const idRecetaSel = document.getElementById('pp-receta').value;
         payload.sized = false;
         payload.price = parseFloat(document.getElementById('pp-precio').value) || 0;
         payload.prices = null;
+        payload.idReceta = idRecetaSel || null;
+        payload.recetas = null;
       }
 
       await fbAuthReady;
