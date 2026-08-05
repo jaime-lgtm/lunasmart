@@ -1771,7 +1771,7 @@
           <th class="sortable" data-type="text">Producto<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
           <th>Categoría</th>
           <th class="num">Precio</th>
-          <th>Receta vinculada</th>
+          <th id="catpos-th-receta" style="cursor:pointer;user-select:none" onclick="LS_UI.toggleCatposSinReceta()" title="Clic para mostrar solo los productos a los que les falta receta">Receta vinculada <i class="ti ti-filter" style="font-size:13px;margin-left:2px"></i></th>
           <th>Acciones</th>
         </tr></thead>
         <tbody id="tabla-catalogopos"><tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
@@ -6089,6 +6089,7 @@ async function guardarVentaDirecta() {
   let _catposSucursal = 'cafeteria';
   let _catposProductos = [];
   let _catposRecetas = [];
+  let _catposSoloSinReceta = false;
 
   function _h(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -6112,7 +6113,8 @@ async function guardarVentaDirecta() {
       const val = snap.val() || {};
       _catposProductos = Object.keys(val).map(id => val[id]).sort((a,b) => (a.name||'').localeCompare(b.name||''));
       _catposRecetas = recetas;
-      _pintarCatalogoPOS(_catposProductos);
+      _actualizarHeaderRecetaFiltro();
+      _catposAplicarFiltros();
     } catch(e) {
       console.error('Error cargando catálogo POS:', e);
       showError('tabla-catalogopos', 'Error cargando el catálogo (revisa la conexión con Firebase)');
@@ -6123,6 +6125,41 @@ async function guardarVentaDirecta() {
     if (!idReceta) return null;
     const r = (_catposRecetas || []).find(x => x.id === idReceta);
     return r ? r.nombre : idReceta;
+  }
+
+  function _catposProductoCompletoReceta(p) {
+    if (p.sized) {
+      const keys = Object.keys(p.prices || {});
+      return keys.length > 0 && keys.every(k => p.recetas && p.recetas[k]);
+    }
+    return !!p.idReceta;
+  }
+
+  function _actualizarHeaderRecetaFiltro() {
+    const th = document.getElementById('catpos-th-receta');
+    if (!th) return;
+    const faltantes = (_catposProductos || []).filter(p => !_catposProductoCompletoReceta(p)).length;
+    const badge = faltantes > 0 ? ` <span style="background:var(--terra-claro);color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700">${faltantes}</span>` : '';
+    th.innerHTML = `Receta vinculada${badge} <i class="ti ti-filter" style="font-size:13px;margin-left:2px"></i>`;
+    th.style.color = _catposSoloSinReceta ? 'var(--terra-claro)' : '';
+    th.title = _catposSoloSinReceta
+      ? 'Mostrando solo productos sin receta completa — clic para ver todos'
+      : 'Clic para mostrar solo los productos a los que les falta receta';
+  }
+
+  function toggleCatposSinReceta() {
+    _catposSoloSinReceta = !_catposSoloSinReceta;
+    _actualizarHeaderRecetaFiltro();
+    _catposAplicarFiltros();
+  }
+
+  function _catposAplicarFiltros() {
+    const buscarInput = document.getElementById('catpos-buscar');
+    const q = _norm(buscarInput ? buscarInput.value : '');
+    let lista = _catposProductos || [];
+    if (q) lista = lista.filter(p => _norm(p.name||'').includes(q) || _norm(p.id||'').includes(q));
+    if (_catposSoloSinReceta) lista = lista.filter(p => !_catposProductoCompletoReceta(p));
+    _pintarCatalogoPOS(lista);
   }
 
   function _recetaBuscarHTML(prefix, idRecetaActual) {
@@ -6254,9 +6291,7 @@ async function guardarVentaDirecta() {
   }
 
   function buscarCatalogoPOS(q) {
-    const t = _norm(q), l = _catposProductos || [];
-    if (!t) { _pintarCatalogoPOS(l); return; }
-    _pintarCatalogoPOS(l.filter(p => _norm(p.name||'').includes(t) || _norm(p.id||'').includes(t)));
+    _catposAplicarFiltros();
   }
 
   function cambiarSucursalCatalogoPOS(sucId) {
@@ -7862,7 +7897,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     abrirNuevaReceta, agregarLineaReceta, actualizarIngrediente, calcRecetaCosto, guardarReceta, renderRecetas,
     renderCatalogoPOS, buscarCatalogoPOS, cambiarSucursalCatalogoPOS, abrirNuevoProductoPOS, editarProductoPOS,
     guardarProductoPOS, _toggleSizedProductoPOS, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS,
-    filtrarRecetaPOS, seleccionarRecetaPOS, cerrarRecetaDD, recetaDDNav,
+    filtrarRecetaPOS, seleccionarRecetaPOS, cerrarRecetaDD, recetaDDNav, toggleCatposSinReceta,
     closeModal,
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },
