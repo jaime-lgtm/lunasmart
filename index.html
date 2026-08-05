@@ -6124,6 +6124,76 @@ async function guardarVentaDirecta() {
     return r ? r.nombre : idReceta;
   }
 
+  function _recetaBuscarHTML(prefix, idRecetaActual) {
+    const nombreActual = idRecetaActual ? (_catposRecetaNombre(idRecetaActual) || '') : '';
+    return `
+      <div style="position:relative">
+        <input type="text" id="${prefix}-buscar" autocomplete="off" placeholder="Escribe para buscar receta..."
+          value="${_h(nombreActual)}"
+          oninput="LS_UI.filtrarRecetaPOS(this,'${prefix}')"
+          onfocus="LS_UI.filtrarRecetaPOS(this,'${prefix}')"
+          onblur="setTimeout(()=>LS_UI.cerrarRecetaDD('${prefix}'),200)">
+        <input type="hidden" id="${prefix}-id" value="${_h(idRecetaActual || '')}">
+        <div id="${prefix}-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:60;background:var(--cafe-750);border:1px solid var(--line-2);border-radius:0 0 var(--r) var(--r);max-height:220px;overflow-y:auto;box-shadow:var(--sh-pop)"></div>
+      </div>`;
+  }
+
+  function filtrarRecetaPOS(input, prefix) {
+    const dd = document.getElementById(prefix + '-dd');
+    if (!dd) return;
+    const q = _norm(input.value);
+    const recetas = _catposRecetas || [];
+    const hits = (q ? recetas.filter(r => _norm(r.nombre).includes(q)) : recetas).slice(0, 50);
+
+    dd.innerHTML = '';
+
+    const clearRow = document.createElement('div');
+    clearRow.dataset.id = ''; clearRow.dataset.nombre = '';
+    clearRow.style.cssText = 'padding:8px 12px;cursor:pointer;font-size:12.5px;color:var(--tx-3);border-bottom:1px solid var(--line-2)';
+    clearRow.textContent = '— Sin receta —';
+    dd.appendChild(clearRow);
+
+    if (!hits.length) {
+      const vacio = document.createElement('div');
+      vacio.style.cssText = 'padding:10px 12px;font-size:12.5px;color:var(--tx-4)';
+      vacio.textContent = recetas.length ? 'Sin coincidencias' : 'Cargando recetas...';
+      dd.appendChild(vacio);
+    } else {
+      hits.forEach(r => {
+        const row = document.createElement('div');
+        row.dataset.id = r.id; row.dataset.nombre = r.nombre;
+        row.style.cssText = 'padding:8px 12px;cursor:pointer;font-size:13px;color:var(--tx)';
+        row.onmouseover = () => { row.style.background = 'var(--cafe-card-hi)'; };
+        row.onmouseout = () => { row.style.background = 'transparent'; };
+        row.innerHTML = _h(r.nombre) + (r.costo_elaboracion ? ` <span style="color:var(--tx-4);font-size:11px">— ${LS_API.formatMXNDec(r.costo_elaboracion)}</span>` : '');
+        dd.appendChild(row);
+      });
+    }
+
+    Array.from(dd.children).forEach(el => {
+      el.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        LS_UI.seleccionarRecetaPOS(prefix, el.dataset.id || '', el.dataset.nombre || '');
+      });
+    });
+
+    dd.style.display = 'block';
+  }
+
+  function seleccionarRecetaPOS(prefix, id, nombre) {
+    const inp = document.getElementById(prefix + '-buscar');
+    const hid = document.getElementById(prefix + '-id');
+    if (inp) inp.value = nombre;
+    if (hid) hid.value = id;
+    const dd = document.getElementById(prefix + '-dd');
+    if (dd) dd.style.display = 'none';
+  }
+
+  function cerrarRecetaDD(prefix) {
+    const dd = document.getElementById(prefix + '-dd');
+    if (dd) dd.style.display = 'none';
+  }
+
   function _catposRecetaBadge(p) {
     if (p.sized) {
       const sizeKeys = Object.keys(p.prices || {});
@@ -6191,7 +6261,6 @@ async function guardarVentaDirecta() {
   function _formProductoPOS(producto) {
     const esEdicion = !!producto;
     const sizedInicial = producto ? !!producto.sized : false;
-    const recetasOpts = (_catposRecetas || []).map(r => `<option value="${r.id}" ${producto && producto.idReceta===r.id ? 'selected' : ''}>${_h(r.nombre)}${r.costo_elaboracion ? ' — '+LS_API.formatMXNDec(r.costo_elaboracion) : ''}</option>`).join('');
     const precioSimple = producto && !producto.sized ? (producto.price || '') : '';
     const preciosSized = producto && producto.prices ? producto.prices : {};
     const sizeKeys = Object.keys(preciosSized);
@@ -6239,18 +6308,21 @@ async function guardarVentaDirecta() {
             </div>
           </div>
           <div id="pp-receta-simple" style="display:${sizedInicial ? 'none':'block'}">
-            <div class="ff"><label>Receta vinculada (opcional)</label>
-              <select id="pp-receta"><option value="">— Sin receta —</option>${recetasOpts}</select>
+            <div class="ff">
+              <label>Receta vinculada (opcional)</label>
+              ${_recetaBuscarHTML('pp-receta', producto ? producto.idReceta : null)}
             </div>
           </div>
           <div id="pp-receta-sized" style="display:${sizedInicial ? 'block':'none'}">
             <div class="ff" style="margin-bottom:2px"><label style="text-transform:none;font-size:11px;color:var(--tx-4);font-weight:400">Cada tamaño usa cantidades distintas de ingredientes, así que se vincula una receta por tamaño</label></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-              <div class="ff"><label>Receta — tamaño 1</label>
-                <select id="pp-receta-t1"><option value="">— Sin receta —</option>${(_catposRecetas||[]).map(r=>`<option value="${r.id}" ${producto && producto.recetas && producto.recetas[sizeKeys[0]]===r.id ? 'selected':''}>${_h(r.nombre)}</option>`).join('')}</select>
+              <div class="ff">
+                <label>Receta — tamaño 1</label>
+                ${_recetaBuscarHTML('pp-receta-t1', producto && producto.recetas ? producto.recetas[sizeKeys[0]] : null)}
               </div>
-              <div class="ff"><label>Receta — tamaño 2</label>
-                <select id="pp-receta-t2"><option value="">— Sin receta —</option>${(_catposRecetas||[]).map(r=>`<option value="${r.id}" ${producto && producto.recetas && producto.recetas[sizeKeys[1]]===r.id ? 'selected':''}>${_h(r.nombre)}</option>`).join('')}</select>
+              <div class="ff">
+                <label>Receta — tamaño 2</label>
+                ${_recetaBuscarHTML('pp-receta-t2', producto && producto.recetas ? producto.recetas[sizeKeys[1]] : null)}
               </div>
             </div>
           </div>
@@ -6291,15 +6363,15 @@ async function guardarVentaDirecta() {
         const t1p = parseFloat(document.getElementById('pp-t1-precio').value) || 0;
         const t2n = document.getElementById('pp-t2-nombre').value.trim() || 'El Mayor';
         const t2p = parseFloat(document.getElementById('pp-t2-precio').value) || 0;
-        const idRecetaT1 = document.getElementById('pp-receta-t1').value;
-        const idRecetaT2 = document.getElementById('pp-receta-t2').value;
+        const idRecetaT1 = document.getElementById('pp-receta-t1-id').value;
+        const idRecetaT2 = document.getElementById('pp-receta-t2-id').value;
         payload.sized = true;
         payload.prices = { [t1n]: t1p, [t2n]: t2p };
         payload.price = t1p;
         payload.recetas = { [t1n]: idRecetaT1 || null, [t2n]: idRecetaT2 || null };
         payload.idReceta = null;
       } else {
-        const idRecetaSel = document.getElementById('pp-receta').value;
+        const idRecetaSel = document.getElementById('pp-receta-id').value;
         payload.sized = false;
         payload.price = parseFloat(document.getElementById('pp-precio').value) || 0;
         payload.prices = null;
@@ -7768,6 +7840,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     abrirNuevaReceta, agregarLineaReceta, actualizarIngrediente, calcRecetaCosto, guardarReceta, renderRecetas,
     renderCatalogoPOS, buscarCatalogoPOS, cambiarSucursalCatalogoPOS, abrirNuevoProductoPOS, editarProductoPOS,
     guardarProductoPOS, _toggleSizedProductoPOS, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS,
+    filtrarRecetaPOS, seleccionarRecetaPOS, cerrarRecetaDD,
     closeModal,
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },
