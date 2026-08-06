@@ -3112,6 +3112,9 @@ const LS_API = (() => {
   async function actualizarCatalogoArticulo(datos) {
     return escribirViaScript('actualizarCatalogoArticulo', { datos });
   }
+  async function registrarReceta(datos) {
+    return escribirViaScript('registrarReceta', { datos });
+  }
   async function borrarCatalogoArticulo(articulo) {
     return escribirViaScript('borrarCatalogoArticulo', { datos: { articulo } });
   }
@@ -3666,7 +3669,7 @@ const LS_API = (() => {
     // Escritura
     registrarIngreso, registrarIngresoCompleto, actualizarIngreso, borrarIngreso, getIngresoDetalle,
     registrarFactura, registrarFacturaCompleta, actualizarFactura, borrarFactura,
-    registrarProveedor, registrarCliente, actualizarProveedor, borrarProveedor, actualizarCatalogoArticulo, borrarCatalogoArticulo,
+    registrarProveedor, registrarCliente, actualizarProveedor, borrarProveedor, actualizarCatalogoArticulo, borrarCatalogoArticulo, registrarReceta,
     registrarArticuloDetalle, registrarCatalogoArticulo, registrarCliente, guardarInventarioFisico, sumarStockPorCompra,
     actualizarMinMaxInventario,
     // Agregaciones
@@ -6005,17 +6008,14 @@ async function guardarVentaDirecta() {
     }
 
     const datos = {
-      accion: 'registrarReceta',
-      datos: {
-        nombre:        nombre,
-        categoria:     document.getElementById('rec-categoria')?.value || '',
-        tipo:          document.getElementById('rec-tipo')?.value || '',
-        tamano:        parseFloat(document.getElementById('rec-tamano')?.value || 0) || 0,
-        porciones:     porciones,
-        clase:         document.getElementById('rec-clase')?.value || '',
-        fecha:         document.getElementById('rec-fecha')?.value || '',
-        ingredientes:  ingredientes,
-      }
+      nombre:        nombre,
+      categoria:     document.getElementById('rec-categoria')?.value || '',
+      tipo:          document.getElementById('rec-tipo')?.value || '',
+      tamano:        parseFloat(document.getElementById('rec-tamano')?.value || 0) || 0,
+      porciones:     porciones,
+      clase:         document.getElementById('rec-clase')?.value || '',
+      fecha:         document.getElementById('rec-fecha')?.value || '',
+      ingredientes:  ingredientes,
     };
 
     const btn = document.querySelector('#modal-receta .btn-save');
@@ -6023,12 +6023,7 @@ async function guardarVentaDirecta() {
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.9s linear infinite"></i> Guardando...'; }
 
     try {
-      const result = await fetch('https://script.google.com/macros/s/AKfycbwWsUIXoYDN_XayVBNDk6pshHL81WtxA_whT_tjy8tOQGhqxpVsKFqk2a-kDZyZmCCk/exec', {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(datos),
-        redirect: 'follow'
-      }).then(r => r.json()).catch(() => ({}));
+      const result = await LS_API.registrarReceta(datos).catch(() => ({}));
 
       if (result.status === 'ok') {
         toast('Receta registrada', nombre, 'ok', 'ti-check');
