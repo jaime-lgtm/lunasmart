@@ -6857,6 +6857,13 @@ async function guardarVentaDirecta() {
               <input type="number" id="nart-costo" step="0.01" min="0" placeholder="0.00">
             </div>
             <div class="ff">
+              <label>Cantidad que trae <span style="color:var(--terra)">*</span></label>
+              <input type="number" id="nart-cantidad" step="0.01" min="0" placeholder="Ej: 300">
+            </div>
+            <div class="ff" style="grid-column:1/-1;margin-top:-6px">
+              <label style="text-transform:none;font-size:11px;color:var(--tx-4);font-weight:400">El costo base es por TODO el paquete, no por unidad. Ej: si pagaste $223 por una bolsa de 300 gramos, Costo base = 223, Cantidad que trae = 300, Unidad = Gramos.</label>
+            </div>
+            <div class="ff">
               <label>Unidad de medida <span style="color:var(--terra)">*</span></label>
               <input type="text" id="nart-unidad" placeholder="kg, lts, pzas, caja...">
             </div>
@@ -6925,11 +6932,16 @@ async function guardarVentaDirecta() {
     const g = id => document.getElementById(id);
     const nombre = g('nart-nombre')?.value?.trim();
     const costo  = parseFloat(g('nart-costo')?.value || 0);
+    const cantidad = parseFloat(g('nart-cantidad')?.value || 0);
     const unidad = g('nart-unidad')?.value?.trim();
     const categoria = g('nart-categoria')?.value?.trim();
 
     if (!nombre || !costo || !unidad) {
       toast('Faltan campos', 'Nombre, costo y unidad son requeridos', 'err', 'ti-alert-circle');
+      return;
+    }
+    if (!cantidad || cantidad <= 0) {
+      toast('Falta la cantidad', '¿Cuánto trae el paquete? (ej. 300 para 300 gramos)', 'err', 'ti-alert-circle');
       return;
     }
     if (!categoria) {
@@ -6943,6 +6955,7 @@ async function guardarVentaDirecta() {
     const datos = {
       articulo:     nombre,
       costoBase:    costo,
+      cantidad,
       unidad,
       merma:        parseFloat(g('nart-merma')?.value || 0),
       categoria:    g('nart-categoria')?.value?.trim() || '',
