@@ -1699,9 +1699,10 @@
           <th>Categoría</th><th>Subcategoría</th>
           <th class="sortable num" data-type="num">Costo base<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
           <th class="sortable num" data-type="num">Costo dinámico<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th>Presentación</th>
           <th>Proveedor</th><th>Acciones</th>
         </tr></thead>
-        <tbody id="tabla-catalogo"><tr><td colspan="7" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+        <tbody id="tabla-catalogo"><tr><td colspan="8" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -4649,17 +4650,19 @@ const LS_UI = (() => {
   }
   function _pintarCatalogo(lista, esBusq) {
     if (!lista || !lista.length) {
-      setEl('tabla-catalogo', `<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--tx-3)">${esBusq ? 'Sin resultados' : 'Sin artículos'}</td></tr>`);
+      setEl('tabla-catalogo', `<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--tx-3)">${esBusq ? 'Sin resultados' : 'Sin artículos'}</td></tr>`);
       return;
     }
     setEl('tabla-catalogo', lista.slice(0, 400).map(a => {
       const key = (a.articulo || '').replace(/'/g, "\\'");
+      const presentacion = a.unidad ? `${a.cantidad != null ? a.cantidad : 1} ${a.unidad}` : '—';
       return `<tr>
         <td style="font-weight:500">${a.articulo}</td>
         <td style="color:var(--tx-2)">${a.categoria || '—'}</td>
         <td style="color:var(--tx-2)">${a.subcategoria || '—'}</td>
         <td class="num" data-v="${a.costoBase}" style="font-family:var(--mono)">${LS_API.formatMXNDec(a.costoBase)}</td>
         <td class="num" data-v="${a.costoDinamico}" style="font-family:var(--mono);font-weight:600">${LS_API.formatMXNDec(a.costoDinamico)}</td>
+        <td style="color:var(--tx-2);font-family:var(--mono);font-size:12.5px">${presentacion}</td>
         <td style="color:var(--tx-2)">${a.proveedor || '—'}</td>
         <td style="white-space:nowrap">
           <button class="icon-btn" title="Ver" onclick="LS_UI.verArticulo('${key}')"><i class="ti ti-eye"></i></button>
@@ -6689,34 +6692,83 @@ async function guardarVentaDirecta() {
   }
 
   async function seleccionarProveedor(nombre, id, esNuevo) {
+    const dd = document.getElementById('prov-dd');
+    if (dd) dd.style.display = 'none';
+
+    // Si es proveedor NUEVO, abrir el formulario completo (RFC, contacto,
+    // teléfono, crédito...) en vez de registrar solo el nombre a secas.
+    if (esNuevo && nombre) {
+      const yaExiste = (window._proveedoresCache || []).some(p => _norm(p.nombre) === _norm(nombre));
+      if (yaExiste) {
+        const input = document.getElementById('fact-proveedor');
+        if (input) input.value = nombre;
+        return;
+      }
+      abrirNuevoProveedorDesdeBusqueda(nombre);
+      return;
+    }
+
     const input = document.getElementById('fact-proveedor');
     if (input) {
       input.value = nombre;
       input.dataset.provId = id || '';       // código que se guardará en FACTURAS
-      input.dataset.nuevo  = esNuevo ? '1' : '';
+      input.dataset.nuevo  = '';
     }
-    const dd = document.getElementById('prov-dd');
-    if (dd) dd.style.display = 'none';
+  }
 
-    // Si es proveedor NUEVO, registrarlo de inmediato (con confirmación visible)
-    if (esNuevo && nombre) {
-      const yaExiste = (window._proveedoresCache || []).some(p => _norm(p.nombre) === _norm(nombre));
-      if (yaExiste) return;
-      try {
-        const res = await LS_API.registrarProveedor({ nombre });
-        if (res && (res.status === 'ok' || res.msg === 'El proveedor ya existe')) {
-          const newId = res.idProveedor || '';
-          if (input) input.dataset.provId = newId;
-          window._proveedoresCache = window._proveedoresCache || [];
-          if (!window._proveedoresCache.some(p => _norm(p.nombre) === _norm(nombre)))
-            window._proveedoresCache.push({ id: newId, nombre });
-          typeof toast !== 'undefined' && toast('Proveedor agregado', nombre + ' · registrado en DATOS_PROVEEDORES', 'ok', 'ti-check');
-        } else {
-          typeof toast !== 'undefined' && toast('Error', 'No se pudo registrar el proveedor', 'err', 'ti-alert-circle');
-        }
-      } catch (e) {
-        typeof toast !== 'undefined' && toast('Error', 'No se pudo registrar el proveedor', 'err', 'ti-alert-circle');
+  // Formulario completo de "nuevo proveedor" abierto desde el buscador de
+  // Egresos/Facturas -- se apila sobre la factura (igual que "nuevo artículo")
+  // en vez de registrar solo el nombre sin el resto de los datos.
+  function abrirNuevoProveedorDesdeBusqueda(nombre) {
+    _modal2(`<div class="modal" style="max-width:520px">
+      <div class="modal-header"><div><div class="modal-title">Nuevo proveedor</div><div class="modal-sub">Se guardará en DATOS_PROVEEDORES</div></div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div>
+      <div class="modal-body">
+        <div class="ff"><label>Nombre comercial</label><input type="text" id="npf-nombre" value="${(nombre||'').replace(/"/g,'&quot;')}"></div>
+        <div class="ff"><label>Razón social (RFC)</label><input type="text" id="npf-rfc"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="ff"><label>Contacto</label><input type="text" id="npf-contacto"></div>
+          <div class="ff"><label>Teléfono</label><input type="text" id="npf-tel"></div>
+        </div>
+        <div class="ff"><label>Correo</label><input type="email" id="npf-correo"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="ff"><label>Línea de crédito ($)</label><input type="number" id="npf-linea"></div>
+          <div class="ff"><label>Días de crédito</label><input type="number" id="npf-dias"></div>
+        </div>
+      </div>
+      <div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button><button class="btn-save" id="npf-btn" onclick="LS_UI.guardarNuevoProveedorDesdeBusqueda()"><i class="ti ti-device-floppy"></i> Registrar</button></div>
+    </div>`);
+    setTimeout(() => document.getElementById('npf-rfc')?.focus(), 120);
+  }
+
+  async function guardarNuevoProveedorDesdeBusqueda() {
+    const v = id => document.getElementById(id)?.value?.trim() || '';
+    const nombre = v('npf-nombre');
+    if (!nombre) { toast('Falta nombre', 'El nombre comercial es obligatorio', 'err', 'ti-alert-circle'); return; }
+
+    const datos = { nombre, rfc: v('npf-rfc'), contacto: v('npf-contacto'), telefono: v('npf-tel'), correo: v('npf-correo'), lineaCredito: parseFloat(v('npf-linea')) || 0, diasCredito: parseFloat(v('npf-dias')) || 0 };
+
+    const btn = document.getElementById('npf-btn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 spin"></i> Guardando...'; }
+
+    try {
+      const res = await LS_API.registrarProveedor(datos);
+      if (res && (res.status === 'ok' || res.msg === 'El proveedor ya existe')) {
+        const newId = res.idProveedor || '';
+        const input = document.getElementById('fact-proveedor');
+        if (input) { input.value = nombre; input.dataset.provId = newId; input.dataset.nuevo = ''; }
+        window._proveedoresCache = window._proveedoresCache || [];
+        if (!window._proveedoresCache.some(p => _norm(p.nombre) === _norm(nombre)))
+          window._proveedoresCache.push({ id: newId, nombre });
+        LS_API.invalidarCache('DATOS_PROVEEDORES');
+        _cerrarModal2();
+        toast('Proveedor registrado', nombre, 'ok', 'ti-check');
+      } else {
+        toast('Error', res?.msg || 'No se pudo registrar el proveedor', 'err', 'ti-alert-circle');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy"></i> Registrar'; }
       }
+    } catch (e) {
+      toast('Error', 'No se pudo registrar el proveedor', 'err', 'ti-alert-circle');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy"></i> Registrar'; }
     }
   }
 
@@ -6751,7 +6803,8 @@ async function guardarVentaDirecta() {
         const subio = din > base;
         precioTxt = `<span style="color:${subio?'var(--rojo)':'var(--verde)'}">$${din.toFixed(2)} ${subio?'▲':'▼'}</span> <span style="color:var(--tx-4)">(antes $${base.toFixed(2)})</span>`;
       }
-      const det = [a.categoria, a.unidad, precioTxt].filter(Boolean).join('  ·  ');
+      const paquete = a.unidad ? ((parseFloat(a.cantidad) > 0 ? (a.cantidad + ' ') : '') + a.unidad + (parseFloat(a.cantidad) > 1 ? '/paquete' : '')) : '';
+      const det = [a.categoria, paquete, precioTxt].filter(Boolean).join('  ·  ');
       return `<div class="art-opt" data-idx="${idx}">
         <div class="art-opt-nom">${_h(a.articulo)}</div>
         ${det ? `<div class="art-opt-det">${det}</div>` : ''}
@@ -7923,6 +7976,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderCatalogoPOS, buscarCatalogoPOS, cambiarSucursalCatalogoPOS, abrirNuevoProductoPOS, editarProductoPOS,
     guardarProductoPOS, _toggleSizedProductoPOS, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS,
     filtrarRecetaPOS, seleccionarRecetaPOS, cerrarRecetaDD, recetaDDNav, toggleCatposSinReceta,
+    abrirNuevoProveedorDesdeBusqueda, guardarNuevoProveedorDesdeBusqueda,
     closeModal,
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },
