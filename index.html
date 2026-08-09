@@ -6650,14 +6650,10 @@ async function guardarVentaDirecta() {
     });
     const hits = empiezan.concat(contienen).slice(0, 40);
 
-    const row = (p) => {
-      const nom = p.nombre.replace(/'/g,"&#39;");
-      const pid = String(p.id || '').replace(/'/g,"&#39;");
-      return `<div class="art-opt" onmousedown="event.preventDefault();LS_UI.seleccionarProveedor('${nom}','${pid}')">
-        <div class="art-opt-nom">${p.nombre}</div>
-        ${pid ? `<div class="art-opt-det">${pid}</div>` : ''}
+    const row = (p, idx) => `<div class="art-opt" data-idx="${idx}">
+        <div class="art-opt-nom">${_h(p.nombre)}</div>
+        ${p.id ? `<div class="art-opt-det">${_h(p.id)}</div>` : ''}
       </div>`;
-    };
 
     let html = '';
     if (hits.length > 0) {
@@ -6666,16 +6662,28 @@ async function guardarVentaDirecta() {
     }
     // Opción de registrar nuevo si lo escrito no coincide exacto
     const existeExacto = provs.some(p => _norm(p.nombre) === q);
-    if (val.trim() && !existeExacto) {
-      const valEsc = val.replace(/'/g,"&#39;");
-      html += `<div class="art-opt" style="display:flex;align-items:center;gap:9px;color:var(--terra-claro);border-top:1px solid var(--line-2);background:rgba(177,70,24,0.05)"
-        onmousedown="event.preventDefault();LS_UI.seleccionarProveedor('${valEsc}','',true)">
+    const hayNuevo = val.trim() && !existeExacto;
+    if (hayNuevo) {
+      html += `<div class="art-opt" data-nuevo="1" style="display:flex;align-items:center;gap:9px;color:var(--terra-claro);border-top:1px solid var(--line-2);background:rgba(177,70,24,0.05)">
         <i class="ti ti-circle-plus" style="font-size:18px;flex-shrink:0"></i>
-        <span style="font-size:13px">Usar <strong>"${val}"</strong> como proveedor nuevo</span>
+        <span style="font-size:13px">Usar <strong>"${_h(val)}"</strong> como proveedor nuevo</span>
       </div>`;
     }
 
     dd.innerHTML = html || `<div style="padding:11px 16px;font-size:12.5px;color:var(--tx-3)">Escribe el nombre del proveedor</div>`;
+
+    // Nota: los nombres se pasan como VALORES de JS (no interpolados en un
+    // atributo onclick), asi un apostrofo en el nombre (ej. "Sam's Club") no
+    // rompe el codigo -- eso era justo el bug que le fallaba a los usuarios.
+    dd.querySelectorAll('.art-opt[data-idx]').forEach(el => {
+      const p = hits[parseInt(el.dataset.idx, 10)];
+      el.addEventListener('mousedown', (e) => { e.preventDefault(); LS_UI.seleccionarProveedor(p.nombre, p.id, false); });
+    });
+    if (hayNuevo) {
+      const nuevoEl = dd.querySelector('.art-opt[data-nuevo]');
+      if (nuevoEl) nuevoEl.addEventListener('mousedown', (e) => { e.preventDefault(); LS_UI.seleccionarProveedor(val, '', true); });
+    }
+
     dd.style.display = 'block';
     _posicionarDropdown(input, dd);
   }
@@ -6732,9 +6740,7 @@ async function guardarVentaDirecta() {
     });
     const hits = empiezan.concat(contienen).slice(0, 40);
 
-    const row = (a) => {
-      const nom = a.articulo.replace(/'/g,"&#39;");
-      const uni = (a.unidad||'').replace(/'/g,"&#39;");
+    const row = (a, idx) => {
       // Usar el COSTO DINÁMICO (precio de la última compra) si existe; si no, el base
       const din  = parseFloat(a.costoDinamico) || 0;
       const base = parseFloat(a.costoBase) || 0;
@@ -6746,18 +6752,15 @@ async function guardarVentaDirecta() {
         precioTxt = `<span style="color:${subio?'var(--rojo)':'var(--verde)'}">$${din.toFixed(2)} ${subio?'▲':'▼'}</span> <span style="color:var(--tx-4)">(antes $${base.toFixed(2)})</span>`;
       }
       const det = [a.categoria, a.unidad, precioTxt].filter(Boolean).join('  ·  ');
-      return `<div class="art-opt"
-        onmousedown="event.preventDefault();LS_UI.seleccionarArticulo(this,'${nom}','${uni}',${costo})">
-        <div class="art-opt-nom">${a.articulo}</div>
+      return `<div class="art-opt" data-idx="${idx}">
+        <div class="art-opt-nom">${_h(a.articulo)}</div>
         ${det ? `<div class="art-opt-det">${det}</div>` : ''}
       </div>`;
     };
 
-    const valEsc = val.replace(/'/g,"&#39;");
-    const btnNuevo = `<div class="art-opt" style="display:flex;align-items:center;gap:9px;color:var(--terra-claro);border-top:1px solid var(--line-2);background:rgba(177,70,24,0.05)"
-      onmousedown="event.preventDefault();LS_UI.abrirNuevoArticulo('${valEsc}',this)">
+    const btnNuevo = `<div class="art-opt" data-nuevo="1" style="display:flex;align-items:center;gap:9px;color:var(--terra-claro);border-top:1px solid var(--line-2);background:rgba(177,70,24,0.05)">
       <i class="ti ti-circle-plus" style="font-size:18px;flex-shrink:0"></i>
-      <span style="font-size:13px">Registrar <strong>"${val}"</strong> como artículo nuevo</span>
+      <span style="font-size:13px">Registrar <strong>"${_h(val)}"</strong> como artículo nuevo</span>
     </div>`;
 
     const encabezado = hits.length > 0
@@ -6765,6 +6768,20 @@ async function guardarVentaDirecta() {
       : `<div style="padding:11px 16px;font-size:12.5px;color:var(--tx-3)">Sin coincidencias — puedes registrarlo:</div>`;
 
     dd.innerHTML = encabezado + hits.map(row).join('') + btnNuevo;
+
+    // Nota: nombre/unidad/costo se pasan como VALORES de JS (no interpolados
+    // en un atributo onclick), asi un apostrofo en el nombre del articulo
+    // (ej. "MEMBER'S CHOICE") no rompe el codigo -- ese era el bug reportado.
+    dd.querySelectorAll('.art-opt[data-idx]').forEach(el => {
+      const a = hits[parseInt(el.dataset.idx, 10)];
+      const din = parseFloat(a.costoDinamico) || 0;
+      const base = parseFloat(a.costoBase) || 0;
+      const costo = din || base;
+      el.addEventListener('mousedown', (e) => { e.preventDefault(); LS_UI.seleccionarArticulo(el, a.articulo, a.unidad, costo); });
+    });
+    const nuevoEl = dd.querySelector('.art-opt[data-nuevo]');
+    if (nuevoEl) nuevoEl.addEventListener('mousedown', (e) => { e.preventDefault(); LS_UI.abrirNuevoArticulo(val, nuevoEl); });
+
     dd.style.display = 'block';
     _posicionarDropdown(input, dd);
   }
