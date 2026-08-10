@@ -5304,7 +5304,7 @@ return `<tr>
         <div class="modal-footer">
           ${esEdicion ? `<button class="btn-cancel" style="color:var(--rojo);margin-right:auto" onclick="_cerrarModal();LS_UI.confirmarBorrarIngreso('${(editData.id||'').replace(/'/g,'')}')"><i class="ti ti-trash"></i> Borrar</button>` : ''}
           <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
-          <button class="btn-save" onclick="LS_UI.guardarIngreso()">
+          <button class="btn-save" id="btn-guardar-ingreso" onclick="LS_UI.guardarIngreso()">
             <i class="ti ti-device-floppy"></i> ${esEdicion ? 'Guardar cambios' : 'Guardar corte'}
           </button>
         </div>
@@ -5397,6 +5397,8 @@ return `<tr>
   }
 
   async function guardarIngreso() {
+    const btn = document.getElementById('btn-guardar-ingreso');
+    if (btn && btn.disabled) return; // ya se está guardando, ignora clics repetidos
     const n = id => parseFloat(document.getElementById(id)?.value || 0) || 0;
     const s = id => document.getElementById(id)?.value || '';
 
@@ -5440,7 +5442,6 @@ return `<tr>
     })).filter(d => d.articulo);
 
     const editId = window._editandoIngresoId;
-    const btn = document.querySelector('#modal-ingreso .btn-modal-ok');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i> Guardando...'; }
 
     let result;
@@ -5448,6 +5449,9 @@ return `<tr>
       datos.id = editId;
       result = await LS_API.actualizarIngreso(datos);
     } else {
+      // corteId estable para este intento -- si el guard de arriba falla por
+      // cualquier razón y el clic se duplica, el backend rechaza el reintento.
+      datos.corteId = 'MANUAL_' + (datos.sucursal || 'x') + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
       result = await LS_API.registrarIngresoCompleto(datos);
       // Fallback si el endpoint nuevo no está desplegado aún
       if (result?.msg && /desconocida/i.test(result.msg)) {
@@ -5464,7 +5468,7 @@ return `<tr>
       await renderDashboard();
     } else {
       typeof toast !== 'undefined' && toast('Error al guardar', result?.msg || 'Verifica la conexión', 'err', 'ti-alert-circle');
-      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy"></i> Guardar corte'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = `<i class="ti ti-device-floppy"></i> ${editId ? 'Guardar cambios' : 'Guardar corte'}`; }
     }
   }
 
