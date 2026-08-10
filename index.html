@@ -3254,10 +3254,14 @@ const LS_API = (() => {
 
   // Top artículos estrella
   async function getTopArticulos(top = 10) {
-    const detalles = await getArticulosDetalle();
+    const [detalles, facturas] = await Promise.all([getArticulosDetalle(), getFacturas()]);
+    // getFacturas() ya viene filtrado por la sucursal activa -- solo dejamos
+    // pasar el detalle de las facturas que pertenecen a esa sucursal.
+    const idsPermitidos = new Set(facturas.map(f => String(f.id)));
     const agg = {};
     detalles.forEach(d => {
       if (!d.articulo) return;
+      if (!idsPermitidos.has(String(d.idFactura))) return;
       if (!agg[d.articulo]) agg[d.articulo] = { cantidad: 0, total: 0 };
       agg[d.articulo].cantidad += d.cantidad;
       agg[d.articulo].total    += d.total;
@@ -3270,11 +3274,13 @@ const LS_API = (() => {
 
   // Top artículos COMPRADOS (de facturas/egresos · ARTICULOS DETALLES), por período
   async function getTopComprados(desde, hasta, top = 5) {
-    const detalles = await getArticulosDetalle();
+    const [detalles, facturas] = await Promise.all([getArticulosDetalle(), getFacturas()]);
+    const idsPermitidos = new Set(facturas.map(f => String(f.id)));
     const filtrados = (desde && hasta) ? detalles.filter(d => _enRango(d.fecha, desde, hasta)) : detalles;
     const agg = {};
     filtrados.forEach(d => {
       if (!d.articulo) return;
+      if (!idsPermitidos.has(String(d.idFactura))) return;
       if (!agg[d.articulo]) agg[d.articulo] = { cantidad: 0, total: 0 };
       agg[d.articulo].cantidad += d.cantidad;
       agg[d.articulo].total    += d.total;
@@ -3289,12 +3295,27 @@ const LS_API = (() => {
   // Top productos VENDIDOS (de Parrot · INGRESOS DETALLES), por período
   // Cols reales: C=fecha(2), D=articulo(3), E=cantidad(4), G=subtotal_linea(6)
   async function getProductosVendidos(desde, hasta, top = 5) {
-    const rows = await leerHoja(SHEETS.ING_DETALLES);
+    const [rows, ingresosRows] = await Promise.all([
+      leerHoja(SHEETS.ING_DETALLES),
+      leerHoja(SHEETS.INGRESOS),
+    ]);
     if (!rows) return [];
+    // Mapa id/cliente de INGRESOS → sucursal, para poder ubicar de qué
+    // sucursal es cada línea de detalle y aplicarle el filtro activo.
+    const sucPorClave = {};
+    (ingresosRows || []).slice(1).forEach(r => {
+      const suc = r[COLS.INGRESOS.SUCURSAL] || '';
+      const id = String(r[COLS.INGRESOS.ID] || '').trim();
+      const cliente = String(r[COLS.INGRESOS.CLIENTE] || '').trim();
+      if (id) sucPorClave[id] = suc;
+      if (cliente && !(cliente in sucPorClave)) sucPorClave[cliente] = suc;
+    });
     const agg = {};
     rows.slice(1).forEach(r => {
       const articulo = String(r[3] || '').trim();
       if (!articulo) return;
+      const idIngreso = String(r[1] || '').trim();
+      if (!_pasaBranch(sucPorClave[idIngreso] || '')) return;
       const fecha = r[2];
       if (desde && hasta && !_enRango(fecha, desde, hasta)) return;
       const cant = parseNum(r[4]);
