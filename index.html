@@ -6265,6 +6265,23 @@ async function guardarVentaDirecta() {
     return recNombre ? `<span class="badge b-s"><span class="bdot"></span>${_h(recNombre)}</span>` : `<span class="badge b-w"><span class="bdot"></span>Sin receta</span>`;
   }
 
+  async function toggleFavoritoProductoPOS(id) {
+    const p = (_catposProductos || []).find(x => x.id === id);
+    if (!p) return;
+    const nuevoFav = !(p.fav === true);
+    try {
+      if (!fbDb) throw new Error('Firebase no disponible');
+      await fbAuthReady;
+      await fbDb.ref('catalogo/' + _catposSucursal + '/' + id).update({ fav: nuevoFav });
+      p.fav = nuevoFav;
+      toast(nuevoFav ? 'Agregado a favoritos' : 'Quitado de favoritos', p.name, 'ok', 'ti-star');
+      _catposAplicarFiltros();
+    } catch (e) {
+      console.error(e);
+      toast('Error', 'No se pudo actualizar favorito', 'err', 'ti-alert-triangle');
+    }
+  }
+
   function _pintarCatalogoPOS(lista) {
     const tbody = document.getElementById('tabla-catalogopos');
     if (!tbody) return;
@@ -6281,6 +6298,7 @@ async function guardarVentaDirecta() {
         <td class="num" style="font-family:var(--mono)">${precio}</td>
         <td>${_catposRecetaBadge(p)}</td>
         <td style="white-space:nowrap">
+          <button class="icon-btn" title="${p.fav===true ? 'Quitar de favoritos' : 'Marcar como favorito'}" onclick="LS_UI.toggleFavoritoProductoPOS('${p.id}')" style="${p.fav===true ? 'color:#e0a300' : ''}"><i class="ti ${p.fav===true ? 'ti-star-filled' : 'ti-star'}"></i></button>
           <button class="icon-btn" title="Editar" onclick="LS_UI.editarProductoPOS('${p.id}')"><i class="ti ti-pencil"></i></button>
           <button class="icon-btn" title="Eliminar" onclick="LS_UI.confirmarBorrarProductoPOS('${p.id}')"><i class="ti ti-trash"></i></button>
         </td>
@@ -7981,7 +7999,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderCatalogoPOS, buscarCatalogoPOS, cambiarSucursalCatalogoPOS, abrirNuevoProductoPOS, editarProductoPOS,
     guardarProductoPOS, _toggleSizedProductoPOS, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS,
     filtrarRecetaPOS, seleccionarRecetaPOS, cerrarRecetaDD, recetaDDNav, toggleCatposSinReceta,
-    abrirNuevoProveedorDesdeBusqueda, guardarNuevoProveedorDesdeBusqueda,
+    abrirNuevoProveedorDesdeBusqueda, guardarNuevoProveedorDesdeBusqueda, toggleFavoritoProductoPOS,
     closeModal,
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },
