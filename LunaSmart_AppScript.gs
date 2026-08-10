@@ -206,8 +206,29 @@ function doPost(e) {
 
 // ── REGISTRAR INGRESO + DETALLE ────────────────────────────────────────────
 function _registrarIngresoCompleto(b) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch (e) {
+    return _err('Sistema ocupado, intenta de nuevo en unos segundos');
+  }
   try {
     var sh = _getSheet(HOJAS.INGRESOS);
+
+    // Migración additiva de la columna de idempotencia (ver abajo también las P-W).
+    if (!sh.getRange(1, 24).getValue()) { sh.getRange(1, 24).setValue('Corte ID'); }
+
+    // Idempotencia: si este mismo corte (mismo corteId) ya fue registrado
+    // -- por ejemplo por un reintento o un doble clic -- no se vuelve a insertar.
+    if (b.corteId) {
+      var valsCheck = sh.getDataRange().getValues();
+      for (var ci = 1; ci < valsCheck.length; ci++) {
+        if (String(valsCheck[ci][23]) === String(b.corteId)) {
+          return _json({ status: 'ok', idIngreso: valsCheck[ci][0], detalles: 0, duplicado: true });
+        }
+      }
+    }
+
     var id = _nextId(HOJAS.INGRESOS, 'INGRESOS');
     var efectivo      = parseFloat(b.efectivo      || 0);
     var tarjeta       = parseFloat(b.tarjeta       || 0);
@@ -246,6 +267,7 @@ function _registrarIngresoCompleto(b) {
       (typeof b.terminalDiferencia === 'number') ? b.terminalDiferencia : '',
       (typeof b.transferenciaDeclarada === 'number') ? b.transferenciaDeclarada : '',
       (typeof b.transferenciaDiferencia === 'number') ? b.transferenciaDiferencia : '',
+      b.corteId || '',
     ]);
 
     var nDet = 0;
@@ -277,6 +299,8 @@ function _registrarIngresoCompleto(b) {
     return _json({ status: 'ok', idIngreso: id, detalles: nDet });
   } catch (e) {
     return _err(e.message);
+  } finally {
+    lock.releaseLock();
   }
 }
 
