@@ -5791,9 +5791,10 @@ async function guardarVentaDirecta() {
       return;
     }
     const datos = {
-      accion: 'registrarIngreso',
+      accion: 'registrarIngresoCompleto',
       token: 'SDL-luna-w-7Kq9mT2pXr5vB',
       datos: {
+        corteId: 'VDIRECTA_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
         fecha: s('vdta-fecha'),
         sucursal: s('vdta-sucursal'),
         cliente: `${cliente} (vendedor: ${vendedor})`,  // cliente + vendedor
