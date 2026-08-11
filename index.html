@@ -6029,17 +6029,20 @@ async function guardarVentaDirecta() {
     if (!cont) return;
     const div = document.createElement('div');
     div.className = 'rec-linea';
-    div.style.cssText = 'display:grid;grid-template-columns:2fr 80px 80px 30px;gap:8px;margin-bottom:6px;align-items:center';
+    div.style.cssText = 'margin-bottom:10px';
     div.innerHTML = `
-      <input list="rec-ingredientes-list" class="rec-art" placeholder="Ingrediente..."
-        style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--tx);font-size:13px"
-        onchange="LS_UI.actualizarIngrediente(this)">
-      <input type="number" class="rec-cant" placeholder="Cantidad" min="0" step="0.5" value="1"
-        style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--tx);font-size:13px;font-family:var(--mono);text-align:center" oninput="LS_UI.calcRecetaCosto()">
-      <input type="text" class="rec-unidad" placeholder="Unidad" value="Gramos"
-        style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--tx);font-size:13px;text-align:center;background-color:var(--cafe-800)">
-      <button type="button" title="Quitar" onclick="this.closest('.rec-linea').remove();LS_UI.calcRecetaCosto()"
-        style="background:transparent;border:none;color:var(--rojo);cursor:pointer;font-size:16px">✕</button>`;
+      <div style="display:grid;grid-template-columns:2fr 80px 80px 30px;gap:8px;align-items:center">
+        <input list="rec-ingredientes-list" class="rec-art" placeholder="Ingrediente..."
+          style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--tx);font-size:13px"
+          onchange="LS_UI.actualizarIngrediente(this)">
+        <input type="number" class="rec-cant" placeholder="Cantidad" min="0" step="0.5" value="1"
+          style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--tx);font-size:13px;font-family:var(--mono);text-align:center" oninput="LS_UI.calcRecetaCosto()">
+        <input type="text" class="rec-unidad" placeholder="Unidad" value="Gramos"
+          style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--tx);font-size:13px;text-align:center;background-color:var(--cafe-800)">
+        <button type="button" title="Quitar" onclick="this.closest('.rec-linea').remove();LS_UI.calcRecetaCosto()"
+          style="background:transparent;border:none;color:var(--rojo);cursor:pointer;font-size:16px">✕</button>
+      </div>
+      <div class="rec-info" style="font-size:11px;color:var(--tx-4);margin-top:4px;padding-left:2px"></div>`;
     cont.appendChild(div);
     div.querySelector('.rec-art').focus();
   }
@@ -6080,18 +6083,27 @@ async function guardarVentaDirecta() {
 
       // Calcular costo de cada línea
       for (let linea of lineas) {
-        const artNombre = (linea.querySelector('.rec-art')?.value || '').trim().toLowerCase();
+        const artNombreRaw = (linea.querySelector('.rec-art')?.value || '').trim();
+        const artNombre = artNombreRaw.toLowerCase();
         const cantidad = parseFloat(linea.querySelector('.rec-cant')?.value || 0) || 0;
+        const infoEl = linea.querySelector('.rec-info');
 
-        if (artNombre && cantidad > 0 && catalogoMap[artNombre]) {
-          const articulo = catalogoMap[artNombre];
-          // Costo final = (Costo base / Cantidad presentación) × Cantidad utilizada
-          const costoFinal = articulo.costo_final || articulo.costo_base || 0;
+        const articulo = artNombre ? catalogoMap[artNombre] : null;
+        if (!artNombreRaw) {
+          if (infoEl) infoEl.textContent = '';
+        } else if (!articulo) {
+          if (infoEl) { infoEl.textContent = '⚠ No está en el Catálogo Maestro — no se puede calcular su costo'; infoEl.style.color = 'var(--ambar, #c9862f)'; }
+        } else {
+          // Costo final = (Costo base/final de la presentación / Cantidad de la presentación) × Cantidad utilizada
+          const costoFinal = articulo.costoFinal || articulo.costoBase || 0;
           const cantPres = articulo.cantidad || 1;
           const costoPorUnidad = costoFinal / cantPres;
           const costoPorLinea = costoPorUnidad * cantidad;
-
           costoTotal += costoPorLinea;
+          if (infoEl) {
+            infoEl.style.color = 'var(--tx-4)';
+            infoEl.textContent = `Presentación: ${cantPres} ${articulo.unidad || ''} · ${LS_API.formatMXNDec(costoPorUnidad)} c/u · Costo en receta: ${LS_API.formatMXNDec(costoPorLinea)}`;
+          }
         }
       }
 
