@@ -2845,6 +2845,8 @@ const LS_API = (() => {
     try {
       const rows = await leerHoja(SHEETS.RECETAS);
       if (!rows) return [];
+      // Orden real de columnas en BD_RECETAS: ID_RECETA, NOMBRE, CATEGORIA,
+      // TIPO, TAMANO, PORCIONES, CLASE, TIPO_VENTA, COSTO_ELABORACION, FECHA.
       return rows.slice(1)
         .filter(r => r.length > 0 && r[0])
         .map(r => ({
@@ -2855,8 +2857,9 @@ const LS_API = (() => {
           tamano:             parseFloat(r[4]) || 0,
           porciones:          parseFloat(r[5]) || 1,
           clase:              r[6] || '',
-          fecha:              r[7] || '',
+          tipoVenta:          r[7] || '',
           costo_elaboracion:  parseFloat(r[8]) || 0,
+          fecha:              r[9] || '',
         }));
     } catch(e) {
       console.error('Error cargando recetas:', e);
@@ -5926,11 +5929,15 @@ async function guardarVentaDirecta() {
   // FORMULARIO — NUEVA RECETA
   // ══════════════════════════════════════════════════════════
   async function abrirNuevaReceta() {
-    // Cargar ingredientes disponibles del Catálogo
+    // Cargar ingredientes disponibles del Catálogo + subrecetas/preparaciones
+    // ya registradas (ej. "BARBACOA (RECETA)"), para poder usarlas como
+    // ingrediente de otra receta (ej. Lonche de Barbacoa usa la sub-receta
+    // Barbacoa, no el insumo crudo).
     let artOpts = '';
     try {
-      const prods = await LS_API.getCatalogo();
-      artOpts = prods.map(p => `<option value="${String(p.articulo).replace(/"/g,'&quot;')}">`).join('');
+      const [prods, recetas] = await Promise.all([LS_API.getCatalogo(), LS_API.getRecetas()]);
+      artOpts = prods.map(p => `<option value="${String(p.articulo).replace(/"/g,'&quot;')}">`).join('')
+        + recetas.map(r => `<option value="${String(r.nombre).replace(/"/g,'&quot;')} (RECETA)">`).join('');
     } catch(_) {}
 
     openModal(`
@@ -6047,20 +6054,53 @@ async function guardarVentaDirecta() {
     div.querySelector('.rec-art').focus();
   }
 
+  // Resuelve un nombre de ingrediente contra el Catálogo Maestro O contra una
+  // sub-receta/preparación ya registrada (ej. "BARBACOA (RECETA)") -- para
+  // subrecetas, el costo por unidad es costo_elaboracion / tamaño (el
+  // rendimiento total con el que se registró esa receta).
+  function _resolverIngredienteReceta(nombreRaw, catalogoMap, recetasMap) {
+    const nombre = (nombreRaw || '').trim();
+    if (!nombre) return null;
+    const nombreBase = nombre.replace(/\s*\(RECETA\)\s*$/i, '').trim().toLowerCase();
+    const receta = recetasMap[nombreBase];
+    if (receta) {
+      const cantPres = receta.tamano || 1;
+      return {
+        esReceta: true,
+        cantPres,
+        unidadSugerida: 'Gramos',
+        costoPorUnidad: (receta.costo_elaboracion || 0) / cantPres,
+      };
+    }
+    const articulo = catalogoMap[nombreBase];
+    if (articulo) {
+      const cantPres = articulo.cantidad || 1;
+      return {
+        esReceta: false,
+        cantPres,
+        unidadSugerida: articulo.unidad || 'Gramos',
+        costoPorUnidad: (articulo.costoFinal || articulo.costoBase || 0) / cantPres,
+      };
+    }
+    return null;
+  }
+
   async function actualizarIngrediente(inputEl) {
-    // Cuando cambia el ingrediente, traer la unidad del Catálogo
+    // Cuando cambia el ingrediente, traer la unidad del Catálogo/sub-receta
     try {
       const artNombre = (inputEl.value || '').trim();
       if (!artNombre) return;
 
-      const catalogo = await LS_API.getCatalogo();
-      const articulo = catalogo.find(p => p.articulo?.toLowerCase() === artNombre.toLowerCase());
+      const [catalogo, recetas] = await Promise.all([LS_API.getCatalogo(), LS_API.getRecetas()]);
+      const catalogoMap = {};
+      catalogo.forEach(p => { catalogoMap[p.articulo?.toLowerCase() || ''] = p; });
+      const recetasMap = {};
+      recetas.forEach(r => { recetasMap[r.nombre?.toLowerCase() || ''] = r; });
 
-      if (articulo) {
+      const resuelto = _resolverIngredienteReceta(artNombre, catalogoMap, recetasMap);
+      if (resuelto) {
         const unidadEl = inputEl.closest('.rec-linea').querySelector('.rec-unidad');
-        if (unidadEl) {
-          unidadEl.value = articulo.unidad || 'Gramos';
-        }
+        if (unidadEl) unidadEl.value = resuelto.unidadSugerida;
         // Recalcular costo
         await calcRecetaCosto();
       }
@@ -6074,35 +6114,33 @@ async function guardarVentaDirecta() {
       const lineas = document.querySelectorAll('#rec-lineas .rec-linea');
       let costoTotal = 0;
 
-      // Obtener catálogo para buscar costos
-      const catalogo = await LS_API.getCatalogo();
+      // Obtener catálogo + sub-recetas para buscar costos
+      const [catalogo, recetas] = await Promise.all([LS_API.getCatalogo(), LS_API.getRecetas()]);
       const catalogoMap = {};
       catalogo.forEach(p => {
         catalogoMap[p.articulo?.toLowerCase() || ''] = p;
       });
+      const recetasMap = {};
+      recetas.forEach(r => { recetasMap[r.nombre?.toLowerCase() || ''] = r; });
 
       // Calcular costo de cada línea
       for (let linea of lineas) {
         const artNombreRaw = (linea.querySelector('.rec-art')?.value || '').trim();
-        const artNombre = artNombreRaw.toLowerCase();
         const cantidad = parseFloat(linea.querySelector('.rec-cant')?.value || 0) || 0;
         const infoEl = linea.querySelector('.rec-info');
 
-        const articulo = artNombre ? catalogoMap[artNombre] : null;
+        const resuelto = _resolverIngredienteReceta(artNombreRaw, catalogoMap, recetasMap);
         if (!artNombreRaw) {
           if (infoEl) infoEl.textContent = '';
-        } else if (!articulo) {
-          if (infoEl) { infoEl.textContent = '⚠ No está en el Catálogo Maestro — no se puede calcular su costo'; infoEl.style.color = 'var(--ambar, #c9862f)'; }
+        } else if (!resuelto) {
+          if (infoEl) { infoEl.textContent = '⚠ No está en el Catálogo Maestro ni en Recetas — no se puede calcular su costo'; infoEl.style.color = 'var(--ambar, #c9862f)'; }
         } else {
-          // Costo final = (Costo base/final de la presentación / Cantidad de la presentación) × Cantidad utilizada
-          const costoFinal = articulo.costoFinal || articulo.costoBase || 0;
-          const cantPres = articulo.cantidad || 1;
-          const costoPorUnidad = costoFinal / cantPres;
-          const costoPorLinea = costoPorUnidad * cantidad;
+          const costoPorLinea = resuelto.costoPorUnidad * cantidad;
           costoTotal += costoPorLinea;
           if (infoEl) {
             infoEl.style.color = 'var(--tx-4)';
-            infoEl.textContent = `Presentación: ${cantPres} ${articulo.unidad || ''} · ${LS_API.formatMXNDec(costoPorUnidad)} c/u · Costo en receta: ${LS_API.formatMXNDec(costoPorLinea)}`;
+            const etiqueta = resuelto.esReceta ? 'Sub-receta' : 'Presentación';
+            infoEl.textContent = `${etiqueta}: ${resuelto.cantPres} ${resuelto.unidadSugerida} · ${LS_API.formatMXNDec(resuelto.costoPorUnidad)} c/u · Costo en receta: ${LS_API.formatMXNDec(costoPorLinea)}`;
           }
         }
       }

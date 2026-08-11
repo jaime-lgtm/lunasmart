@@ -141,6 +141,8 @@ function doGet(e) {
     getCONCILIACION:               HOJAS.CONCILIACION,
     getDATAINGRESOS:               HOJAS.DATA_INGRESOS,
     getVENTASPARROT:               HOJAS.VENTAS_PARROT,
+    getBD_RECETAS:                 HOJAS.RECETAS,
+    getBD_RECETAS_DETALLES:        HOJAS.RECETAS_DET,
   };
 
   if (accion === 'getUSUARIOS') return _getUsuarios();
@@ -843,7 +845,9 @@ function _registrarProveedor(b) {
 function _registrarReceta(b) {
   try {
     const sh = _getSheet(HOJAS.RECETAS);
-    const id = _nextId(HOJAS.RECETAS, 'RECETA');
+    const id = _nextId(HOJAS.RECETAS, 'REC');
+    // Orden real de columnas en BD_RECETAS: ID_RECETA, NOMBRE, CATEGORIA,
+    // TIPO, TAMANO, PORCIONES, CLASE, TIPO_VENTA, COSTO_ELABORACION, FECHA.
     _escribirFila(sh, [
       id,
       b.nombre    || '',
@@ -852,8 +856,9 @@ function _registrarReceta(b) {
       parseFloat(b.tamano    || 0) || 0,
       parseFloat(b.porciones || 1) || 1,
       b.clase || '',
-      b.fecha || _fechaHoy(),
+      b.tipoVenta || 'RESTAURANTE',
       parseFloat(b.costoElaboracion || 0) || 0,
+      b.fecha || _fechaHoy(),
     ]);
 
     const ingredientes = b.ingredientes || [];
