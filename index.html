@@ -1444,7 +1444,7 @@
 <div id="p-rentabilidad" class="page" data-screen-label="Rentabilidad">
   <div class="card">
     <div class="card-head">
-      <div><div class="card-title"><i class="ti ti-chart-arrows-vertical"></i>Rentabilidad por producto</div><div class="card-sub">Fuente: hoja "Costo de Producto" — costo de elaboración vs precio real de venta</div></div>
+      <div><div class="card-title"><i class="ti ti-chart-arrows-vertical"></i>Rentabilidad por producto</div><div class="card-sub">Recetas "Productos Vendibles" vs. precio real vinculado en Catálogo POS</div></div>
       <!-- Filtros de rentabilidad -->
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button data-rent-filtro="mayor" class="btn btn-sm on" onclick="LS_UI.filtrarRentabilidad('mayor')"><i class="ti ti-trending-up"></i> Mayor ganancia</button>
@@ -4943,6 +4943,71 @@ const LS_UI = (() => {
   let _rentFiltroActivo = 'mayor';
   function buscarRentabilidad(q) { renderRentabilidad(_rentFiltroActivo, q); }
 
+  // Margen objetivo por tipo de receta (mismo criterio que ya se usaba antes
+  // a mano en la hoja de cálculo): bebidas 65%, alimentos/postres 60%, resto 55%.
+  function _margenObjetivoPorTipo(tipo) {
+    const t = (tipo || '').toLowerCase();
+    if (t.includes('bebida')) return 0.65;
+    if (t.includes('aliment') || t.includes('postre')) return 0.60;
+    return 0.55;
+  }
+
+  // Trae de Catálogo POS (Firebase, todas las sucursales) cada producto
+  // vinculado a una receta, junto con el precio real con el que se vende.
+  async function _cargarVinculosCatalogoPOS() {
+    await fbAuthReady;
+    const snaps = await Promise.all(CATPOS_SUCURSALES.map(s => fbDb.ref('catalogo/' + s.id).once('value')));
+    const filas = [];
+    CATPOS_SUCURSALES.forEach((s, i) => {
+      const val = snaps[i].val() || {};
+      Object.values(val).forEach(p => {
+        if (p.sized && p.prices) {
+          Object.keys(p.prices).forEach(sk => {
+            const idReceta = p.recetas && p.recetas[sk];
+            if (idReceta) filas.push({ idReceta, sucursal: s.nombre, precioReal: parseFloat(p.prices[sk]) || 0 });
+          });
+        } else if (p.idReceta) {
+          filas.push({ idReceta: p.idReceta, sucursal: s.nombre, precioReal: parseFloat(p.price) || 0 });
+        }
+      });
+    });
+    return filas;
+  }
+
+  // Arma la tabla de rentabilidad a partir de Recetas (clase = "Productos
+  // Vendibles") cruzadas con su precio real de venta en Catálogo POS -- ya
+  // no depende de la hoja "Costo de Producto" (que había que vincular a mano).
+  async function _construirRentabilidad() {
+    const [recetas, vinculos] = await Promise.all([
+      LS_API.getRecetas(),
+      _cargarVinculosCatalogoPOS().catch(() => []),
+    ]);
+    const vendibles = recetas.filter(r => (r.clase || '').trim().toLowerCase() === 'productos vendibles');
+    const filas = [];
+    vendibles.forEach(r => {
+      const costo = (r.costo_elaboracion || 0) / (r.porciones || 1);
+      const margenObjetivo = _margenObjetivoPorTipo(r.tipo);
+      const precioSugerido = costo > 0 ? Math.round(costo / (1 - margenObjetivo)) : 0;
+      const enlaces = vinculos.filter(v => v.idReceta === r.id);
+      if (enlaces.length === 0) {
+        filas.push({
+          articulo: r.nombre, categoria: r.categoria, costoUnit: costo, precioSugerido,
+          precioReal: 0, margenReal: 0, margenObjetivo: margenObjetivo * 100, vinculado: false,
+        });
+      } else {
+        enlaces.forEach(v => {
+          const margenReal = v.precioReal > 0 ? ((v.precioReal - costo) / v.precioReal) * 100 : 0;
+          filas.push({
+            articulo: enlaces.length > 1 ? `${r.nombre} · ${v.sucursal}` : r.nombre,
+            categoria: r.categoria, costoUnit: costo, precioSugerido,
+            precioReal: v.precioReal, margenReal, margenObjetivo: margenObjetivo * 100, vinculado: true,
+          });
+        });
+      }
+    });
+    return filas;
+  }
+
   async function renderRentabilidad(filtroOrden, q) {
     filtroOrden = filtroOrden || _rentFiltroActivo || 'mayor';
     _rentFiltroActivo = filtroOrden;
@@ -4951,14 +5016,14 @@ const LS_UI = (() => {
     showLoading(containerId);
 
     try {
-      // Solo cargar del Sheet si no tenemos caché
+      // Solo reconstruir si no tenemos caché
       if (_rentabilidadData.length === 0) {
-        _rentabilidadData = await LS_API.getCostoProducto();
+        _rentabilidadData = await _construirRentabilidad();
       }
       const productos = _rentabilidadData;
 
       if (productos.length === 0) {
-        setEl(containerId, '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--tx-3)">Sin datos en Costo de Producto</td></tr>');
+        setEl(containerId, '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--tx-3)">Sin recetas marcadas como "Productos Vendibles"</td></tr>');
         return;
       }
 
@@ -4974,17 +5039,15 @@ const LS_UI = (() => {
         ordenados = ordenados.filter(p => _norm(p.articulo).includes(t) || _norm(p.categoria).includes(t));
       }
       if (filtroOrden === 'mayor') {
-        ordenados.sort((a, b) => (b.margenReal || b.margen || 0) - (a.margenReal || a.margen || 0));
+        ordenados.sort((a, b) => b.margenReal - a.margenReal);
       } else if (filtroOrden === 'menor') {
-        ordenados.sort((a, b) => (a.margenReal || a.margen || 0) - (b.margenReal || b.margen || 0));
+        ordenados.sort((a, b) => a.margenReal - b.margenReal);
       } else if (filtroOrden === 'mejorar') {
-        ordenados = ordenados.filter(p => {
-          const m = p.margenReal || p.margen || 0;
-          return m >= 30 && m < 60;
-        }).sort((a, b) => (a.margenReal || a.margen || 0) - (b.margenReal || b.margen || 0));
+        ordenados = ordenados.filter(p => p.vinculado && p.margenReal >= 60 && p.margenReal < p.margenObjetivo)
+          .sort((a, b) => a.margenReal - b.margenReal);
       } else if (filtroOrden === 'bajo') {
-        ordenados = ordenados.filter(p => (p.margenReal || p.margen || 0) < 40);
-        ordenados.sort((a, b) => (a.margenReal || a.margen || 0) - (b.margenReal || b.margen || 0));
+        ordenados = ordenados.filter(p => p.vinculado && p.margenReal < 60)
+          .sort((a, b) => a.margenReal - b.margenReal);
       }
 
       if (ordenados.length === 0) {
@@ -4992,19 +5055,20 @@ const LS_UI = (() => {
         return;
       }
 
-      setEl(containerId, ordenados.slice(0, 50).map(p => {
-        const margen = p.margenReal || p.margen || 0;
-        const estado = margen >= 60 ? { cls: 'ok',  txt: 'Ganando bien' }
-                     : margen >= 45 ? { cls: 'warn', txt: 'Puede mejorar' }
-                     :               { cls: 'err',  txt: 'Margen bajo' };
-        const colMargen = margen >= 55 ? 'var(--verde)' : margen >= 40 ? 'var(--ambar)' : 'var(--rojo)';
+      setEl(containerId, ordenados.slice(0, 100).map(p => {
+        let estado;
+        if (!p.vinculado) estado = { cls: 'warn', txt: 'Sin vincular en Catálogo POS' };
+        else if (p.margenReal < 60) estado = { cls: 'err', txt: '🔴 Margen bajo' };
+        else if (p.margenReal < p.margenObjetivo) estado = { cls: 'warn', txt: '🟠 Puede mejorar' };
+        else estado = { cls: 'ok', txt: '🟢 Ganando muy bien' };
+        const colMargen = !p.vinculado ? 'var(--tx-4)' : p.margenReal >= p.margenObjetivo ? 'var(--verde)' : p.margenReal >= 60 ? 'var(--ambar)' : 'var(--rojo)';
         return `<tr>
           <td style="font-weight:500">${p.articulo || '—'}</td>
           <td style="font-size:11px;color:var(--tx-3)">${p.categoria || '—'}</td>
-          <td style="font-family:var(--mono);font-size:12px">${fmtD(p.costoUnit || p.costoBase || 0)}</td>
+          <td style="font-family:var(--mono);font-size:12px">${fmtD(p.costoUnit || 0)}</td>
           <td style="font-family:var(--mono);font-size:12px">${fmtD(p.precioSugerido || 0)}</td>
-          <td style="font-family:var(--mono);font-size:12px">${fmtD(p.precioReal || 0)}</td>
-          <td style="font-family:var(--mono);color:${colMargen};font-weight:700">${fmtP(margen)}</td>
+          <td style="font-family:var(--mono);font-size:12px">${p.vinculado ? fmtD(p.precioReal || 0) : '—'}</td>
+          <td style="font-family:var(--mono);color:${colMargen};font-weight:700">${p.vinculado ? fmtP(p.margenReal) : '—'}</td>
           <td><span class="badge ${estado.cls}">${estado.txt}</span></td>
         </tr>`;
       }).join(''));
