@@ -6097,8 +6097,10 @@ async function guardarVentaDirecta() {
 
       const totEl = document.getElementById('rec-costo-total');
       if (totEl) totEl.textContent = LS_API.formatMXNDec(costoTotal);
+      return costoTotal;
     } catch(e) {
       console.error('Error calculando costo:', e);
+      return 0;
     }
   }
 
@@ -6123,6 +6125,8 @@ async function guardarVentaDirecta() {
       return;
     }
 
+    const costoElaboracion = await calcRecetaCosto();
+
     const datos = {
       nombre:        nombre,
       categoria:     document.getElementById('rec-categoria')?.value || '',
@@ -6132,6 +6136,7 @@ async function guardarVentaDirecta() {
       clase:         document.getElementById('rec-clase')?.value || '',
       fecha:         document.getElementById('rec-fecha')?.value || '',
       ingredientes:  ingredientes,
+      costoElaboracion,
     };
 
     const btn = document.querySelector('#modal-receta .btn-save');

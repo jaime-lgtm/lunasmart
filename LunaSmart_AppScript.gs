@@ -40,6 +40,8 @@ const HOJAS = {
   DATA_INGRESOS:  'DATA_INGRESOS',
   VENTAS_PARROT:  'VENTAS_PARROT',        // ventas por artículo (de Parrot)
   CLIENTES_DOM:   'CLIENTES_DOMICILIO',   // clientes de domicilio (POS)
+  RECETAS:        'BD_RECETAS',
+  RECETAS_DET:    'BD_RECETAS_DETALLES',
 };
 
 // ── JSON OUTPUT ─────────────────────────────────────────────────────────────
@@ -198,6 +200,7 @@ function doPost(e) {
     case 'actualizarCatalogoArticulo': return _actualizarCatalogoArticulo(datos);
     case 'borrarCatalogoArticulo':     return _borrarCatalogoArticulo(datos);
     case 'registrarCliente':           return _registrarCliente(datos);
+    case 'registrarReceta':            return _registrarReceta(datos);
     case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(datos);
     case 'buscarClienteDom':           return _buscarClienteDom(datos);
     case 'registrarClienteDom':        return _registrarClienteDom(datos);
@@ -831,6 +834,40 @@ function _registrarProveedor(b) {
       b.diasCredito  || 0,
     ]);
     return _json({ status: 'ok', idProveedor: id });
+  } catch(e) {
+    return _err(e.message);
+  }
+}
+
+// ── REGISTRAR RECETA ────────────────────────────────────────────────────────
+function _registrarReceta(b) {
+  try {
+    const sh = _getSheet(HOJAS.RECETAS);
+    const id = _nextId(HOJAS.RECETAS, 'RECETA');
+    _escribirFila(sh, [
+      id,
+      b.nombre    || '',
+      b.categoria || '',
+      b.tipo      || '',
+      parseFloat(b.tamano    || 0) || 0,
+      parseFloat(b.porciones || 1) || 1,
+      b.clase || '',
+      b.fecha || _fechaHoy(),
+      parseFloat(b.costoElaboracion || 0) || 0,
+    ]);
+
+    const ingredientes = b.ingredientes || [];
+    if (ingredientes.length) {
+      const shD = _getSheet(HOJAS.RECETAS_DET);
+      const filas = ingredientes.filter(function(i){ return i && i.articulo; }).map(function(i){
+        return [id, i.articulo, parseFloat(i.cantidad || 0) || 0, i.unidad || ''];
+      });
+      if (filas.length) {
+        const fi = _siguienteFilaLibre(shD, 1);
+        shD.getRange(fi, 1, filas.length, 4).setValues(filas);
+      }
+    }
+    return _json({ status: 'ok', idReceta: id });
   } catch(e) {
     return _err(e.message);
   }
