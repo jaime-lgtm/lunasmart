@@ -1453,6 +1453,14 @@
         <button data-rent-filtro="bajo" class="btn btn-sm" onclick="LS_UI.filtrarRentabilidad('bajo')" style="color:var(--rojo)"><i class="ti ti-alert-circle"></i> Margen bajo</button>
       </div>
     </div>
+    <div style="padding:0 18px 12px">
+      <div style="position:relative;max-width:460px">
+        <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--tx-4);font-size:16px"></i>
+        <input type="text" id="rent-buscar" placeholder="Buscar por artículo o categoría..."
+          oninput="LS_UI.buscarRentabilidad(this.value)"
+          style="width:100%;padding:9px 12px 9px 36px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none">
+      </div>
+    </div>
     <div class="tbl-wrap">
       <table class="tbl" data-sortable>
         <thead><tr>
@@ -4932,8 +4940,13 @@ const LS_UI = (() => {
   // ══════════════════════════════════════════════════════════
   // Caché de productos de rentabilidad para re-filtrar sin recargar
   let _rentabilidadData = [];
+  let _rentFiltroActivo = 'mayor';
+  function buscarRentabilidad(q) { renderRentabilidad(_rentFiltroActivo, q); }
 
-  async function renderRentabilidad(filtroOrden = 'mayor') {
+  async function renderRentabilidad(filtroOrden, q) {
+    filtroOrden = filtroOrden || _rentFiltroActivo || 'mayor';
+    _rentFiltroActivo = filtroOrden;
+    if (q === undefined) q = document.getElementById('rent-buscar')?.value || '';
     const containerId = 'tabla-rentabilidad';
     showLoading(containerId);
 
@@ -4956,6 +4969,10 @@ const LS_UI = (() => {
 
       // Ordenar según filtro
       let ordenados = [...productos];
+      const t = _norm(q);
+      if (t) {
+        ordenados = ordenados.filter(p => _norm(p.articulo).includes(t) || _norm(p.categoria).includes(t));
+      }
       if (filtroOrden === 'mayor') {
         ordenados.sort((a, b) => (b.margenReal || b.margen || 0) - (a.margenReal || a.margen || 0));
       } else if (filtroOrden === 'menor') {
@@ -4971,7 +4988,7 @@ const LS_UI = (() => {
       }
 
       if (ordenados.length === 0) {
-        setEl(containerId, `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--tx-3)">Sin productos en esta categoría</td></tr>`);
+        setEl(containerId, `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--tx-3)">${t ? 'Sin resultados para tu búsqueda' : 'Sin productos en esta categoría'}</td></tr>`);
         return;
       }
 
@@ -8235,6 +8252,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     buscarCatalogo, verArticulo, editarArticulo, nuevoArticulo, guardarArticulo, setModoArticulos, confirmarBorrarArticulo, ejecutarBorrarArticulo,
     onPageChange, reloadPage, invalidarCacheYRecargar, recargarPagina,
     filtrarRentabilidad: (f) => renderRentabilidad(f),
+    buscarRentabilidad,
     filtrarInventarioEstado: (f) => renderInventario(f), mostrarTipConteo,
     buscarFacturas, verFactura, editarFactura, confirmarBorrarFactura, ejecutarBorrarFactura,
     verIngreso, editarIngreso, confirmarBorrarIngreso, ejecutarBorrarIngreso, buscarIngresos,
