@@ -203,6 +203,11 @@ function doPost(e) {
     case 'borrarCatalogoArticulo':     return _borrarCatalogoArticulo(datos);
     case 'registrarCliente':           return _registrarCliente(datos);
     case 'registrarReceta':            return _registrarReceta(datos);
+    case 'actualizarReceta':           return _actualizarReceta(datos);
+    case 'guardarInventarioFisico':    return _guardarInventarioFisico(datos);
+    case 'sumarStockPorCompra':        return _sumarStockPorCompra(datos);
+    case 'actualizarMinMaxInventario': return _actualizarMinMaxInventario(datos);
+    case 'agregarArticuloInventario':  return _agregarArticuloInventario(datos);
     case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(datos);
     case 'buscarClienteDom':           return _buscarClienteDom(datos);
     case 'registrarClienteDom':        return _registrarClienteDom(datos);
@@ -876,6 +881,169 @@ function _registrarReceta(b) {
   } catch(e) {
     return _err(e.message);
   }
+}
+
+function _actualizarReceta(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var id = String(b.id || '').trim();
+    if (!id) return _err('Falta el ID de la receta');
+    var sh = _getSheet(HOJAS.RECETAS);
+    var vals = sh.getDataRange().getValues();
+    var fila = -1;
+    for (var i = 1; i < vals.length; i++) {
+      if (String(vals[i][0]).trim() === id) { fila = i + 1; break; }
+    }
+    if (fila === -1) return _err('Receta no encontrada: ' + id);
+
+    sh.getRange(fila, 2, 1, 9).setValues([[
+      b.nombre    || '',
+      b.categoria || '',
+      b.tipo      || '',
+      parseFloat(b.tamano    || 0) || 0,
+      parseFloat(b.porciones || 1) || 1,
+      b.clase || '',
+      b.tipoVenta || 'RESTAURANTE',
+      parseFloat(b.costoElaboracion || 0) || 0,
+      b.fecha || vals[fila - 1][9],
+    ]]);
+
+    if (b.ingredientes) {
+      var shD = _getSheet(HOJAS.RECETAS_DET);
+      var dvals = shD.getDataRange().getValues();
+      for (var j = dvals.length - 1; j >= 1; j--) {
+        if (String(dvals[j][0]).trim() === id) shD.deleteRow(j + 1);
+      }
+      var filas = (b.ingredientes || []).filter(function(i){ return i && i.articulo; }).map(function(i){
+        return [id, i.articulo, parseFloat(i.cantidad || 0) || 0, i.unidad || ''];
+      });
+      if (filas.length) {
+        var fi = _siguienteFilaLibre(shD, 1);
+        shD.getRange(fi, 1, filas.length, 4).setValues(filas);
+      }
+    }
+    return _json({ status: 'ok', idReceta: id });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+// ── INVENTARIO ───────────────────────────────────────────────────────────
+// Columnas de BD_INVENTARIO_GENERAL (1-based):
+// 1 ID, 2 SUCURSAL, 3 CONTEO_VISUAL, 4 CATEGORIA, 5 UBICACION, 6 ARTICULO,
+// 7 STOCK_FISICO, 8 FALTANTE, 9 STOCK_SUGERIDO, 10 UNIDAD, 11 PRESENTACION,
+// 12 COSTO_UNIT, 13 CONVERSION, 14 COSTO_RESURTIDO, 15 TIMESTAMP,
+// 16 STOCK_MINIMO, 17 TIPO_REGISTRO.
+
+// Guarda un conteo físico -- cada item ya trae la fila exacta (viene de
+// getInventario(), que expone `fila` por cada renglón leído).
+function _guardarInventarioFisico(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var sh = _getSheet(HOJAS.INVENTARIO);
+    var items = b.items || [];
+    var actualizados = 0;
+    items.forEach(function(it) {
+      var fila = parseInt(it.fila, 10);
+      if (!fila || fila < 2) return;
+      sh.getRange(fila, 7).setValue(parseFloat(it.stockFisico || 0) || 0);
+      sh.getRange(fila, 15).setValue(new Date());
+      actualizados++;
+    });
+    return _json({ status: 'ok', actualizados: actualizados });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+// Suma cantidades compradas (de una factura) al stock físico -- se localiza
+// por nombre exacto de artículo porque las líneas de factura no traen fila.
+function _sumarStockPorCompra(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var sh = _getSheet(HOJAS.INVENTARIO);
+    var vals = sh.getDataRange().getValues();
+    var items = b.items || [];
+    var actualizados = 0;
+    items.forEach(function(it) {
+      var nombre = String(it.articulo || '').trim().toLowerCase();
+      var cant = parseFloat(it.cantidad || 0) || 0;
+      if (!nombre || !cant) return;
+      for (var i = 1; i < vals.length; i++) {
+        if (String(vals[i][5]).trim().toLowerCase() === nombre) {
+          var filaSheet = i + 1;
+          var actual = parseFloat(vals[i][6]) || 0;
+          var nuevo = actual + cant;
+          sh.getRange(filaSheet, 7).setValue(nuevo);
+          sh.getRange(filaSheet, 15).setValue(new Date());
+          vals[i][6] = nuevo;
+          actualizados++;
+        }
+      }
+    });
+    return _json({ status: 'ok', actualizados: actualizados });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+// Actualiza mínimo/máximo/tipo de registro -- cada item trae fila exacta.
+function _actualizarMinMaxInventario(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var sh = _getSheet(HOJAS.INVENTARIO);
+    var items = b.items || [];
+    var actualizados = 0;
+    items.forEach(function(it) {
+      var fila = parseInt(it.fila, 10);
+      if (!fila || fila < 2) return;
+      if (it.minimo !== undefined && it.minimo !== '') sh.getRange(fila, 16).setValue(parseFloat(it.minimo) || 0);
+      if (it.maximo !== undefined && it.maximo !== '') sh.getRange(fila, 9).setValue(parseFloat(it.maximo) || 0);
+      if (it.tipoRegistro) sh.getRange(fila, 17).setValue(it.tipoRegistro);
+      actualizados++;
+    });
+    return _json({ status: 'ok', actualizados: actualizados });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+// Agrega un artículo nuevo a inventario (para una sucursal). Si el artículo
+// existe en el Catálogo Maestro, hereda categoría/unidad/costo de ahí.
+function _agregarArticuloInventario(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var articulo = String(b.articulo || '').trim();
+    if (!articulo) return _err('Falta el artículo');
+    var sucursal = String(b.sucursal || '').trim();
+    if (!sucursal) return _err('Falta la sucursal');
+
+    var categoria = '', unidad = '', costoUnit = 0;
+    try {
+      var shCat = _getSheet(HOJAS.CATALOGO);
+      var catVals = shCat.getDataRange().getValues();
+      for (var i = 1; i < catVals.length; i++) {
+        if (String(catVals[i][0]).trim().toLowerCase() === articulo.toLowerCase()) {
+          unidad = catVals[i][4] || '';
+          costoUnit = parseFloat(catVals[i][6]) || parseFloat(catVals[i][1]) || 0;
+          categoria = catVals[i][7] || '';
+          break;
+        }
+      }
+    } catch (e2) {}
+
+    var sh = _getSheet(HOJAS.INVENTARIO);
+    var id = _nextId(HOJAS.INVENTARIO, 'INV');
+    _escribirFila(sh, [
+      id, sucursal, '', categoria, b.ubicacion || '', articulo,
+      parseFloat(b.stockInicial || 0) || 0, '', parseFloat(b.maximo || 0) || 0,
+      unidad, '', costoUnit, 1, 0, new Date(),
+      parseFloat(b.minimo || 0) || 0, b.tipoRegistro || '',
+    ]);
+    return _json({ status: 'ok', id: id });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
 }
 
 // ── REGISTRAR CLIENTE ──────────────────────────────────────────────────────

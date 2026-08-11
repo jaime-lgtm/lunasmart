@@ -1724,6 +1724,7 @@
       <div style="position:relative;max-width:460px">
         <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--tx-4);font-size:16px"></i>
         <input type="text" id="rec-buscar" placeholder="Buscar por nombre de receta..."
+          oninput="LS_UI.buscarRecetas(this.value)"
           style="width:100%;padding:9px 12px 9px 36px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none">
       </div>
     </div>
@@ -2867,6 +2868,24 @@ const LS_API = (() => {
     }
   }
 
+  async function getRecetaDetalle() {
+    try {
+      const rows = await leerHoja(SHEETS.RECETAS_DET);
+      if (!rows) return [];
+      return rows.slice(1)
+        .filter(r => r.length > 1 && r[1])
+        .map(r => ({
+          idReceta: r[0] || '',
+          articulo: r[1] || '',
+          cantidad: parseFloat(r[2]) || 0,
+          unidad:   r[3] || '',
+        }));
+    } catch(e) {
+      console.error('Error cargando detalle de recetas:', e);
+      return [];
+    }
+  }
+
   // Obtener proveedores
   async function getProveedores() {
     const rows = await leerHoja(SHEETS.PROVEEDORES);
@@ -3127,6 +3146,9 @@ const LS_API = (() => {
   }
   async function registrarReceta(datos) {
     return escribirViaScript('registrarReceta', { datos });
+  }
+  async function actualizarReceta(datos) {
+    return escribirViaScript('actualizarReceta', { datos });
   }
   async function borrarCatalogoArticulo(articulo) {
     return escribirViaScript('borrarCatalogoArticulo', { datos: { articulo } });
@@ -3704,7 +3726,7 @@ const LS_API = (() => {
     registrarIngreso, registrarIngresoCompleto, actualizarIngreso, borrarIngreso, getIngresoDetalle,
     actualizarIngresoParrot, borrarIngresoParrot,
     registrarFactura, registrarFacturaCompleta, actualizarFactura, borrarFactura,
-    registrarProveedor, registrarCliente, actualizarProveedor, borrarProveedor, actualizarCatalogoArticulo, borrarCatalogoArticulo, registrarReceta,
+    registrarProveedor, registrarCliente, actualizarProveedor, borrarProveedor, actualizarCatalogoArticulo, borrarCatalogoArticulo, registrarReceta, actualizarReceta, getRecetaDetalle,
     registrarArticuloDetalle, registrarCatalogoArticulo, registrarCliente, guardarInventarioFisico, sumarStockPorCompra,
     actualizarMinMaxInventario,
     // Agregaciones
@@ -5928,7 +5950,9 @@ async function guardarVentaDirecta() {
   // ══════════════════════════════════════════════════════════
   // FORMULARIO — NUEVA RECETA
   // ══════════════════════════════════════════════════════════
-  async function abrirNuevaReceta() {
+  async function abrirNuevaReceta(editData) {
+    window._editandoRecetaId = editData ? editData.id : null;
+    const esEdicion = !!editData;
     // Cargar ingredientes disponibles del Catálogo + subrecetas/preparaciones
     // ya registradas (ej. "BARBACOA (RECETA)"), para poder usarlas como
     // ingrediente de otra receta (ej. Lonche de Barbacoa usa la sub-receta
@@ -5945,8 +5969,8 @@ async function guardarVentaDirecta() {
       <div class="modal" style="max-width:600px;max-height:90vh;overflow-y:auto">
         <div class="modal-header">
           <div>
-            <div class="modal-title">Nueva Receta</div>
-            <div class="modal-sub">Registra una nueva receta de producción</div>
+            <div class="modal-title">${esEdicion ? 'Editar Receta' : 'Nueva Receta'}</div>
+            <div class="modal-sub">${esEdicion ? 'Modifica la receta y sus ingredientes' : 'Registra una nueva receta de producción'}</div>
           </div>
           <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
         </div>
@@ -5955,7 +5979,7 @@ async function guardarVentaDirecta() {
           <!-- Datos básicos de receta -->
           <div class="ff">
             <label>Nombre de la receta</label>
-            <input type="text" id="rec-nombre" placeholder="Ej: Cheesecake Mango">
+            <input type="text" id="rec-nombre" placeholder="Ej: Cheesecake Mango" value="${esEdicion ? String(editData.nombre||'').replace(/"/g,'&quot;') : ''}">
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -5982,11 +6006,11 @@ async function guardarVentaDirecta() {
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
             <div class="ff">
               <label>Tamaño/Presentación</label>
-              <input type="number" id="rec-tamano" placeholder="Ej: 354">
+              <input type="number" id="rec-tamano" placeholder="Ej: 354" value="${esEdicion ? (editData.tamano||'') : ''}">
             </div>
             <div class="ff">
               <label>Rendimiento (porciones)</label>
-              <input type="number" id="rec-porciones" placeholder="Ej: 8" value="1">
+              <input type="number" id="rec-porciones" placeholder="Ej: 8" value="${esEdicion ? (editData.porciones||1) : '1'}">
             </div>
           </div>
 
@@ -5997,11 +6021,12 @@ async function guardarVentaDirecta() {
                 <option value="Productos Vendibles">Productos Vendibles</option>
                 <option value="Preparaciones">Preparaciones</option>
                 <option value="Semielaborados">Semielaborados</option>
+                <option value="Sub Recetas">Sub Recetas</option>
               </select>
             </div>
             <div class="ff">
               <label>Fecha de elaboración</label>
-              <input type="date" id="rec-fecha" value="${new Date().toISOString().split('T')[0]}">
+              <input type="date" id="rec-fecha" value="${esEdicion && editData.fecha ? (LS_API._fechaISO(editData.fecha) || new Date().toISOString().split('T')[0]) : new Date().toISOString().split('T')[0]}">
             </div>
           </div>
 
@@ -6023,12 +6048,28 @@ async function guardarVentaDirecta() {
         </div>
         <div class="modal-footer">
           <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
-          <button class="btn-save" onclick="LS_UI.guardarReceta()">
-            <i class="ti ti-device-floppy"></i> Guardar receta
+          <button class="btn-save" id="btn-guardar-receta" onclick="LS_UI.guardarReceta()">
+            <i class="ti ti-device-floppy"></i> ${esEdicion ? 'Guardar cambios' : 'Guardar receta'}
           </button>
         </div>
       </div>
     </div>`);
+
+    if (esEdicion) {
+      const sel = id => document.getElementById(id);
+      if (sel('rec-categoria')) sel('rec-categoria').value = editData.categoria || 'ALIMENTOS';
+      if (sel('rec-tipo')) sel('rec-tipo').value = editData.tipo || 'ALIMENTOS';
+      if (sel('rec-clase')) sel('rec-clase').value = editData.clase || 'Productos Vendibles';
+      (editData.ingredientes || []).forEach(ing => {
+        agregarLineaReceta();
+        const linea = document.querySelector('#rec-lineas .rec-linea:last-child');
+        if (!linea) return;
+        linea.querySelector('.rec-art').value = ing.articulo;
+        linea.querySelector('.rec-cant').value = ing.cantidad;
+        linea.querySelector('.rec-unidad').value = ing.unidad;
+      });
+      await calcRecetaCosto();
+    }
   }
 
   function agregarLineaReceta() {
@@ -6155,6 +6196,9 @@ async function guardarVentaDirecta() {
   }
 
   async function guardarReceta() {
+    const btn = document.getElementById('btn-guardar-receta');
+    if (btn && btn.disabled) return; // ya se está guardando, ignora clics repetidos
+
     const nombre = document.getElementById('rec-nombre')?.value?.trim() || '';
     if (!nombre) {
       toast('Nombre requerido', 'Ingresa el nombre de la receta', 'err', 'ti-alert-circle');
@@ -6176,6 +6220,7 @@ async function guardarVentaDirecta() {
     }
 
     const costoElaboracion = await calcRecetaCosto();
+    const editId = window._editandoRecetaId;
 
     const datos = {
       nombre:        nombre,
@@ -6188,16 +6233,19 @@ async function guardarVentaDirecta() {
       ingredientes:  ingredientes,
       costoElaboracion,
     };
+    if (editId) datos.id = editId;
 
-    const btn = document.querySelector('#modal-receta .btn-save');
     const orig = btn ? btn.innerHTML : '';
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.9s linear infinite"></i> Guardando...'; }
 
     try {
-      const result = await LS_API.registrarReceta(datos).catch(() => ({}));
+      const result = editId
+        ? await LS_API.actualizarReceta(datos).catch(() => ({}))
+        : await LS_API.registrarReceta(datos).catch(() => ({}));
 
       if (result.status === 'ok') {
-        toast('Receta registrada', nombre, 'ok', 'ti-check');
+        toast(editId ? 'Receta actualizada' : 'Receta registrada', nombre, 'ok', 'ti-check');
+        window._editandoRecetaId = null;
         _cerrarModal();
         LS_API.invalidarCache();
         LS_UI.renderRecetas();
@@ -6214,31 +6262,60 @@ async function guardarVentaDirecta() {
   async function renderRecetas() {
     try {
       const recetas = await LS_API.getRecetas();
-      const tbody = document.getElementById('tabla-recetas');
-      if (!tbody) return;
-
-      if (recetas.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--tx-4)">No hay recetas registradas</td></tr>';
-        return;
-      }
-
-      tbody.innerHTML = recetas.map(r => `
-        <tr>
-          <td><strong>${r.nombre || ''}</strong></td>
-          <td>${r.categoria || ''}</td>
-          <td>${r.tipo || ''}</td>
-          <td style="text-align:right;font-family:var(--mono)">${LS_API.formatMXNDec(r.costo_elaboracion || 0)}</td>
-          <td style="text-align:right;font-family:var(--mono)">${LS_API.formatMXNDec((r.costo_elaboracion || 0) / (r.porciones || 1))}</td>
-          <td style="text-align:center">${r.porciones || ''}</td>
-          <td style="font-size:12px;color:var(--tx-3)">${r.fecha || ''}</td>
-          <td style="text-align:center;font-size:14px">
-            <button class="btn-icon" title="Editar" onclick="alert('Función pendiente')" style="background:none;border:none;color:var(--azul);cursor:pointer"><i class="ti ti-edit"></i></button>
-          </td>
-        </tr>
-      `).join('');
+      window._recetasVista = recetas;
+      const q = document.getElementById('rec-buscar')?.value || '';
+      if (q.trim()) buscarRecetas(q); else _pintarRecetas(recetas);
     } catch(e) {
       console.error('Error cargando recetas:', e);
     }
+  }
+
+  function _pintarRecetas(lista) {
+    const tbody = document.getElementById('tabla-recetas');
+    if (!tbody) return;
+
+    if (!lista || lista.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--tx-4)">No hay recetas registradas</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = lista.map((r, idx) => `
+      <tr>
+        <td><strong>${r.nombre || ''}</strong></td>
+        <td>${r.categoria || ''}</td>
+        <td>${r.tipo || ''}</td>
+        <td style="text-align:right;font-family:var(--mono)">${LS_API.formatMXNDec(r.costo_elaboracion || 0)}</td>
+        <td style="text-align:right;font-family:var(--mono)">${LS_API.formatMXNDec((r.costo_elaboracion || 0) / (r.porciones || 1))}</td>
+        <td style="text-align:center">${r.porciones || ''}</td>
+        <td style="font-size:12px;color:var(--tx-3)">${r.fecha || ''}</td>
+        <td style="text-align:center;font-size:14px">
+          <button class="btn-icon" title="Editar" data-idx="${idx}" data-accion="editar-receta" style="background:none;border:none;color:var(--azul);cursor:pointer"><i class="ti ti-edit"></i></button>
+        </td>
+      </tr>
+    `).join('');
+    tbody.querySelectorAll('[data-accion="editar-receta"]').forEach(btn => {
+      btn.addEventListener('click', () => editarReceta(lista[parseInt(btn.dataset.idx, 10)]));
+    });
+  }
+
+  function buscarRecetas(q) {
+    const lista = window._recetasVista || [];
+    const t = _norm(q);
+    if (!t) { _pintarRecetas(lista); return; }
+    _pintarRecetas(lista.filter(r =>
+      _norm(r.nombre).includes(t) ||
+      _norm(r.categoria).includes(t) ||
+      _norm(r.tipo).includes(t)
+    ));
+  }
+
+  async function editarReceta(r) {
+    if (!r) return;
+    const detalle = await LS_API.getRecetaDetalle();
+    const ingredientes = detalle
+      .filter(d => String(d.idReceta) === String(r.id))
+      .map(d => ({ articulo: d.articulo, cantidad: d.cantidad, unidad: d.unidad }));
+    await abrirNuevaReceta({ ...r, ingredientes });
   }
 
   // ══════════════════════════════════════════════════════════
@@ -8165,6 +8242,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     calcIngreso, guardarIngreso, guardarFactura, agregarLineaVenta, calcVentaDetalle, autollenarPrecioVenta,
     agregarLineaVentaDirect, calcVentaDirectaTotal, agregarVendedor, guardarVentaDirecta, abrirFormularioNuevoCliente, guardarNuevoCliente, registrarNuevoCliente,
     abrirNuevaReceta, agregarLineaReceta, actualizarIngrediente, calcRecetaCosto, guardarReceta, renderRecetas,
+    buscarRecetas, editarReceta,
     renderCatalogoPOS, buscarCatalogoPOS, cambiarSucursalCatalogoPOS, abrirNuevoProductoPOS, editarProductoPOS,
     guardarProductoPOS, _toggleSizedProductoPOS, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS,
     filtrarRecetaPOS, seleccionarRecetaPOS, cerrarRecetaDD, recetaDDNav, toggleCatposSinReceta,
