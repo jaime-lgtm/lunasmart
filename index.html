@@ -3081,6 +3081,15 @@ const LS_API = (() => {
     return escribirViaScript('borrarIngreso', { datos: { id } });
   }
 
+  // Cortes de Parrot (sin ID propio): se localizan por fecha+sucursal+cliente+
+  // observaciones originales en vez de por ID.
+  async function actualizarIngresoParrot(datos) {
+    return escribirViaScript('actualizarIngresoParrot', { datos });
+  }
+  async function borrarIngresoParrot(original) {
+    return escribirViaScript('borrarIngresoParrot', { datos: original });
+  }
+
   // Registrar corte + detalle de venta (qué se vendió) en una sola operación
   async function registrarIngresoCompleto(datos) {
     return escribirViaScript('registrarIngresoCompleto', {
@@ -3690,6 +3699,7 @@ const LS_API = (() => {
     getVentasPorSucursal, aliasSucursal, nombreSucursal, getProductosVenta,
     // Escritura
     registrarIngreso, registrarIngresoCompleto, actualizarIngreso, borrarIngreso, getIngresoDetalle,
+    actualizarIngresoParrot, borrarIngresoParrot,
     registrarFactura, registrarFacturaCompleta, actualizarFactura, borrarFactura,
     registrarProveedor, registrarCliente, actualizarProveedor, borrarProveedor, actualizarCatalogoArticulo, borrarCatalogoArticulo, registrarReceta,
     registrarArticuloDetalle, registrarCatalogoArticulo, registrarCliente, guardarInventarioFisico, sumarStockPorCompra,
@@ -4229,11 +4239,13 @@ const LS_UI = (() => {
       setEl('tabla-ingresos', `<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--tx-3)">${esBusqueda ? 'Sin resultados para tu búsqueda' : 'Sin cortes en el período seleccionado'}</td></tr>`);
       return;
     }
-    setEl('tabla-ingresos', lista.slice(0, 300).map(r => {
+    setEl('tabla-ingresos', lista.slice(0, 300).map((r, idx) => {
       const id = (r.id || '').replace(/'/g, '');
       const acciones = `
         <button class="icon-btn" title="Ver detalle" onclick="LS_UI.verIngreso('${id}','${(r.fecha||'')}')"><i class="ti ti-eye"></i></button>
-        ${id ? `<button class="icon-btn" title="Editar" onclick="LS_UI.editarIngreso('${id}')"><i class="ti ti-pencil"></i></button>` : '<span style="color:var(--tx-4);font-size:10px" title="Corte sin ID (Parrot/histórico)">—</span>'}`;
+        ${id
+          ? `<button class="icon-btn" title="Editar" onclick="LS_UI.editarIngreso('${id}')"><i class="ti ti-pencil"></i></button>`
+          : `<button class="icon-btn" title="Editar (Parrot)" data-idx="${idx}" data-accion="editar-parrot"><i class="ti ti-pencil"></i></button>`}`;
       const isoNum = (LS_API._fechaISO(r.fecha) || '').replace(/-/g, '');
       return `
       <tr>
@@ -4250,6 +4262,9 @@ const LS_UI = (() => {
         <td style="white-space:nowrap">${acciones}</td>
       </tr>`;
     }).join(''));
+    document.querySelectorAll('#tabla-ingresos [data-accion="editar-parrot"]').forEach(btn => {
+      btn.addEventListener('click', () => editarIngresoParrot(lista[parseInt(btn.dataset.idx, 10)]));
+    });
   }
 
   // Busca en TODOS los cortes (ignora el filtro de período)
@@ -4274,7 +4289,14 @@ const LS_UI = (() => {
     const r = (window._ingresosVista || []).find(x => String(x.id) === String(id))
            || (window._ingresosVista || []).find(x => String(x.fecha) === String(fecha));
     if (!r) { toast('No encontrado', 'No se pudo abrir el corte', 'err', 'ti-alert-circle'); return; }
-    const det = (window._ingDetCache || []).filter(d => id && String(d.idIngreso) === String(id));
+    // Cortes con ID propio: el detalle liga por ID. Cortes de Parrot (sin ID,
+    // el detalle se escribe con el pseudo-ID de turno "INGRESOS-000XX") --
+    // se liga por ese mismo pseudo-ID + fecha (normalizada a ISO, los Sheets
+    // de INGRESOS e INGRESOS DETALLES no comparten el mismo formato de fecha).
+    const fISO = LS_API._fechaISO(r.fecha);
+    const det = (window._ingDetCache || []).filter(d => id
+      ? String(d.idIngreso) === String(id)
+      : String(d.idIngreso) === String(r.cliente) && LS_API._fechaISO(d.fecha) === fISO);
     const filas = det.length ? det.map(d => `
       <tr><td style="padding:7px 12px">${d.articulo}</td>
       <td style="padding:7px 12px;text-align:right;font-family:var(--mono)">${Math.round(d.cantidad)}</td>
@@ -4332,6 +4354,55 @@ const LS_UI = (() => {
       efectivo: r.efectivo, tarjeta: r.tarjeta, transferencia: r.transferencia, rappi: r.rappi,
       observaciones: r.observaciones, detalles,
     });
+  }
+
+  // Cortes de Parrot (sin ID propio): se editan/borran localizándolos por
+  // fecha+sucursal+cliente(turno)+observaciones -- ver LS_API.actualizarIngresoParrot.
+  async function editarIngresoParrot(r) {
+    const fISO = LS_API._fechaISO(r.fecha);
+    const detalles = (window._ingDetCache || [])
+      .filter(d => String(d.idIngreso) === String(r.cliente) && LS_API._fechaISO(d.fecha) === fISO)
+      .map(d => ({ articulo: d.articulo, cantidad: d.cantidad, precio: d.precioUnit }));
+    await buildFormIngreso({
+      id: '', fecha: r.fecha, sucursal: r.sucursal, cliente: r.cliente,
+      inicioCaja: r.inicioCaja, retiros: r.retiros,
+      efectivo: r.efectivo, tarjeta: r.tarjeta, transferencia: r.transferencia, rappi: r.rappi,
+      observaciones: r.observaciones, detalles,
+      parrotOriginal: { fecha: r.fecha, sucursal: r.sucursal, cliente: r.cliente, observaciones: r.observaciones },
+    });
+  }
+
+  async function confirmarBorrarIngresoParrot() {
+    const orig = window._editandoIngresoParrotOriginal;
+    if (!orig) return;
+    _modal(`
+      <div class="modal" style="max-width:400px">
+        <div class="modal-header"><div><div class="modal-title" style="color:var(--rojo)"><i class="ti ti-trash" style="margin-right:6px"></i>Borrar corte</div></div></div>
+        <div class="modal-body"><p style="font-size:13.5px;color:var(--tx-2);line-height:1.6">¿Borrar este corte de Parrot?<br><strong>${LS_API.nombreSucursal(orig.sucursal)}</strong> · ${orig.fecha}<br><span style="color:var(--tx-3);font-size:12px">Se borra el corte y su detalle de venta. No se puede deshacer.</span></p></div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
+          <button class="btn-save" style="background:var(--rojo)" id="btn-del-ing" onclick="LS_UI.ejecutarBorrarIngresoParrot()"><i class="ti ti-trash"></i> Sí, borrar</button>
+        </div>
+      </div>`);
+  }
+  async function ejecutarBorrarIngresoParrot() {
+    const orig = window._editandoIngresoParrotOriginal;
+    if (!orig) return;
+    const btn = document.getElementById('btn-del-ing');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 spin"></i> Borrando...'; }
+    const res = await LS_API.borrarIngresoParrot({
+      fechaOriginal: orig.fecha, sucursalOriginal: orig.sucursal,
+      clienteOriginal: orig.cliente, observacionesOriginal: orig.observaciones,
+    });
+    if (res?.status === 'ok') {
+      window._editandoIngresoParrotOriginal = null;
+      _cerrarModal(); LS_API.invalidarCache();
+      toast('Corte borrado', 'El corte y su detalle se eliminaron', 'ok', 'ti-check');
+      await renderIngresos();
+    } else {
+      toast('Error', res?.msg || 'No se pudo borrar', 'err', 'ti-alert-circle');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-trash"></i> Sí, borrar'; }
+    }
   }
 
   async function confirmarBorrarIngreso(id) {
@@ -5150,6 +5221,7 @@ return `<tr>
   // ══════════════════════════════════════════════════════════
   async function buildFormIngreso(editData) {
     window._editandoIngresoId = editData ? editData.id : null;
+    window._editandoIngresoParrotOriginal = editData ? (editData.parrotOriginal || null) : null;
     const esEdicion = !!editData;
     // Cargar clientes/turnos desde DATOS_CLIENTES (ids 00013-00015 = turnos)
     let turnoOpts = `
@@ -5302,7 +5374,9 @@ return `<tr>
 
         </div>
         <div class="modal-footer">
-          ${esEdicion ? `<button class="btn-cancel" style="color:var(--rojo);margin-right:auto" onclick="_cerrarModal();LS_UI.confirmarBorrarIngreso('${(editData.id||'').replace(/'/g,'')}')"><i class="ti ti-trash"></i> Borrar</button>` : ''}
+          ${esEdicion ? (editData.id
+            ? `<button class="btn-cancel" style="color:var(--rojo);margin-right:auto" onclick="_cerrarModal();LS_UI.confirmarBorrarIngreso('${(editData.id||'').replace(/'/g,'')}')"><i class="ti ti-trash"></i> Borrar</button>`
+            : `<button class="btn-cancel" style="color:var(--rojo);margin-right:auto" onclick="_cerrarModal();LS_UI.confirmarBorrarIngresoParrot()"><i class="ti ti-trash"></i> Borrar</button>`) : ''}
           <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
           <button class="btn-save" id="btn-guardar-ingreso" onclick="LS_UI.guardarIngreso()">
             <i class="ti ti-device-floppy"></i> ${esEdicion ? 'Guardar cambios' : 'Guardar corte'}
@@ -5442,12 +5516,19 @@ return `<tr>
     })).filter(d => d.articulo);
 
     const editId = window._editandoIngresoId;
+    const parrotOriginal = window._editandoIngresoParrotOriginal;
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i> Guardando...'; }
 
     let result;
     if (editId) {
       datos.id = editId;
       result = await LS_API.actualizarIngreso(datos);
+    } else if (parrotOriginal) {
+      datos.fechaOriginal = parrotOriginal.fecha;
+      datos.sucursalOriginal = parrotOriginal.sucursal;
+      datos.clienteOriginal = parrotOriginal.cliente;
+      datos.observacionesOriginal = parrotOriginal.observaciones;
+      result = await LS_API.actualizarIngresoParrot(datos);
     } else {
       // corteId estable para este intento -- si el guard de arriba falla por
       // cualquier razón y el clic se duplica, el backend rechaza el reintento.
@@ -5461,14 +5542,15 @@ return `<tr>
 
     if (result?.status === 'ok') {
       window._editandoIngresoId = null;
+      window._editandoIngresoParrotOriginal = null;
       closeModal('modal-ingreso');
       LS_API.invalidarCache('INGRESOS');
-      typeof toast !== 'undefined' && toast(editId ? 'Corte actualizado' : 'Ingreso registrado', 'El corte fue guardado correctamente', 'ok', 'ti-check');
+      typeof toast !== 'undefined' && toast((editId || parrotOriginal) ? 'Corte actualizado' : 'Ingreso registrado', 'El corte fue guardado correctamente', 'ok', 'ti-check');
       await renderIngresos();
       await renderDashboard();
     } else {
       typeof toast !== 'undefined' && toast('Error al guardar', result?.msg || 'Verifica la conexión', 'err', 'ti-alert-circle');
-      if (btn) { btn.disabled = false; btn.innerHTML = `<i class="ti ti-device-floppy"></i> ${editId ? 'Guardar cambios' : 'Guardar corte'}`; }
+      if (btn) { btn.disabled = false; btn.innerHTML = `<i class="ti ti-device-floppy"></i> ${(editId || parrotOriginal) ? 'Guardar cambios' : 'Guardar corte'}`; }
     }
   }
 
@@ -8019,6 +8101,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     filtrarInventarioEstado: (f) => renderInventario(f), mostrarTipConteo,
     buscarFacturas, verFactura, editarFactura, confirmarBorrarFactura, ejecutarBorrarFactura,
     verIngreso, editarIngreso, confirmarBorrarIngreso, ejecutarBorrarIngreso, buscarIngresos,
+    editarIngresoParrot, confirmarBorrarIngresoParrot, ejecutarBorrarIngresoParrot,
     calcIngreso, guardarIngreso, guardarFactura, agregarLineaVenta, calcVentaDetalle, autollenarPrecioVenta,
     agregarLineaVentaDirect, calcVentaDirectaTotal, agregarVendedor, guardarVentaDirecta, abrirFormularioNuevoCliente, guardarNuevoCliente, registrarNuevoCliente,
     abrirNuevaReceta, agregarLineaReceta, actualizarIngrediente, calcRecetaCosto, guardarReceta, renderRecetas,

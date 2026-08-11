@@ -185,6 +185,8 @@ function doPost(e) {
     case 'registrarIngresoCompleto':   return _registrarIngresoCompleto(datos);
     case 'actualizarIngreso':          return _actualizarIngreso(datos);
     case 'borrarIngreso':              return _borrarIngreso(datos);
+    case 'actualizarIngresoParrot':    return _actualizarIngresoParrot(datos);
+    case 'borrarIngresoParrot':        return _borrarIngresoParrot(datos);
     case 'registrarFactura':           return _registrarFactura(datos);
     case 'registrarFacturaCompleta':   return _registrarFacturaCompleta(datos);
     case 'actualizarFactura':          return _actualizarFactura(datos);
@@ -398,6 +400,105 @@ function _borrarIngreso(b) {
     }
     return _json({ status: 'ok' });
   } catch (e) { return _err(e.message); }
+}
+
+// Normaliza una fecha (Date real o string dd/MM/yyyy, dd-MM-yyyy, yyyy-MM-dd)
+// a 'yyyy-MM-dd' para poder comparar fechas que vienen de columnas con
+// formato de número distinto entre hojas (INGRESOS vs INGRESOS DETALLES).
+function _fechaAISO(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var s = String(v || '').trim();
+  var m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
+  return s;
+}
+
+// Localiza la fila de un corte de Parrot (sin ID propio en columna A) usando
+// fecha + sucursal + cliente(pseudo-turno) + observaciones exactas como huella
+// -- es la unica forma de direccionarlo, ya que estas filas no traen ID.
+function _localizarFilaIngresoParrot(sh, b) {
+  var vals = sh.getDataRange().getValues();
+  var fISO = _fechaAISO(b.fechaOriginal);
+  for (var i = 1; i < vals.length; i++) {
+    if (String(vals[i][0]).trim() !== '') continue; // solo filas sin ID (Parrot)
+    if (_fechaAISO(vals[i][1]) !== fISO) continue;
+    if (String(vals[i][2]).trim() !== String(b.sucursalOriginal || '').trim()) continue;
+    if (String(vals[i][3]).trim() !== String(b.clienteOriginal || '').trim()) continue;
+    if (String(vals[i][14]).trim() !== String(b.observacionesOriginal || '').trim()) continue;
+    return i + 1;
+  }
+  return -1;
+}
+
+// ── ACTUALIZAR / BORRAR INGRESO DE PARROT (sin ID propio) ──────────────────
+function _actualizarIngresoParrot(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var sh = _getSheet(HOJAS.INGRESOS);
+    var fila = _localizarFilaIngresoParrot(sh, b);
+    if (fila === -1) return _err('No se encontró el corte original (pudo cambiar desde que se abrió, recarga e intenta de nuevo)');
+
+    var efectivo      = parseFloat(b.efectivo      || 0);
+    var tarjeta       = parseFloat(b.tarjeta       || 0);
+    var transferencia = parseFloat(b.transferencia || 0);
+    var rappi         = parseFloat(b.rappi         || 0);
+    var total         = efectivo + tarjeta + transferencia + rappi;
+    var ventaTotal    = parseFloat(b.ventaTotal || total);
+
+    sh.getRange(fila, 2, 1, 14).setValues([[
+      b.fecha || '', b.sucursal || '', b.cliente || '',
+      parseFloat(b.inicioCaja || 0), parseFloat(b.retiros || 0), parseFloat(b.depositos || 0),
+      efectivo, tarjeta, transferencia, rappi,
+      total, ventaTotal, total - ventaTotal,
+      b.observaciones || '',
+    ]]);
+
+    if (b.detalles) {
+      var shD = _getSheet(HOJAS.ING_DETALLES);
+      var dvals = shD.getDataRange().getValues();
+      var fISOOrig = _fechaAISO(b.fechaOriginal);
+      for (var j = dvals.length - 1; j >= 1; j--) {
+        if (String(dvals[j][1]).trim() === String(b.clienteOriginal || '').trim() && _fechaAISO(dvals[j][2]) === fISOOrig) {
+          shD.deleteRow(j + 1);
+        }
+      }
+      var filas = (b.detalles || []).filter(function(d){ return d && d.articulo; }).map(function(d){
+        var c = parseFloat(d.cantidad || 0) || 0, p = parseFloat(d.precio || 0) || 0;
+        return [Utilities.getUuid().substring(0, 8), b.cliente || b.clienteOriginal, b.fecha || b.fechaOriginal, d.articulo, c, p, c * p, '', 0];
+      });
+      if (filas.length) {
+        var fi = _siguienteFilaLibre(shD, 4);
+        shD.getRange(fi, 1, filas.length, 9).setValues(filas);
+      }
+    }
+    return _json({ status: 'ok' });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+function _borrarIngresoParrot(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var sh = _getSheet(HOJAS.INGRESOS);
+    var fila = _localizarFilaIngresoParrot(sh, b);
+    if (fila === -1) return _err('No se encontró el corte original (pudo cambiar desde que se abrió, recarga e intenta de nuevo)');
+    sh.deleteRow(fila);
+
+    var shD = _getSheet(HOJAS.ING_DETALLES);
+    var dvals = shD.getDataRange().getValues();
+    var fISOOrig = _fechaAISO(b.fechaOriginal);
+    for (var j = dvals.length - 1; j >= 1; j--) {
+      if (String(dvals[j][1]).trim() === String(b.clienteOriginal || '').trim() && _fechaAISO(dvals[j][2]) === fISOOrig) {
+        shD.deleteRow(j + 1);
+      }
+    }
+    return _json({ status: 'ok' });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
 }
 
 function asignarIdsIngresos() {
