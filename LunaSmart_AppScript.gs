@@ -778,12 +778,15 @@ function _actualizarCatalogoArticulo(b) {
     for (var i = 1; i < vals.length; i++) {
       if (String(vals[i][0]).trim().toLowerCase() === clave) {
         var costo = parseFloat(b.costoBase || vals[i][1] || 0);
-        var merma = parseFloat(b.merma || 0);
+        var merma = parseFloat(b.merma || 0); // ej. 30 significa 30% -- se usa asi en la formula de costo
         var costoFinal = merma > 0 ? costo / (1 - merma / 100) : costo;
         var cant = (b.cantidad != null && b.cantidad !== '') ? parseFloat(b.cantidad) : (vals[i][3] || 1);
         sh.getRange(i + 1, 1, 1, 2).setValues([[b.articulo || vals[i][0], costo]]);
         sh.getRange(i + 1, 4, 1, 7).setValues([[
-          cant, b.unidad || '', merma, costoFinal,
+          // La columna % MERMA esta formateada como Porcentaje en el Sheet,
+          // que multiplica x100 al mostrar -- por eso se guarda como fraccion
+          // (30% -> 0.30), NO como el numero entero que capturo el usuario.
+          cant, b.unidad || '', merma / 100, costoFinal,
           b.categoria || '', b.subcategoria || '', b.proveedor || '',
         ]]);
         return _json({ status: 'ok' });
@@ -1164,7 +1167,7 @@ function _registrarCatalogoArticulo(b) {
       costo,
       (b.cantidad != null && b.cantidad !== '') ? parseFloat(b.cantidad) : 1,
       b.unidad       || '',
-      merma,
+      merma / 100, // la columna % MERMA esta formateada como Porcentaje: se guarda como fraccion
       costoFinal,
       b.categoria    || '',
       b.subcategoria || '',
