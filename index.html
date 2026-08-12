@@ -7179,7 +7179,7 @@ async function guardarVentaDirecta() {
       const din = parseFloat(a.costoDinamico) || 0;
       const base = parseFloat(a.costoBase) || 0;
       const costo = din || base;
-      el.addEventListener('mousedown', (e) => { e.preventDefault(); LS_UI.seleccionarArticulo(el, a.articulo, a.unidad, costo); });
+      el.addEventListener('mousedown', (e) => { e.preventDefault(); LS_UI.seleccionarArticulo(el, a.articulo, a.unidad, costo, a.cantidad); });
     });
     const nuevoEl = dd.querySelector('.art-opt[data-nuevo]');
     if (nuevoEl) nuevoEl.addEventListener('mousedown', (e) => { e.preventDefault(); LS_UI.abrirNuevoArticulo(val, nuevoEl); });
@@ -7233,7 +7233,7 @@ async function guardarVentaDirecta() {
     dd.style.left = left + 'px';
   }
 
-  function seleccionarArticulo(el, nombre, unidad, costo) {
+  function seleccionarArticulo(el, nombre, unidad, costo, cantidadPresentacion) {
     const linea = el.closest('.fact-linea');
     if (!linea) return;
     const inp = linea.querySelector('.fl-art-input');
@@ -7242,6 +7242,11 @@ async function guardarVentaDirecta() {
     if (uni && unidad) uni.value = unidad;
     const pr = linea.querySelector('.fl-precio');
     if (pr && costo > 0) pr.value = parseFloat(costo).toFixed(2);
+    const pres = linea.querySelector('.fl-presentacion');
+    if (pres) {
+      const cant = parseFloat(cantidadPresentacion) || 0;
+      pres.textContent = (cant > 0 && unidad) ? `Trae: ${cant} ${unidad} por paquete` : '';
+    }
     const dd = linea.querySelector('.art-dd');
     if (dd) dd.style.display = 'none';
     calcTotalFactura();
@@ -7453,6 +7458,7 @@ async function guardarVentaDirecta() {
           onkeydown="LS_UI.ddNav(this,event)"
           onblur="setTimeout(()=>{const d=this.closest('.fact-linea')?.querySelector('.art-dd');if(d)d.style.display='none'},220)"
           style="width:100%;background:transparent;border:none;outline:none;font-size:13px;color:var(--tx);font-family:inherit">
+        <div class="fl-presentacion" style="font-size:10px;color:var(--tx-4);margin-top:2px"></div>
         <div class="art-dd" style="display:none;position:absolute;top:calc(100% + 1px);left:-1px;right:-1px;z-index:400;background:var(--cafe-750);border:1px solid var(--line-2);border-radius:0 0 var(--r) var(--r);max-height:240px;overflow-y:auto;box-shadow:var(--sh-pop)"></div>
       </div>
       <div style="padding:7px 10px;border-right:1px solid var(--line)">
@@ -7486,6 +7492,11 @@ async function guardarVentaDirecta() {
       const q = div.querySelector('.fl-qty');       if (q) q.value = prefill.cantidad != null ? prefill.cantidad : 1;
       const u = div.querySelector('.fl-uni');        if (u) u.value = prefill.unidad || '';
       const p = div.querySelector('.fl-precio');     if (p) p.value = prefill.precio != null ? prefill.precio : (prefill.precioUnit || '');
+      const pres = div.querySelector('.fl-presentacion');
+      if (pres && prefill.articulo) {
+        const cat = (window._catalogoCache || []).find(x => _norm(x.articulo) === _norm(prefill.articulo));
+        if (cat && parseFloat(cat.cantidad) > 0) pres.textContent = `Trae: ${cat.cantidad} ${cat.unidad || ''} por paquete`;
+      }
     } else {
       setTimeout(() => div.querySelector('.fl-art-input')?.focus(), 30);
     }
