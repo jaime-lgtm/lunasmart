@@ -208,6 +208,7 @@ function doPost(e) {
     case 'sumarStockPorCompra':        return _sumarStockPorCompra(datos);
     case 'actualizarMinMaxInventario': return _actualizarMinMaxInventario(datos);
     case 'agregarArticuloInventario':  return _agregarArticuloInventario(datos);
+    case 'descontarInventarioVenta':   return _descontarInventarioVenta(datos);
     case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(datos);
     case 'buscarClienteDom':           return _buscarClienteDom(datos);
     case 'registrarClienteDom':        return _registrarClienteDom(datos);
@@ -1045,6 +1046,45 @@ function _agregarArticuloInventario(b) {
       parseFloat(b.minimo || 0) || 0, b.tipoRegistro || '',
     ]);
     return _json({ status: 'ok', id: id });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+// Descuenta stock por una venta del POS -- se localiza por sucursal + nombre
+// exacto de articulo (las lineas de venta no traen fila). Si el resultado
+// queda por debajo de STOCK_MINIMO se reporta como alerta al POS.
+function _descontarInventarioVenta(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var sucursal = String(b.sucursal || '').trim().toLowerCase();
+    var items = b.items || [];
+    if (!sucursal) return _err('Falta la sucursal');
+    var sh = _getSheet(HOJAS.INVENTARIO);
+    var vals = sh.getDataRange().getValues();
+    var actualizados = 0, alertas = [], noEncontrados = [];
+    items.forEach(function(it) {
+      var nombre = String(it.articulo || '').trim().toLowerCase();
+      var cant = parseFloat(it.cantidad || 0) || 0;
+      if (!nombre || !cant) return;
+      var encontrado = false;
+      for (var i = 1; i < vals.length; i++) {
+        if (String(vals[i][1]).trim().toLowerCase() === sucursal && String(vals[i][5]).trim().toLowerCase() === nombre) {
+          encontrado = true;
+          var filaSheet = i + 1;
+          var actual = parseFloat(vals[i][6]) || 0;
+          var nuevo = actual - cant;
+          var minimo = parseFloat(vals[i][15]) || 0;
+          sh.getRange(filaSheet, 7).setValue(nuevo);
+          sh.getRange(filaSheet, 15).setValue(new Date());
+          vals[i][6] = nuevo;
+          actualizados++;
+          if (minimo > 0 && nuevo < minimo) alertas.push(String(vals[i][5]) + ' (' + nuevo + ')');
+        }
+      }
+      if (!encontrado) noEncontrados.push(it.articulo);
+    });
+    return _json({ status: 'ok', actualizados: actualizados, alertas: alertas, noEncontrados: noEncontrados });
   } catch (e) { return _err(e.message); }
   finally { lock.releaseLock(); }
 }
