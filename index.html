@@ -6657,13 +6657,81 @@ async function guardarVentaDirecta() {
     if (p) _formProductoPOS(p);
   }
 
-  function _formProductoPOS(producto) {
+  // Renglón de una opción de modificador -- controla si esa opción, al
+  // elegirse en el POS, agrega un ingrediente o sustituye uno de la receta
+  // base (ej. "Con pollo" agrega pechuga; "Leche Deslactosada" sustituye la
+  // leche entera que ya trae la receta).
+  function _modOptInvHTML(gi, oi, o, artOpts) {
+    const inv = o.inv || null;
+    const modo = inv ? inv.modo : '';
+    const ag = (inv && inv.agrega) || {};
+    const qu = (inv && inv.quita) || {};
+    const po = (inv && inv.pon) || {};
+    const inpStyle = 'background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:7px 9px;color:var(--tx);font-size:12.5px';
+    return `
+      <div class="pp-mod-opt" style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--line-2)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <span style="flex:1;font-size:13px">${_h(o.l||'')}</span>
+          <select id="pp-mod-${gi}-${oi}-modo" onchange="LS_UI._toggleModInventario(${gi},${oi})" style="${inpStyle};width:172px">
+            <option value="" ${!modo?'selected':''}>Ninguno</option>
+            <option value="agrega" ${modo==='agrega'?'selected':''}>Agrega ingrediente</option>
+            <option value="sustituye" ${modo==='sustituye'?'selected':''}>Sustituye ingrediente</option>
+          </select>
+        </div>
+        <div id="pp-mod-${gi}-${oi}-agrega" style="display:${modo==='agrega'?'grid':'none'};grid-template-columns:2fr 90px;gap:8px">
+          <input list="pp-mod-ingredientes-list" id="pp-mod-${gi}-${oi}-agrega-art" placeholder="Ingrediente a agregar..." value="${_h(ag.articulo||'')}" style="${inpStyle}">
+          <input type="number" id="pp-mod-${gi}-${oi}-agrega-cant" placeholder="Cantidad" min="0" step="0.5" value="${ag.cantidad||''}" style="${inpStyle};text-align:center;font-family:var(--mono)">
+        </div>
+        <div id="pp-mod-${gi}-${oi}-sustituye" style="display:${modo==='sustituye'?'block':'none'}">
+          <div style="font-size:10.5px;color:var(--tx-4);margin-bottom:3px">Quita de la receta base</div>
+          <div style="display:grid;grid-template-columns:2fr 90px;gap:8px;margin-bottom:6px">
+            <input list="pp-mod-ingredientes-list" id="pp-mod-${gi}-${oi}-quita-art" placeholder="Ingrediente a quitar..." value="${_h(qu.articulo||'')}" style="${inpStyle}">
+            <input type="number" id="pp-mod-${gi}-${oi}-quita-cant" placeholder="Cantidad" min="0" step="0.5" value="${qu.cantidad||''}" style="${inpStyle};text-align:center;font-family:var(--mono)">
+          </div>
+          <div style="font-size:10.5px;color:var(--tx-4);margin-bottom:3px">Pon en su lugar</div>
+          <div style="display:grid;grid-template-columns:2fr 90px;gap:8px">
+            <input list="pp-mod-ingredientes-list" id="pp-mod-${gi}-${oi}-pon-art" placeholder="Ingrediente nuevo..." value="${_h(po.articulo||'')}" style="${inpStyle}">
+            <input type="number" id="pp-mod-${gi}-${oi}-pon-cant" placeholder="Cantidad" min="0" step="0.5" value="${po.cantidad||''}" style="${inpStyle};text-align:center;font-family:var(--mono)">
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function _toggleModInventario(gi, oi) {
+    const sel = document.getElementById(`pp-mod-${gi}-${oi}-modo`);
+    const modo = sel ? sel.value : '';
+    const ag = document.getElementById(`pp-mod-${gi}-${oi}-agrega`);
+    const su = document.getElementById(`pp-mod-${gi}-${oi}-sustituye`);
+    if (ag) ag.style.display = modo === 'agrega' ? 'grid' : 'none';
+    if (su) su.style.display = modo === 'sustituye' ? 'block' : 'none';
+  }
+
+  async function _formProductoPOS(producto) {
     const esEdicion = !!producto;
     const sizedInicial = producto ? !!producto.sized : false;
     const precioSimple = producto && !producto.sized ? (producto.price || '') : '';
     const preciosSized = producto && producto.prices ? producto.prices : {};
     const sizeKeys = Object.keys(preciosSized);
     const sucNombre = (CATPOS_SUCURSALES.find(s=>s.id===_catposSucursal) || {}).nombre || '';
+
+    let artOpts = '';
+    try {
+      const prods = await LS_API.getCatalogo();
+      artOpts = prods.map(p => `<option value="${String(p.articulo).replace(/"/g,'&quot;')}">`).join('');
+    } catch(e) {}
+
+    const tieneMods = esEdicion && producto.mods && producto.mods.length;
+    const modsHTML = tieneMods ? `
+      <div class="ff" style="margin-top:6px">
+        <label>Modificadores — efecto en inventario (opcional)</label>
+        <div style="font-size:11px;color:var(--tx-4);margin:-4px 0 10px">Por cada opción, di si agrega un ingrediente o sustituye uno de la receta base. Déjalo en "Ninguno" si es solo informativo.</div>
+        ${producto.mods.map((g, gi) => `
+          <div style="margin-bottom:14px;padding:10px;border:1px solid var(--line-2);border-radius:10px">
+            <div style="font-weight:600;font-size:12.5px;margin-bottom:8px;color:var(--tx-2)">${_h(g.label||'')}</div>
+            ${(g.opts||[]).map((o, oi) => _modOptInvHTML(gi, oi, o, artOpts)).join('')}
+          </div>`).join('')}
+        <datalist id="pp-mod-ingredientes-list">${artOpts}</datalist>
+      </div>` : '';
 
     openModal(`
     <div class="modal-overlay" id="modal-producto-pos" onclick="if(event.target===this)_cerrarModal()">
@@ -6729,7 +6797,8 @@ async function guardarVentaDirecta() {
               </div>
             </div>
           </div>
-          ${esEdicion ? `<div class="ff" style="margin-top:2px"><label style="text-transform:none;font-size:11px;color:var(--tx-4);font-weight:400">ID: <span style="font-family:var(--mono)">${producto.id}</span> — los modificadores (leche, extras, etc.) no se editan aquí, se conservan tal cual</label></div>` : ''}
+          ${esEdicion ? `<div class="ff" style="margin-top:2px"><label style="text-transform:none;font-size:11px;color:var(--tx-4);font-weight:400">ID: <span style="font-family:var(--mono)">${producto.id}</span></label></div>` : ''}
+          ${modsHTML}
         </div>
         <div class="modal-footer">
           <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
@@ -6781,6 +6850,32 @@ async function guardarVentaDirecta() {
         payload.prices = null;
         payload.idReceta = idRecetaSel || null;
         payload.recetas = null;
+      }
+
+      const productoOriginal = idExistente ? (_catposProductos || []).find(x => x.id === idExistente) : null;
+      if (productoOriginal && productoOriginal.mods && productoOriginal.mods.length) {
+        payload.mods = productoOriginal.mods.map((g, gi) => ({
+          ...g,
+          opts: (g.opts || []).map((o, oi) => {
+            const selEl = document.getElementById(`pp-mod-${gi}-${oi}-modo`);
+            const modo = selEl ? selEl.value : '';
+            const nuevo = { ...o };
+            if (modo === 'agrega') {
+              const art = (document.getElementById(`pp-mod-${gi}-${oi}-agrega-art`).value || '').trim();
+              const cant = parseFloat(document.getElementById(`pp-mod-${gi}-${oi}-agrega-cant`).value) || 0;
+              nuevo.inv = (art && cant > 0) ? { modo: 'agrega', agrega: { articulo: art, cantidad: cant } } : null;
+            } else if (modo === 'sustituye') {
+              const qArt = (document.getElementById(`pp-mod-${gi}-${oi}-quita-art`).value || '').trim();
+              const qCant = parseFloat(document.getElementById(`pp-mod-${gi}-${oi}-quita-cant`).value) || 0;
+              const pArt = (document.getElementById(`pp-mod-${gi}-${oi}-pon-art`).value || '').trim();
+              const pCant = parseFloat(document.getElementById(`pp-mod-${gi}-${oi}-pon-cant`).value) || 0;
+              nuevo.inv = (qArt && qCant > 0 && pArt && pCant > 0) ? { modo: 'sustituye', quita: { articulo: qArt, cantidad: qCant }, pon: { articulo: pArt, cantidad: pCant } } : null;
+            } else {
+              nuevo.inv = null;
+            }
+            return nuevo;
+          }),
+        }));
       }
 
       await fbAuthReady;
@@ -8337,7 +8432,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     abrirNuevaReceta, agregarLineaReceta, actualizarIngrediente, calcRecetaCosto, guardarReceta, renderRecetas,
     buscarRecetas, editarReceta,
     renderCatalogoPOS, buscarCatalogoPOS, cambiarSucursalCatalogoPOS, abrirNuevoProductoPOS, editarProductoPOS,
-    guardarProductoPOS, _toggleSizedProductoPOS, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS,
+    guardarProductoPOS, _toggleSizedProductoPOS, _toggleModInventario, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS,
     filtrarRecetaPOS, seleccionarRecetaPOS, cerrarRecetaDD, recetaDDNav, toggleCatposSinReceta,
     abrirNuevoProveedorDesdeBusqueda, guardarNuevoProveedorDesdeBusqueda, toggleFavoritoProductoPOS,
     closeModal,
