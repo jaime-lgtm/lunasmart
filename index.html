@@ -6660,48 +6660,60 @@ async function guardarVentaDirecta() {
   // Renglón de una opción de modificador -- controla si esa opción, al
   // elegirse en el POS, agrega un ingrediente o sustituye uno de la receta
   // base (ej. "Con pollo" agrega pechuga; "Leche Deslactosada" sustituye la
-  // leche entera que ya trae la receta).
-  function _modOptInvHTML(gi, oi, o, artOpts) {
-    const inv = o.inv || null;
+  // leche entera que ya trae la receta). Si el producto tiene tamaños, cada
+  // tamaño usa su propia receta con cantidades distintas (El Chico vs El
+  // Mayor), asi que aqui tambien se configura un renglon por tamaño.
+  function _modInvBloqueHTML(idBase, inv, etiquetaTamano) {
     const modo = inv ? inv.modo : '';
     const ag = (inv && inv.agrega) || {};
     const qu = (inv && inv.quita) || {};
     const po = (inv && inv.pon) || {};
-    const inpStyle = 'background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:7px 9px;color:var(--tx);font-size:12.5px';
+    const inpStyle = 'background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:7px 9px;color:var(--tx);font-size:12.5px;width:100%';
     return `
-      <div class="pp-mod-opt" style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--line-2)">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-          <span style="flex:1;font-size:13px">${_h(o.l||'')}</span>
-          <select id="pp-mod-${gi}-${oi}-modo" onchange="LS_UI._toggleModInventario(${gi},${oi})" style="${inpStyle};width:172px">
-            <option value="" ${!modo?'selected':''}>Ninguno</option>
-            <option value="agrega" ${modo==='agrega'?'selected':''}>Agrega ingrediente</option>
-            <option value="sustituye" ${modo==='sustituye'?'selected':''}>Sustituye ingrediente</option>
-          </select>
+      <div>
+        ${etiquetaTamano ? `<div style="font-size:10.5px;font-weight:700;color:var(--tx-3);margin-bottom:4px">${_h(etiquetaTamano)}</div>` : ''}
+        <select id="${idBase}-modo" onchange="LS_UI._toggleModInventario('${idBase}')" style="${inpStyle};margin-bottom:6px">
+          <option value="" ${!modo?'selected':''}>Ninguno</option>
+          <option value="agrega" ${modo==='agrega'?'selected':''}>Agrega ingrediente</option>
+          <option value="sustituye" ${modo==='sustituye'?'selected':''}>Sustituye ingrediente</option>
+        </select>
+        <div id="${idBase}-agrega" style="display:${modo==='agrega'?'grid':'none'};grid-template-columns:2fr 80px;gap:8px">
+          <input list="pp-mod-ingredientes-list" id="${idBase}-agrega-art" placeholder="Ingrediente a agregar..." value="${_h(ag.articulo||'')}" style="${inpStyle}">
+          <input type="number" id="${idBase}-agrega-cant" placeholder="Cant." min="0" step="0.5" value="${ag.cantidad||''}" style="${inpStyle};text-align:center;font-family:var(--mono)">
         </div>
-        <div id="pp-mod-${gi}-${oi}-agrega" style="display:${modo==='agrega'?'grid':'none'};grid-template-columns:2fr 90px;gap:8px">
-          <input list="pp-mod-ingredientes-list" id="pp-mod-${gi}-${oi}-agrega-art" placeholder="Ingrediente a agregar..." value="${_h(ag.articulo||'')}" style="${inpStyle}">
-          <input type="number" id="pp-mod-${gi}-${oi}-agrega-cant" placeholder="Cantidad" min="0" step="0.5" value="${ag.cantidad||''}" style="${inpStyle};text-align:center;font-family:var(--mono)">
-        </div>
-        <div id="pp-mod-${gi}-${oi}-sustituye" style="display:${modo==='sustituye'?'block':'none'}">
+        <div id="${idBase}-sustituye" style="display:${modo==='sustituye'?'block':'none'}">
           <div style="font-size:10.5px;color:var(--tx-4);margin-bottom:3px">Quita de la receta base</div>
-          <div style="display:grid;grid-template-columns:2fr 90px;gap:8px;margin-bottom:6px">
-            <input list="pp-mod-ingredientes-list" id="pp-mod-${gi}-${oi}-quita-art" placeholder="Ingrediente a quitar..." value="${_h(qu.articulo||'')}" style="${inpStyle}">
-            <input type="number" id="pp-mod-${gi}-${oi}-quita-cant" placeholder="Cantidad" min="0" step="0.5" value="${qu.cantidad||''}" style="${inpStyle};text-align:center;font-family:var(--mono)">
+          <div style="display:grid;grid-template-columns:2fr 80px;gap:8px;margin-bottom:6px">
+            <input list="pp-mod-ingredientes-list" id="${idBase}-quita-art" placeholder="Ingrediente a quitar..." value="${_h(qu.articulo||'')}" style="${inpStyle}">
+            <input type="number" id="${idBase}-quita-cant" placeholder="Cant." min="0" step="0.5" value="${qu.cantidad||''}" style="${inpStyle};text-align:center;font-family:var(--mono)">
           </div>
           <div style="font-size:10.5px;color:var(--tx-4);margin-bottom:3px">Pon en su lugar</div>
-          <div style="display:grid;grid-template-columns:2fr 90px;gap:8px">
-            <input list="pp-mod-ingredientes-list" id="pp-mod-${gi}-${oi}-pon-art" placeholder="Ingrediente nuevo..." value="${_h(po.articulo||'')}" style="${inpStyle}">
-            <input type="number" id="pp-mod-${gi}-${oi}-pon-cant" placeholder="Cantidad" min="0" step="0.5" value="${po.cantidad||''}" style="${inpStyle};text-align:center;font-family:var(--mono)">
+          <div style="display:grid;grid-template-columns:2fr 80px;gap:8px">
+            <input list="pp-mod-ingredientes-list" id="${idBase}-pon-art" placeholder="Ingrediente nuevo..." value="${_h(po.articulo||'')}" style="${inpStyle}">
+            <input type="number" id="${idBase}-pon-cant" placeholder="Cant." min="0" step="0.5" value="${po.cantidad||''}" style="${inpStyle};text-align:center;font-family:var(--mono)">
           </div>
         </div>
       </div>`;
   }
 
-  function _toggleModInventario(gi, oi) {
-    const sel = document.getElementById(`pp-mod-${gi}-${oi}-modo`);
+  function _modOptInvHTML(gi, oi, o, sized, sizeKeys) {
+    const keys = sized ? sizeKeys : ['__default__'];
+    const bloques = keys.map((sk, si) => _modInvBloqueHTML(`pp-mod-${gi}-${oi}-${si}`, (o.inv && o.inv[sk]) || null, sized ? sk : ''));
+    const inner = sized
+      ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${bloques.join('')}</div>`
+      : bloques.join('');
+    return `
+      <div class="pp-mod-opt" style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--line-2)">
+        <div style="font-size:13px;margin-bottom:6px">${_h(o.l||'')}</div>
+        ${inner}
+      </div>`;
+  }
+
+  function _toggleModInventario(idBase) {
+    const sel = document.getElementById(`${idBase}-modo`);
     const modo = sel ? sel.value : '';
-    const ag = document.getElementById(`pp-mod-${gi}-${oi}-agrega`);
-    const su = document.getElementById(`pp-mod-${gi}-${oi}-sustituye`);
+    const ag = document.getElementById(`${idBase}-agrega`);
+    const su = document.getElementById(`${idBase}-sustituye`);
     if (ag) ag.style.display = modo === 'agrega' ? 'grid' : 'none';
     if (su) su.style.display = modo === 'sustituye' ? 'block' : 'none';
   }
@@ -6728,7 +6740,7 @@ async function guardarVentaDirecta() {
         ${producto.mods.map((g, gi) => `
           <div style="margin-bottom:14px;padding:10px;border:1px solid var(--line-2);border-radius:10px">
             <div style="font-weight:600;font-size:12.5px;margin-bottom:8px;color:var(--tx-2)">${_h(g.label||'')}</div>
-            ${(g.opts||[]).map((o, oi) => _modOptInvHTML(gi, oi, o, artOpts)).join('')}
+            ${(g.opts||[]).map((o, oi) => _modOptInvHTML(gi, oi, o, sizedInicial, sizeKeys)).join('')}
           </div>`).join('')}
         <datalist id="pp-mod-ingredientes-list">${artOpts}</datalist>
       </div>` : '';
@@ -6854,25 +6866,31 @@ async function guardarVentaDirecta() {
 
       const productoOriginal = idExistente ? (_catposProductos || []).find(x => x.id === idExistente) : null;
       if (productoOriginal && productoOriginal.mods && productoOriginal.mods.length) {
+        const sizeKeysGuardado = sized
+          ? [(document.getElementById('pp-t1-nombre').value.trim() || 'El Chico'), (document.getElementById('pp-t2-nombre').value.trim() || 'El Mayor')]
+          : ['__default__'];
         payload.mods = productoOriginal.mods.map((g, gi) => ({
           ...g,
           opts: (g.opts || []).map((o, oi) => {
-            const selEl = document.getElementById(`pp-mod-${gi}-${oi}-modo`);
-            const modo = selEl ? selEl.value : '';
             const nuevo = { ...o };
-            if (modo === 'agrega') {
-              const art = (document.getElementById(`pp-mod-${gi}-${oi}-agrega-art`).value || '').trim();
-              const cant = parseFloat(document.getElementById(`pp-mod-${gi}-${oi}-agrega-cant`).value) || 0;
-              nuevo.inv = (art && cant > 0) ? { modo: 'agrega', agrega: { articulo: art, cantidad: cant } } : null;
-            } else if (modo === 'sustituye') {
-              const qArt = (document.getElementById(`pp-mod-${gi}-${oi}-quita-art`).value || '').trim();
-              const qCant = parseFloat(document.getElementById(`pp-mod-${gi}-${oi}-quita-cant`).value) || 0;
-              const pArt = (document.getElementById(`pp-mod-${gi}-${oi}-pon-art`).value || '').trim();
-              const pCant = parseFloat(document.getElementById(`pp-mod-${gi}-${oi}-pon-cant`).value) || 0;
-              nuevo.inv = (qArt && qCant > 0 && pArt && pCant > 0) ? { modo: 'sustituye', quita: { articulo: qArt, cantidad: qCant }, pon: { articulo: pArt, cantidad: pCant } } : null;
-            } else {
-              nuevo.inv = null;
-            }
+            const invObj = {};
+            sizeKeysGuardado.forEach((sk, si) => {
+              const idBase = `pp-mod-${gi}-${oi}-${si}`;
+              const selEl = document.getElementById(`${idBase}-modo`);
+              const modo = selEl ? selEl.value : '';
+              if (modo === 'agrega') {
+                const art = (document.getElementById(`${idBase}-agrega-art`).value || '').trim();
+                const cant = parseFloat(document.getElementById(`${idBase}-agrega-cant`).value) || 0;
+                if (art && cant > 0) invObj[sk] = { modo: 'agrega', agrega: { articulo: art, cantidad: cant } };
+              } else if (modo === 'sustituye') {
+                const qArt = (document.getElementById(`${idBase}-quita-art`).value || '').trim();
+                const qCant = parseFloat(document.getElementById(`${idBase}-quita-cant`).value) || 0;
+                const pArt = (document.getElementById(`${idBase}-pon-art`).value || '').trim();
+                const pCant = parseFloat(document.getElementById(`${idBase}-pon-cant`).value) || 0;
+                if (qArt && qCant > 0 && pArt && pCant > 0) invObj[sk] = { modo: 'sustituye', quita: { articulo: qArt, cantidad: qCant }, pon: { articulo: pArt, cantidad: pCant } };
+              }
+            });
+            nuevo.inv = Object.keys(invObj).length ? invObj : null;
             return nuevo;
           }),
         }));
