@@ -1158,6 +1158,7 @@
         <div class="nav-item" data-page="catalogo" onclick="go('catalogo',this)"><i class="ti ti-package"></i><span class="nav-lbl">Artículos</span></div>
         <div class="nav-item" data-page="recetas" onclick="go('recetas',this)"><i class="ti ti-chef-hat"></i><span class="nav-lbl">Recetas</span></div>
         <div class="nav-item" data-page="catalogopos" onclick="go('catalogopos',this)"><i class="ti ti-cash-register"></i><span class="nav-lbl">Catálogo POS</span></div>
+        <div class="nav-item" data-page="modificadores" onclick="go('modificadores',this)"><i class="ti ti-adjustments"></i><span class="nav-lbl">Modificadores</span></div>
         <div class="nav-item" data-page="catalogo-inventario" onclick="go('catalogo-inventario',this)"><i class="ti ti-clipboard-data"></i><span class="nav-lbl">Catálogo de inventario</span></div>
       </nav>
 
@@ -1790,6 +1791,42 @@
   </div>
 </div>
 
+<!-- PÁGINA: MODIFICADORES -->
+<div id="p-modificadores" class="page" data-screen-label="Modificadores">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title"><i class="ti ti-adjustments"></i>Modificadores</div>
+        <div class="card-sub">Se crean una vez aquí y se asignan a los productos que los usen desde Catálogo POS</div>
+      </div>
+      <div class="card-actions">
+        <button class="btn btn-primary btn-sm" onclick="LS_UI.abrirNuevoModificador()"><i class="ti ti-plus"></i>Nuevo modificador</button>
+      </div>
+    </div>
+    <div style="padding:14px 18px 0;display:flex;gap:8px;flex-wrap:wrap" id="modif-sucursales"></div>
+    <div style="padding:12px 18px 0">
+      <div style="position:relative;max-width:460px">
+        <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--tx-4);font-size:16px"></i>
+        <input type="text" id="modif-buscar" placeholder="Buscar por nombre..." oninput="LS_UI.buscarModificadores(this.value)"
+          style="width:100%;padding:9px 12px 9px 36px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none">
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl" data-sortable>
+        <thead><tr>
+          <th class="sortable" data-type="text">Nombre<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th>Tipo</th>
+          <th>Obligatorio</th>
+          <th>Opciones</th>
+          <th>Usado en</th>
+          <th>Acciones</th>
+        </tr></thead>
+        <tbody id="tabla-modificadores"><tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
         </div>
       </div>
     </main>
@@ -1881,6 +1918,7 @@ const PAGES = {
   recetas:      { title: 'Recetas',               sub: 'Gestiona recetas y costos de elaboración' },
   catalogopos:  { title: 'Catálogo POS',          sub: 'Productos en venta y su receta vinculada' },
   'catalogo-inventario': { title: 'Catálogo de Inventario', sub: 'Listado completo de artículos y stock' },
+  modificadores: { title: 'Modificadores',        sub: 'Biblioteca reutilizable de modificadores para el POS' },
 };
 
 const BRANCHES = {
@@ -6414,6 +6452,7 @@ async function guardarVentaDirecta() {
   let _catposProductos = [];
   let _catposRecetas = [];
   let _catposSoloSinReceta = false;
+  let _formLibModsList = []; // modificadores de la biblioteca cargados para el formulario de producto abierto
 
   function _h(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -6718,6 +6757,43 @@ async function guardarVentaDirecta() {
     if (su) su.style.display = modo === 'sustituye' ? 'block' : 'none';
   }
 
+  // Checkbox para asignar un modificador de la biblioteca a este producto.
+  // El efecto de inventario (agrega/sustituye) vive en el PRODUCTO
+  // (producto.modInv[modId][indiceOpcion][tamano]), no en el modificador,
+  // porque depende de la receta de este producto especifico.
+  function _libModCheckboxHTML(m, producto, sized, sizeKeys) {
+    const asignado = !!(producto && producto.modAsignados && producto.modAsignados.indexOf(m.id) > -1);
+    const tipoCorto = { unico: 'única', multiple: 'varias', cantidad: 'cantidad' }[m.tipo] || '';
+    const opcionesHTML = (m.opciones || []).map((o, oi) => {
+      const keys = sized ? sizeKeys : ['__default__'];
+      const bloques = keys.map((sk) => {
+        const inv = (producto && producto.modInv && producto.modInv[m.id] && producto.modInv[m.id][oi] && producto.modInv[m.id][oi][sk]) || null;
+        const si = keys.indexOf(sk);
+        return _modInvBloqueHTML(`pp-libmod-${m.id}-${oi}-${si}`, inv, sized ? sk : '');
+      });
+      const inner = sized ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${bloques.join('')}</div>` : bloques.join('');
+      return `<div class="pp-mod-opt" style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--line-2)">
+        <div style="font-size:13px;margin-bottom:6px">${_h(o.l||'')}</div>
+        ${inner}
+      </div>`;
+    }).join('');
+    return `
+      <div style="margin-bottom:10px;padding:10px;border:1px solid var(--line-2);border-radius:10px">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:${asignado?'8px':'0'}">
+          <input type="checkbox" class="pp-libmod-chk" data-modid="${m.id}" ${asignado?'checked':''} onchange="LS_UI._toggleLibModOpciones('${m.id}')" style="width:18px;height:18px;accent-color:var(--terra-claro)">
+          <span style="font-weight:600;font-size:13px">${_h(m.nombre)}</span>
+          <span style="font-size:11px;color:var(--tx-4)">(${tipoCorto}${m.obligatorio?' · obligatorio':''})</span>
+        </label>
+        <div id="pp-libmod-${m.id}-opts" style="display:${asignado?'block':'none'}">${opcionesHTML}</div>
+      </div>`;
+  }
+
+  function _toggleLibModOpciones(modId) {
+    const chk = document.querySelector(`.pp-libmod-chk[data-modid="${modId}"]`);
+    const wrap = document.getElementById(`pp-libmod-${modId}-opts`);
+    if (wrap) wrap.style.display = (chk && chk.checked) ? 'block' : 'none';
+  }
+
   async function _formProductoPOS(producto) {
     const esEdicion = !!producto;
     const sizedInicial = producto ? !!producto.sized : false;
@@ -6728,22 +6804,35 @@ async function guardarVentaDirecta() {
 
     let artOpts = '';
     try {
-      const prods = await LS_API.getCatalogo();
+      const [prods, snapMods] = await Promise.all([
+        LS_API.getCatalogo(),
+        fbDb ? (async () => { await fbAuthReady; return fbDb.ref('modificadores/' + _catposSucursal).once('value'); })() : Promise.resolve(null),
+      ]);
       artOpts = prods.map(p => `<option value="${String(p.articulo).replace(/"/g,'&quot;')}">`).join('');
+      const valMods = snapMods ? (snapMods.val() || {}) : {};
+      _formLibModsList = Object.keys(valMods).map(id => Object.assign({ id }, valMods[id])).sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
     } catch(e) {}
+    const libModsList = _formLibModsList;
+
+    const libModsHTML = libModsList.length ? `
+      <div class="ff" style="margin-top:6px">
+        <label>Modificadores de la biblioteca</label>
+        <div style="font-size:11px;color:var(--tx-4);margin:-4px 0 10px">Elige cuáles usa este producto. Para el efecto en inventario, marca "Agrega" o "Sustituye" en la opción correspondiente.</div>
+        ${libModsList.map(m => _libModCheckboxHTML(m, producto, sizedInicial, sizeKeys)).join('')}
+      </div>` : '';
 
     const tieneMods = esEdicion && producto.mods && producto.mods.length;
     const modsHTML = tieneMods ? `
       <div class="ff" style="margin-top:6px">
-        <label>Modificadores — efecto en inventario (opcional)</label>
+        <label>Modificadores propios de este producto (efecto en inventario opcional)</label>
         <div style="font-size:11px;color:var(--tx-4);margin:-4px 0 10px">Por cada opción, di si agrega un ingrediente o sustituye uno de la receta base. Déjalo en "Ninguno" si es solo informativo.</div>
         ${producto.mods.map((g, gi) => `
           <div style="margin-bottom:14px;padding:10px;border:1px solid var(--line-2);border-radius:10px">
             <div style="font-weight:600;font-size:12.5px;margin-bottom:8px;color:var(--tx-2)">${_h(g.label||'')}</div>
             ${(g.opts||[]).map((o, oi) => _modOptInvHTML(gi, oi, o, sizedInicial, sizeKeys)).join('')}
           </div>`).join('')}
-        <datalist id="pp-mod-ingredientes-list">${artOpts}</datalist>
       </div>` : '';
+    const datalistHTML = (libModsList.length || tieneMods) ? `<datalist id="pp-mod-ingredientes-list">${artOpts}</datalist>` : '';
 
     openModal(`
     <div class="modal-overlay" id="modal-producto-pos" onclick="if(event.target===this)_cerrarModal()">
@@ -6810,7 +6899,9 @@ async function guardarVentaDirecta() {
             </div>
           </div>
           ${esEdicion ? `<div class="ff" style="margin-top:2px"><label style="text-transform:none;font-size:11px;color:var(--tx-4);font-weight:400">ID: <span style="font-family:var(--mono)">${producto.id}</span></label></div>` : ''}
+          ${libModsHTML}
           ${modsHTML}
+          ${datalistHTML}
         </div>
         <div class="modal-footer">
           <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
@@ -6896,6 +6987,43 @@ async function guardarVentaDirecta() {
         }));
       }
 
+      const sizeKeysMod = sized
+        ? [(document.getElementById('pp-t1-nombre').value.trim() || 'El Chico'), (document.getElementById('pp-t2-nombre').value.trim() || 'El Mayor')]
+        : ['__default__'];
+      const libChecks = [...document.querySelectorAll('.pp-libmod-chk')];
+      if (libChecks.length) {
+        const modAsignados = [];
+        const modInv = {};
+        libChecks.forEach(chk => {
+          if (!chk.checked) return;
+          const modId = chk.dataset.modid;
+          modAsignados.push(modId);
+          const m = _formLibModsList.find(x => x.id === modId);
+          (m ? m.opciones : []).forEach((o, oi) => {
+            const invObj = {};
+            sizeKeysMod.forEach((sk, si) => {
+              const idBase = `pp-libmod-${modId}-${oi}-${si}`;
+              const selEl = document.getElementById(`${idBase}-modo`);
+              const modo = selEl ? selEl.value : '';
+              if (modo === 'agrega') {
+                const art = (document.getElementById(`${idBase}-agrega-art`).value || '').trim();
+                const cant = parseFloat(document.getElementById(`${idBase}-agrega-cant`).value) || 0;
+                if (art && cant > 0) invObj[sk] = { modo: 'agrega', agrega: { articulo: art, cantidad: cant } };
+              } else if (modo === 'sustituye') {
+                const qArt = (document.getElementById(`${idBase}-quita-art`).value || '').trim();
+                const qCant = parseFloat(document.getElementById(`${idBase}-quita-cant`).value) || 0;
+                const pArt = (document.getElementById(`${idBase}-pon-art`).value || '').trim();
+                const pCant = parseFloat(document.getElementById(`${idBase}-pon-cant`).value) || 0;
+                if (qArt && qCant > 0 && pArt && pCant > 0) invObj[sk] = { modo: 'sustituye', quita: { articulo: qArt, cantidad: qCant }, pon: { articulo: pArt, cantidad: pCant } };
+              }
+            });
+            if (Object.keys(invObj).length) { modInv[modId] = modInv[modId] || {}; modInv[modId][oi] = invObj; }
+          });
+        });
+        payload.modAsignados = modAsignados;
+        payload.modInv = Object.keys(modInv).length ? modInv : null;
+      }
+
       await fbAuthReady;
       await fbDb.ref('catalogo/' + _catposSucursal + '/' + id).update(payload);
       _cerrarModal();
@@ -6934,6 +7062,222 @@ async function guardarVentaDirecta() {
       _cerrarModal();
       toast('Producto eliminado', '', 'ok', 'ti-check');
       await _catposCargar();
+    } catch(e) {
+      console.error(e);
+      toast('Error', 'No se pudo eliminar', 'err', 'ti-alert-triangle');
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // MODIFICADORES -- biblioteca reutilizable (Leche, Endulzante, etc.)
+  // Se crean aqui una vez; los productos en Catalogo POS eligen cuales
+  // usar. El efecto de inventario (agrega/sustituye) sigue viviendo en
+  // el producto porque depende de SU receta, no del modificador en si.
+  // ══════════════════════════════════════════════════════════
+  let _modifSucursal = 'cafeteria';
+  let _modifLista = [];
+  let _modifUsoPorId = {};
+  const TIPO_MODIF_LABEL = { unico: 'Única opción', multiple: 'Varias opciones', cantidad: 'Cantidad (min/max)' };
+
+  async function renderModificadores() {
+    const cont = document.getElementById('modif-sucursales');
+    if (cont) {
+      cont.innerHTML = CATPOS_SUCURSALES.map(s => `<button class="btn ${s.id===_modifSucursal?'btn-primary':''} btn-sm" onclick="LS_UI.cambiarSucursalModificadores('${s.id}')">${s.nombre}</button>`).join('');
+    }
+    await _modifCargar();
+  }
+
+  async function _modifCargar() {
+    showLoading('tabla-modificadores');
+    try {
+      if (!fbDb) throw new Error('Firebase no disponible');
+      await fbAuthReady;
+      const [snapMods, snapCat] = await Promise.all([
+        fbDb.ref('modificadores/' + _modifSucursal).once('value'),
+        fbDb.ref('catalogo/' + _modifSucursal).once('value'),
+      ]);
+      const valMods = snapMods.val() || {};
+      _modifLista = Object.keys(valMods).map(id => Object.assign({ id }, valMods[id])).sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+      const valCat = snapCat.val() || {};
+      const uso = {};
+      Object.values(valCat).forEach(p => { (p.modAsignados || []).forEach(mid => { uso[mid] = (uso[mid] || 0) + 1; }); });
+      _modifUsoPorId = uso;
+      _pintarModificadores(_modifLista);
+    } catch(e) {
+      console.error('Error cargando modificadores:', e);
+      showError('tabla-modificadores', 'Error cargando los modificadores (revisa la conexión con Firebase)');
+    }
+  }
+
+  function _pintarModificadores(lista) {
+    const tbody = document.getElementById('tabla-modificadores');
+    if (!tbody) return;
+    if (!lista || !lista.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)">Sin modificadores en esta sucursal</td></tr>';
+      return;
+    }
+    tbody.innerHTML = lista.map(m => {
+      const usoN = _modifUsoPorId[m.id] || 0;
+      return `<tr>
+        <td style="font-weight:500">${_h(m.nombre)}</td>
+        <td>${TIPO_MODIF_LABEL[m.tipo] || m.tipo}${m.tipo==='cantidad' ? ` (${m.minCant||0}-${m.maxCant||0})` : ''}</td>
+        <td>${m.obligatorio ? '<span class="badge b-w"><span class="bdot"></span>Sí</span>' : '<span class="badge b-s"><span class="bdot"></span>No</span>'}</td>
+        <td>${(m.opciones||[]).map(o=>_h(o.l)).join(', ')}</td>
+        <td>${usoN} producto${usoN===1?'':'s'}</td>
+        <td style="white-space:nowrap">
+          <button class="icon-btn" title="Editar" onclick="LS_UI.editarModificador('${m.id}')"><i class="ti ti-pencil"></i></button>
+          <button class="icon-btn" title="Eliminar" onclick="LS_UI.confirmarBorrarModificador('${m.id}')"><i class="ti ti-trash"></i></button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function cambiarSucursalModificadores(sucId) { _modifSucursal = sucId; renderModificadores(); }
+  function buscarModificadores(q) {
+    const n = _norm(q || '');
+    const lista = n ? _modifLista.filter(m => _norm(m.nombre||'').includes(n)) : _modifLista;
+    _pintarModificadores(lista);
+  }
+
+  function _modifSiguienteId() {
+    let max = 0;
+    _modifLista.forEach(m => { const mm = String(m.id||'').match(/^mod(\d+)$/); if (mm) max = Math.max(max, parseInt(mm[1],10)); });
+    return 'mod' + (max + 1);
+  }
+
+  function abrirNuevoModificador() { _formModificador(null); }
+  function editarModificador(id) { const m = _modifLista.find(x => x.id === id); if (m) _formModificador(m); }
+
+  function _formModificador(m) {
+    const esEdicion = !!m;
+    const opciones = m && m.opciones && m.opciones.length ? m.opciones : [{ l: '', p: 0 }];
+    openModal(`
+    <div class="modal-overlay" id="modal-modificador" onclick="if(event.target===this)_cerrarModal()">
+      <div class="modal" style="max-width:520px;max-height:90vh;overflow-y:auto">
+        <div class="modal-header">
+          <div>
+            <div class="modal-title">${esEdicion ? 'Editar modificador' : 'Nuevo modificador'}</div>
+            <div class="modal-sub">${(CATPOS_SUCURSALES.find(s=>s.id===_modifSucursal)||{}).nombre||''}</div>
+          </div>
+          <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="ff"><label>Nombre *</label><input type="text" id="mf-nombre" value="${_h(m ? m.nombre : '')}" placeholder="Ej. Leche, Endulzante, ¿Cómo lo quieres tomar?"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="ff"><label>Tipo de selección</label>
+              <select id="mf-tipo" onchange="LS_UI._toggleTipoModificador()">
+                <option value="unico" ${(!m||m.tipo==='unico')?'selected':''}>Única opción</option>
+                <option value="multiple" ${m&&m.tipo==='multiple'?'selected':''}>Varias opciones</option>
+                <option value="cantidad" ${m&&m.tipo==='cantidad'?'selected':''}>Cantidad (ej. 1 a 3 Splendas)</option>
+              </select>
+            </div>
+            <div class="ff" style="flex-direction:row;align-items:center;gap:10px;display:flex;margin-top:22px">
+              <input type="checkbox" id="mf-obligatorio" ${m&&m.obligatorio?'checked':''} style="width:18px;height:18px;accent-color:var(--terra-claro)">
+              <label for="mf-obligatorio" style="margin:0;text-transform:none;font-size:13px;color:var(--tx-2);cursor:pointer">Obligatorio</label>
+            </div>
+          </div>
+          <div id="mf-cantidad-wrap" style="display:${m&&m.tipo==='cantidad'?'grid':'none'};grid-template-columns:1fr 1fr;gap:12px">
+            <div class="ff"><label>Mínimo</label><input type="number" id="mf-min" min="0" step="1" value="${m&&typeof m.minCant==='number'?m.minCant:0}"></div>
+            <div class="ff"><label>Máximo</label><input type="number" id="mf-max" min="0" step="1" value="${m&&typeof m.maxCant==='number'?m.maxCant:1}"></div>
+          </div>
+          <div class="ff" style="margin-top:6px">
+            <label>Opciones</label>
+            <div id="mf-opciones"></div>
+            <button type="button" class="btn btn-sm" onclick="LS_UI._agregarOpcionModificador()" style="margin-top:6px"><i class="ti ti-plus"></i>Agregar opción</button>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
+          <button class="btn-save" id="mf-guardar" onclick="LS_UI.guardarModificador(${esEdicion ? `'${m.id}'` : 'null'})">${esEdicion ? 'Guardar cambios' : 'Crear modificador'}</button>
+        </div>
+      </div>
+    </div>`);
+    opciones.forEach(o => _agregarOpcionModificador(o.l, o.p));
+  }
+
+  function _toggleTipoModificador() {
+    const tipo = document.getElementById('mf-tipo').value;
+    const wrap = document.getElementById('mf-cantidad-wrap');
+    if (wrap) wrap.style.display = tipo === 'cantidad' ? 'grid' : 'none';
+  }
+
+  function _agregarOpcionModificador(label, precio) {
+    const cont = document.getElementById('mf-opciones');
+    if (!cont) return;
+    const div = document.createElement('div');
+    div.className = 'mf-opcion';
+    div.style.cssText = 'display:grid;grid-template-columns:2fr 100px 30px;gap:8px;margin-bottom:8px';
+    div.innerHTML = `
+      <input type="text" class="mf-opt-l" placeholder="Etiqueta (ej. Entera)" value="${_h(label||'')}"
+        style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--tx);font-size:13px">
+      <input type="number" class="mf-opt-p" placeholder="Precio extra" min="0" step="0.5" value="${precio||''}"
+        style="background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--tx);font-size:13px;font-family:var(--mono);text-align:center">
+      <button type="button" title="Quitar" onclick="this.closest('.mf-opcion').remove()" style="background:transparent;border:none;color:var(--rojo);cursor:pointer;font-size:16px">✕</button>`;
+    cont.appendChild(div);
+  }
+
+  async function guardarModificador(idExistente) {
+    const nombre = document.getElementById('mf-nombre').value.trim();
+    if (!nombre) { toast('Falta el nombre', 'Escribe el nombre del modificador', 'err', 'ti-alert-triangle'); return; }
+    const tipo = document.getElementById('mf-tipo').value;
+    const obligatorio = document.getElementById('mf-obligatorio').checked;
+    const opciones = [...document.querySelectorAll('#mf-opciones .mf-opcion')].map(row => ({
+      l: (row.querySelector('.mf-opt-l').value || '').trim(),
+      p: parseFloat(row.querySelector('.mf-opt-p').value) || 0,
+    })).filter(o => o.l);
+    if (!opciones.length) { toast('Sin opciones', 'Agrega al menos una opción', 'err', 'ti-alert-triangle'); return; }
+
+    const btn = document.getElementById('mf-guardar');
+    btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i> Guardando...';
+    try {
+      if (!fbDb) throw new Error('Firebase no disponible');
+      const id = idExistente || _modifSiguienteId();
+      const payload = { id, nombre, tipo, obligatorio, opciones };
+      if (tipo === 'cantidad') {
+        payload.minCant = parseFloat(document.getElementById('mf-min').value) || 0;
+        payload.maxCant = parseFloat(document.getElementById('mf-max').value) || 1;
+      } else {
+        payload.minCant = null; payload.maxCant = null;
+      }
+      await fbAuthReady;
+      await fbDb.ref('modificadores/' + _modifSucursal + '/' + id).set(payload);
+      _cerrarModal();
+      toast(idExistente ? 'Modificador actualizado' : 'Modificador creado', nombre, 'ok', 'ti-check');
+      await _modifCargar();
+    } catch(e) {
+      console.error(e);
+      toast('Error al guardar', 'No se pudo guardar el modificador', 'err', 'ti-alert-triangle');
+      btn.disabled = false; btn.innerHTML = idExistente ? 'Guardar cambios' : 'Crear modificador';
+    }
+  }
+
+  function confirmarBorrarModificador(id) {
+    const m = _modifLista.find(x => x.id === id);
+    if (!m) return;
+    const usoN = _modifUsoPorId[id] || 0;
+    openModal(`
+    <div class="modal-overlay" id="modal-del-modif" onclick="if(event.target===this)_cerrarModal()">
+      <div class="modal" style="max-width:420px">
+        <div class="modal-header">
+          <div class="modal-title">¿Eliminar "${_h(m.nombre)}"?</div>
+          <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-body"><p style="color:var(--tx-2);font-size:13px">${usoN>0 ? `Está en uso en ${usoN} producto${usoN===1?'':'s'} -- esos productos dejarán de mostrar este modificador en el POS. ` : ''}Esta acción no se puede deshacer.</p></div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
+          <button class="btn-save" style="background:var(--rojo)" onclick="LS_UI.ejecutarBorrarModificador('${id}')">Eliminar</button>
+        </div>
+      </div>
+    </div>`);
+  }
+
+  async function ejecutarBorrarModificador(id) {
+    try {
+      await fbAuthReady;
+      await fbDb.ref('modificadores/' + _modifSucursal + '/' + id).remove();
+      _cerrarModal();
+      toast('Modificador eliminado', '', 'ok', 'ti-check');
+      await _modifCargar();
     } catch(e) {
       console.error(e);
       toast('Error', 'No se pudo eliminar', 'err', 'ti-alert-triangle');
@@ -7827,6 +8171,7 @@ async function guardarVentaDirecta() {
       case 'catalogo':     await renderCatalogo();      break;
       case 'recetas':      await renderRecetas();       break;
       case 'catalogopos':  await renderCatalogoPOS();   break;
+      case 'modificadores': await renderModificadores(); break;
       case 'catalogo-inventario': await abrirCatalogoInventarioPagina(); break;
     }
   }
@@ -8450,9 +8795,11 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     abrirNuevaReceta, agregarLineaReceta, actualizarIngrediente, calcRecetaCosto, guardarReceta, renderRecetas,
     buscarRecetas, editarReceta,
     renderCatalogoPOS, buscarCatalogoPOS, cambiarSucursalCatalogoPOS, abrirNuevoProductoPOS, editarProductoPOS,
-    guardarProductoPOS, _toggleSizedProductoPOS, _toggleModInventario, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS,
+    guardarProductoPOS, _toggleSizedProductoPOS, _toggleModInventario, _toggleLibModOpciones, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS,
     filtrarRecetaPOS, seleccionarRecetaPOS, cerrarRecetaDD, recetaDDNav, toggleCatposSinReceta,
     abrirNuevoProveedorDesdeBusqueda, guardarNuevoProveedorDesdeBusqueda, toggleFavoritoProductoPOS,
+    renderModificadores, cambiarSucursalModificadores, buscarModificadores, abrirNuevoModificador, editarModificador,
+    _toggleTipoModificador, _agregarOpcionModificador, guardarModificador, confirmarBorrarModificador, ejecutarBorrarModificador,
     closeModal,
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },
