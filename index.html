@@ -6714,11 +6714,16 @@ async function guardarVentaDirecta() {
         <select id="${idBase}-modo" onchange="LS_UI._toggleModInventario('${idBase}')" style="${inpStyle};margin-bottom:6px">
           <option value="" ${!modo?'selected':''}>Ninguno</option>
           <option value="agrega" ${modo==='agrega'?'selected':''}>Agrega ingrediente</option>
+          <option value="quita" ${modo==='quita'?'selected':''}>Quita ingrediente (sin reemplazo)</option>
           <option value="sustituye" ${modo==='sustituye'?'selected':''}>Sustituye ingrediente</option>
         </select>
         <div id="${idBase}-agrega" style="display:${modo==='agrega'?'grid':'none'};grid-template-columns:2fr 80px;gap:8px">
           <input list="pp-mod-ingredientes-list" id="${idBase}-agrega-art" placeholder="Ingrediente a agregar..." value="${_h(ag.articulo||'')}" style="${inpStyle}">
           <input type="number" id="${idBase}-agrega-cant" placeholder="Cant." min="0" step="0.5" value="${ag.cantidad||''}" style="${inpStyle};text-align:center;font-family:var(--mono)">
+        </div>
+        <div id="${idBase}-quita" style="display:${modo==='quita'?'grid':'none'};grid-template-columns:2fr 80px;gap:8px">
+          <input list="pp-mod-ingredientes-list" id="${idBase}-quitasola-art" placeholder="Ingrediente a quitar..." value="${_h(qu.articulo||'')}" style="${inpStyle}">
+          <input type="number" id="${idBase}-quitasola-cant" placeholder="Cant." min="0" step="0.5" value="${qu.cantidad||''}" style="${inpStyle};text-align:center;font-family:var(--mono)">
         </div>
         <div id="${idBase}-sustituye" style="display:${modo==='sustituye'?'block':'none'}">
           <div style="font-size:10.5px;color:var(--tx-4);margin-bottom:3px">Quita de la receta base</div>
@@ -6752,8 +6757,10 @@ async function guardarVentaDirecta() {
     const sel = document.getElementById(`${idBase}-modo`);
     const modo = sel ? sel.value : '';
     const ag = document.getElementById(`${idBase}-agrega`);
+    const qu = document.getElementById(`${idBase}-quita`);
     const su = document.getElementById(`${idBase}-sustituye`);
     if (ag) ag.style.display = modo === 'agrega' ? 'grid' : 'none';
+    if (qu) qu.style.display = modo === 'quita' ? 'grid' : 'none';
     if (su) su.style.display = modo === 'sustituye' ? 'block' : 'none';
   }
 
@@ -6973,6 +6980,10 @@ async function guardarVentaDirecta() {
                 const art = (document.getElementById(`${idBase}-agrega-art`).value || '').trim();
                 const cant = parseFloat(document.getElementById(`${idBase}-agrega-cant`).value) || 0;
                 if (art && cant > 0) invObj[sk] = { modo: 'agrega', agrega: { articulo: art, cantidad: cant } };
+              } else if (modo === 'quita') {
+                const art = (document.getElementById(`${idBase}-quitasola-art`).value || '').trim();
+                const cant = parseFloat(document.getElementById(`${idBase}-quitasola-cant`).value) || 0;
+                if (art && cant > 0) invObj[sk] = { modo: 'quita', quita: { articulo: art, cantidad: cant } };
               } else if (modo === 'sustituye') {
                 const qArt = (document.getElementById(`${idBase}-quita-art`).value || '').trim();
                 const qCant = parseFloat(document.getElementById(`${idBase}-quita-cant`).value) || 0;
@@ -7009,6 +7020,10 @@ async function guardarVentaDirecta() {
                 const art = (document.getElementById(`${idBase}-agrega-art`).value || '').trim();
                 const cant = parseFloat(document.getElementById(`${idBase}-agrega-cant`).value) || 0;
                 if (art && cant > 0) invObj[sk] = { modo: 'agrega', agrega: { articulo: art, cantidad: cant } };
+              } else if (modo === 'quita') {
+                const art = (document.getElementById(`${idBase}-quitasola-art`).value || '').trim();
+                const cant = parseFloat(document.getElementById(`${idBase}-quitasola-cant`).value) || 0;
+                if (art && cant > 0) invObj[sk] = { modo: 'quita', quita: { articulo: art, cantidad: cant } };
               } else if (modo === 'sustituye') {
                 const qArt = (document.getElementById(`${idBase}-quita-art`).value || '').trim();
                 const qCant = parseFloat(document.getElementById(`${idBase}-quita-cant`).value) || 0;
