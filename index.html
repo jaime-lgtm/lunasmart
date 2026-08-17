@@ -1765,10 +1765,12 @@
         <div class="card-sub">Productos en venta por sucursal, en vivo desde Firebase — vincula cada uno con su receta</div>
       </div>
       <div class="card-actions">
+        <button class="btn btn-sm" onclick="LS_UI.abrirOrdenCategorias()"><i class="ti ti-arrows-sort"></i>Ordenar categorías</button>
         <button class="btn btn-primary btn-sm" onclick="LS_UI.abrirNuevoProductoPOS()"><i class="ti ti-plus"></i>Nuevo producto</button>
       </div>
     </div>
     <div style="padding:14px 18px 0;display:flex;gap:8px;flex-wrap:wrap" id="catpos-sucursales"></div>
+    <div style="padding:12px 18px 0;display:flex;gap:8px;flex-wrap:wrap" id="catpos-categorias"></div>
     <div style="padding:12px 18px 12px">
       <div style="position:relative;max-width:460px">
         <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--tx-4);font-size:16px"></i>
@@ -6453,6 +6455,7 @@ async function guardarVentaDirecta() {
   let _catposProductos = [];
   let _catposRecetas = [];
   let _catposSoloSinReceta = false;
+  let _catposFiltroCategoria = null;
   let _formLibModsList = []; // modificadores de la biblioteca cargados para el formulario de producto abierto
 
   function _h(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -6478,6 +6481,7 @@ async function guardarVentaDirecta() {
       _catposProductos = Object.keys(val).map(id => val[id]).sort((a,b) => (a.name||'').localeCompare(b.name||''));
       _catposRecetas = recetas;
       _actualizarHeaderRecetaFiltro();
+      _catposPintarChipsCategoria();
       _catposAplicarFiltros();
     } catch(e) {
       console.error('Error cargando catálogo POS:', e);
@@ -6523,7 +6527,138 @@ async function guardarVentaDirecta() {
     let lista = _catposProductos || [];
     if (q) lista = lista.filter(p => _norm(p.name||'').includes(q) || _norm(p.id||'').includes(q));
     if (_catposSoloSinReceta) lista = lista.filter(p => !_catposProductoCompletoReceta(p));
+    if (_catposFiltroCategoria) lista = lista.filter(p => p.menu === _catposFiltroCategoria);
     _pintarCatalogoPOS(lista);
+  }
+
+  function _catposPintarChipsCategoria() {
+    const cont = document.getElementById('catpos-categorias');
+    if (!cont) return;
+    const categorias = Array.from(new Set((_catposProductos||[]).map(p => p.menu).filter(Boolean))).sort((a,b) => a.localeCompare(b));
+    if (!categorias.length) { cont.innerHTML = ''; return; }
+    cont.innerHTML = `<button class="btn btn-sm ${!_catposFiltroCategoria?'btn-primary':''}" onclick="LS_UI.filtrarCategoriaCatalogoPOS(null)">Todas</button>` +
+      categorias.map(c => `<button class="btn btn-sm ${_catposFiltroCategoria===c?'btn-primary':''}" onclick="LS_UI.filtrarCategoriaCatalogoPOS('${_h(c).replace(/'/g,"\\'")}')">${_h(c)}</button>`).join('');
+  }
+
+  function filtrarCategoriaCatalogoPOS(cat) {
+    _catposFiltroCategoria = cat;
+    _catposPintarChipsCategoria();
+    _catposAplicarFiltros();
+  }
+
+  // ── Orden manual de categorias/subcategorias (categoriasOrden/<suc> en Firebase) ──
+  async function abrirOrdenCategorias() {
+    const categoriasReales = Array.from(new Set((_catposProductos||[]).map(p => p.menu).filter(Boolean)));
+    let guardado = { categorias: [], subcategorias: {} };
+    try {
+      await fbAuthReady;
+      const snap = await fbDb.ref('categoriasOrden/' + _catposSucursal).once('value');
+      guardado = snap.val() || guardado;
+    } catch(e) { console.error(e); }
+    const ordenGuardado = guardado.categorias || [];
+    const categorias = [
+      ...ordenGuardado.filter(c => categoriasReales.includes(c)),
+      ...categoriasReales.filter(c => !ordenGuardado.includes(c)).sort((a,b)=>a.localeCompare(b)),
+    ];
+    window._ordenCatSubGuardado = guardado.subcategorias || {};
+    openModal(`
+    <div class="modal-overlay" id="modal-orden-cat" onclick="if(event.target===this)_cerrarModal()">
+      <div class="modal" style="max-width:480px">
+        <div class="modal-header">
+          <div>
+            <div class="modal-title">Ordenar categorías</div>
+            <div class="modal-sub">${(CATPOS_SUCURSALES.find(s=>s.id===_catposSucursal)||{}).nombre||''}</div>
+          </div>
+          <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="ff"><label>Categorías</label>
+            <div style="font-size:11px;color:var(--tx-4);margin:-4px 0 10px">Este es el orden en que aparecen en el POS al tomar un pedido.</div>
+            <div id="orden-cat-lista">${categorias.map(c => _ordenCatItemHTML('cat', c)).join('')}</div>
+          </div>
+          <div class="ff" style="margin-top:14px">
+            <label>Subcategorías de</label>
+            <select id="orden-cat-select" data-prev="${categorias[0]?_h(categorias[0]):''}" onchange="LS_UI._cambiarCategoriaOrdenSub(this)" style="width:100%;padding:9px 12px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px">
+              ${categorias.map(c => `<option value="${_h(c)}">${_h(c)}</option>`).join('')}
+            </select>
+            <div id="orden-sub-lista" style="margin-top:10px"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
+          <button class="btn-save" id="orden-cat-guardar" onclick="LS_UI.guardarOrdenCategorias()">Guardar orden</button>
+        </div>
+      </div>
+    </div>`);
+    if (categorias.length) _renderOrdenSubcategorias(categorias[0]);
+  }
+
+  function _ordenCatItemHTML(tipo, nombre) {
+    const idSafe = nombre.replace(/[^a-zA-Z0-9]/g, '_');
+    return `<div class="orden-cat-item" data-nombre="${_h(nombre)}" id="orden-${tipo}-${idSafe}" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;margin-bottom:6px">
+      <span style="flex:1;font-size:13px">${_h(nombre)}</span>
+      <button type="button" onclick="LS_UI._moverOrdenItem('${tipo}','${idSafe}',-1)" style="background:transparent;border:none;color:var(--tx-3);cursor:pointer;font-size:14px;padding:2px 6px">&#9650;</button>
+      <button type="button" onclick="LS_UI._moverOrdenItem('${tipo}','${idSafe}',1)" style="background:transparent;border:none;color:var(--tx-3);cursor:pointer;font-size:14px;padding:2px 6px">&#9660;</button>
+    </div>`;
+  }
+
+  function _moverOrdenItem(tipo, idSafe, dir) {
+    const el = document.getElementById(`orden-${tipo}-${idSafe}`);
+    if (!el) return;
+    const sib = dir < 0 ? el.previousElementSibling : el.nextElementSibling;
+    if (!sib) return;
+    if (dir < 0) el.parentNode.insertBefore(el, sib);
+    else el.parentNode.insertBefore(sib, el);
+  }
+
+  function _cambiarCategoriaOrdenSub(selectEl) {
+    // Antes de mostrar la nueva categoria, guardamos en memoria el orden que
+    // se acomodo para la anterior -- si no, cambiar de categoria en el combo
+    // tira el reacomodo que aun no se habia guardado en Firebase.
+    const anterior = selectEl.dataset.prev;
+    if (anterior) {
+      window._ordenCatSubGuardado = window._ordenCatSubGuardado || {};
+      window._ordenCatSubGuardado[anterior] = [...document.querySelectorAll('#orden-sub-lista .orden-cat-item')].map(el => el.dataset.nombre);
+    }
+    selectEl.dataset.prev = selectEl.value;
+    _renderOrdenSubcategorias(selectEl.value);
+  }
+
+  function _renderOrdenSubcategorias(categoria) {
+    const cont = document.getElementById('orden-sub-lista');
+    if (!cont) return;
+    const subsReales = Array.from(new Set((_catposProductos||[]).filter(p => p.menu === categoria).map(p => p.sub).filter(Boolean)));
+    const guardado = (window._ordenCatSubGuardado || {})[categoria] || [];
+    const subs = [
+      ...guardado.filter(s => subsReales.includes(s)),
+      ...subsReales.filter(s => !guardado.includes(s)).sort((a,b)=>a.localeCompare(b)),
+    ];
+    cont.innerHTML = subs.length ? subs.map(s => _ordenCatItemHTML('sub', s)).join('') : '<div class="sub" style="font-size:12px;color:var(--tx-4)">Sin subcategorías en esta categoría</div>';
+  }
+
+  async function guardarOrdenCategorias() {
+    const btn = document.getElementById('orden-cat-guardar');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i> Guardando...'; }
+    try {
+      const categorias = [...document.querySelectorAll('#orden-cat-lista .orden-cat-item')].map(el => el.dataset.nombre);
+      // Recorremos cada categoria para tambien guardar su orden de subcategorias
+      // -- el select solo muestra una a la vez, asi que guardamos la que esta
+      // visible ahora mismo y conservamos las demas tal como estaban.
+      const select = document.getElementById('orden-cat-select');
+      const catActual = select ? select.value : null;
+      const subcategorias = Object.assign({}, window._ordenCatSubGuardado || {});
+      if (catActual) {
+        subcategorias[catActual] = [...document.querySelectorAll('#orden-sub-lista .orden-cat-item')].map(el => el.dataset.nombre);
+      }
+      await fbAuthReady;
+      await fbDb.ref('categoriasOrden/' + _catposSucursal).set({ categorias, subcategorias });
+      _cerrarModal();
+      toast('Orden guardado', '', 'ok', 'ti-check');
+    } catch(e) {
+      console.error(e);
+      toast('Error al guardar', 'No se pudo guardar el orden', 'err', 'ti-alert-triangle');
+      if (btn) { btn.disabled = false; btn.innerHTML = 'Guardar orden'; }
+    }
   }
 
   function _recetaBuscarHTML(prefix, idRecetaActual) {
@@ -6678,6 +6813,7 @@ async function guardarVentaDirecta() {
 
   function cambiarSucursalCatalogoPOS(sucId) {
     _catposSucursal = sucId;
+    _catposFiltroCategoria = null;
     renderCatalogoPOS();
   }
 
@@ -8834,6 +8970,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     abrirNuevaReceta, agregarLineaReceta, actualizarIngrediente, calcRecetaCosto, guardarReceta, renderRecetas,
     buscarRecetas, editarReceta,
     renderCatalogoPOS, buscarCatalogoPOS, cambiarSucursalCatalogoPOS, abrirNuevoProductoPOS, editarProductoPOS,
+    filtrarCategoriaCatalogoPOS, abrirOrdenCategorias, _moverOrdenItem, _cambiarCategoriaOrdenSub, _renderOrdenSubcategorias, guardarOrdenCategorias,
     guardarProductoPOS, _toggleSizedProductoPOS, _toggleModInventario, _toggleLibModOpciones, _moverLibMod, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS,
     filtrarRecetaPOS, seleccionarRecetaPOS, cerrarRecetaDD, recetaDDNav, toggleCatposSinReceta,
     abrirNuevoProveedorDesdeBusqueda, guardarNuevoProveedorDesdeBusqueda, toggleFavoritoProductoPOS,
