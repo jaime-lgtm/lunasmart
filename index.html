@@ -892,6 +892,9 @@
       animation: fadein 0.18s ease;
     }
     @keyframes fadein { from { opacity:0 } to { opacity:1 } }
+    .drag-handle { cursor: grab; color: var(--tx-4); font-size: 15px; padding: 2px 6px; touch-action: none; }
+    [draggable="true"] { transition: background 0.1s; }
+    [draggable="true"].arrastrando { opacity: 0.35; background: var(--cafe-800); }
 
     .modal {
       background: var(--cafe-card);
@@ -6460,6 +6463,38 @@ async function guardarVentaDirecta() {
 
   function _h(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+  // ── Arrastrar para reordenar (reutilizable: modificadores de un producto,
+  // categorias/subcategorias) -- arrastra el renglon completo por el icono
+  // de agarre y lo suelta donde quiera, sin flechas.
+  let _dragEl = null;
+  function _dragStart(e) {
+    _dragEl = e.currentTarget;
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', ''); } catch(err) {}
+    e.currentTarget.classList.add('arrastrando');
+  }
+  function _dragOver(e) {
+    e.preventDefault();
+    const target = e.currentTarget;
+    if (!_dragEl || target === _dragEl) return;
+    const rect = target.getBoundingClientRect();
+    const after = (e.clientY - rect.top) > (rect.height / 2);
+    target.parentNode.insertBefore(_dragEl, after ? target.nextSibling : target);
+  }
+  function _dragEnd(e) {
+    e.currentTarget.classList.remove('arrastrando');
+    _dragEl = null;
+  }
+  function _habilitarArrastre(containerId) {
+    const cont = document.getElementById(containerId);
+    if (!cont) return;
+    cont.querySelectorAll(':scope > [draggable]').forEach(el => {
+      el.addEventListener('dragstart', _dragStart);
+      el.addEventListener('dragover', _dragOver);
+      el.addEventListener('dragend', _dragEnd);
+    });
+  }
+
   async function renderCatalogoPOS() {
     const cont = document.getElementById('catpos-sucursales');
     if (cont) {
@@ -6590,25 +6625,16 @@ async function guardarVentaDirecta() {
         </div>
       </div>
     </div>`);
+    _habilitarArrastre('orden-cat-lista');
     if (categorias.length) _renderOrdenSubcategorias(categorias[0]);
   }
 
   function _ordenCatItemHTML(tipo, nombre) {
     const idSafe = nombre.replace(/[^a-zA-Z0-9]/g, '_');
-    return `<div class="orden-cat-item" data-nombre="${_h(nombre)}" id="orden-${tipo}-${idSafe}" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;margin-bottom:6px">
+    return `<div class="orden-cat-item" draggable="true" data-nombre="${_h(nombre)}" id="orden-${tipo}-${idSafe}" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;margin-bottom:6px;background:var(--cafe-card)">
+      <span class="drag-handle">&#9776;</span>
       <span style="flex:1;font-size:13px">${_h(nombre)}</span>
-      <button type="button" onclick="LS_UI._moverOrdenItem('${tipo}','${idSafe}',-1)" style="background:transparent;border:none;color:var(--tx-3);cursor:pointer;font-size:14px;padding:2px 6px">&#9650;</button>
-      <button type="button" onclick="LS_UI._moverOrdenItem('${tipo}','${idSafe}',1)" style="background:transparent;border:none;color:var(--tx-3);cursor:pointer;font-size:14px;padding:2px 6px">&#9660;</button>
     </div>`;
-  }
-
-  function _moverOrdenItem(tipo, idSafe, dir) {
-    const el = document.getElementById(`orden-${tipo}-${idSafe}`);
-    if (!el) return;
-    const sib = dir < 0 ? el.previousElementSibling : el.nextElementSibling;
-    if (!sib) return;
-    if (dir < 0) el.parentNode.insertBefore(el, sib);
-    else el.parentNode.insertBefore(sib, el);
   }
 
   function _cambiarCategoriaOrdenSub(selectEl) {
@@ -6634,6 +6660,7 @@ async function guardarVentaDirecta() {
       ...subsReales.filter(s => !guardado.includes(s)).sort((a,b)=>a.localeCompare(b)),
     ];
     cont.innerHTML = subs.length ? subs.map(s => _ordenCatItemHTML('sub', s)).join('') : '<div class="sub" style="font-size:12px;color:var(--tx-4)">Sin subcategorías en esta categoría</div>';
+    _habilitarArrastre('orden-sub-lista');
   }
 
   async function guardarOrdenCategorias() {
@@ -6922,27 +6949,17 @@ async function guardarVentaDirecta() {
       </div>`;
     }).join('');
     return `
-      <div class="pp-libmod-block" id="pp-libmod-block-${m.id}" data-modid="${m.id}" style="margin-bottom:10px;padding:10px;border:1px solid var(--line-2);border-radius:10px">
+      <div class="pp-libmod-block" draggable="true" id="pp-libmod-block-${m.id}" data-modid="${m.id}" style="margin-bottom:10px;padding:10px;border:1px solid var(--line-2);border-radius:10px;background:var(--cafe-card)">
         <div style="display:flex;align-items:center;gap:6px">
+          <span class="drag-handle">&#9776;</span>
           <label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1">
             <input type="checkbox" class="pp-libmod-chk" data-modid="${m.id}" ${asignado?'checked':''} onchange="LS_UI._toggleLibModOpciones('${m.id}')" style="width:18px;height:18px;accent-color:var(--terra-claro)">
             <span style="font-weight:600;font-size:13px">${_h(m.nombre)}</span>
             <span style="font-size:11px;color:var(--tx-4)">(${tipoCorto}${m.obligatorio?' · obligatorio':''})</span>
           </label>
-          <button type="button" title="Subir (orden en que aparece al tomar el pedido)" onclick="LS_UI._moverLibMod('${m.id}',-1)" style="background:transparent;border:none;color:var(--tx-3);cursor:pointer;font-size:15px;padding:2px 6px">&#9650;</button>
-          <button type="button" title="Bajar" onclick="LS_UI._moverLibMod('${m.id}',1)" style="background:transparent;border:none;color:var(--tx-3);cursor:pointer;font-size:15px;padding:2px 6px">&#9660;</button>
         </div>
         <div id="pp-libmod-${m.id}-opts" style="display:${asignado?'block':'none'};margin-top:8px">${opcionesHTML}</div>
       </div>`;
-  }
-
-  function _moverLibMod(modId, dir) {
-    const el = document.getElementById(`pp-libmod-block-${modId}`);
-    if (!el) return;
-    const sib = dir < 0 ? el.previousElementSibling : el.nextElementSibling;
-    if (!sib || !sib.classList || !sib.classList.contains('pp-libmod-block')) return;
-    if (dir < 0) el.parentNode.insertBefore(el, sib);
-    else el.parentNode.insertBefore(sib, el);
   }
 
   function _toggleLibModOpciones(modId) {
@@ -6982,8 +6999,8 @@ async function guardarVentaDirecta() {
     const libModsHTML = libModsList.length ? `
       <div class="ff" style="margin-top:6px">
         <label>Modificadores de la biblioteca</label>
-        <div style="font-size:11px;color:var(--tx-4);margin:-4px 0 10px">Elige cuáles usa este producto. Usa las flechas para ordenar los que ya estan asignados -- ese es el orden en que apareceran al tomar el pedido. Para el efecto en inventario, marca "Agrega" o "Sustituye" en la opción correspondiente.</div>
-        ${libModsOrdenados.map(m => _libModCheckboxHTML(m, producto, sizedInicial, sizeKeys)).join('')}
+        <div style="font-size:11px;color:var(--tx-4);margin:-4px 0 10px">Elige cuáles usa este producto. Arrastra desde &#9776; para ordenar los que ya estan asignados -- ese es el orden en que apareceran al tomar el pedido. Para el efecto en inventario, marca "Agrega" o "Sustituye" en la opción correspondiente.</div>
+        <div id="pp-libmods-lista">${libModsOrdenados.map(m => _libModCheckboxHTML(m, producto, sizedInicial, sizeKeys)).join('')}</div>
       </div>` : '';
 
     const tieneMods = esEdicion && producto.mods && producto.mods.length;
@@ -7076,6 +7093,7 @@ async function guardarVentaDirecta() {
         </div>
       </div>
     </div>`);
+    _habilitarArrastre('pp-libmods-lista');
   }
 
   function _toggleSizedProductoPOS(sized) {
@@ -8970,8 +8988,8 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     abrirNuevaReceta, agregarLineaReceta, actualizarIngrediente, calcRecetaCosto, guardarReceta, renderRecetas,
     buscarRecetas, editarReceta,
     renderCatalogoPOS, buscarCatalogoPOS, cambiarSucursalCatalogoPOS, abrirNuevoProductoPOS, editarProductoPOS,
-    filtrarCategoriaCatalogoPOS, abrirOrdenCategorias, _moverOrdenItem, _cambiarCategoriaOrdenSub, _renderOrdenSubcategorias, guardarOrdenCategorias,
-    guardarProductoPOS, _toggleSizedProductoPOS, _toggleModInventario, _toggleLibModOpciones, _moverLibMod, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS,
+    filtrarCategoriaCatalogoPOS, abrirOrdenCategorias, _cambiarCategoriaOrdenSub, _renderOrdenSubcategorias, guardarOrdenCategorias,
+    guardarProductoPOS, _toggleSizedProductoPOS, _toggleModInventario, _toggleLibModOpciones, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS,
     filtrarRecetaPOS, seleccionarRecetaPOS, cerrarRecetaDD, recetaDDNav, toggleCatposSinReceta,
     abrirNuevoProveedorDesdeBusqueda, guardarNuevoProveedorDesdeBusqueda, toggleFavoritoProductoPOS,
     renderModificadores, cambiarSucursalModificadores, buscarModificadores, abrirNuevoModificador, editarModificador,
