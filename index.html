@@ -6785,14 +6785,27 @@ async function guardarVentaDirecta() {
       </div>`;
     }).join('');
     return `
-      <div style="margin-bottom:10px;padding:10px;border:1px solid var(--line-2);border-radius:10px">
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:${asignado?'8px':'0'}">
-          <input type="checkbox" class="pp-libmod-chk" data-modid="${m.id}" ${asignado?'checked':''} onchange="LS_UI._toggleLibModOpciones('${m.id}')" style="width:18px;height:18px;accent-color:var(--terra-claro)">
-          <span style="font-weight:600;font-size:13px">${_h(m.nombre)}</span>
-          <span style="font-size:11px;color:var(--tx-4)">(${tipoCorto}${m.obligatorio?' · obligatorio':''})</span>
-        </label>
-        <div id="pp-libmod-${m.id}-opts" style="display:${asignado?'block':'none'}">${opcionesHTML}</div>
+      <div class="pp-libmod-block" id="pp-libmod-block-${m.id}" data-modid="${m.id}" style="margin-bottom:10px;padding:10px;border:1px solid var(--line-2);border-radius:10px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1">
+            <input type="checkbox" class="pp-libmod-chk" data-modid="${m.id}" ${asignado?'checked':''} onchange="LS_UI._toggleLibModOpciones('${m.id}')" style="width:18px;height:18px;accent-color:var(--terra-claro)">
+            <span style="font-weight:600;font-size:13px">${_h(m.nombre)}</span>
+            <span style="font-size:11px;color:var(--tx-4)">(${tipoCorto}${m.obligatorio?' · obligatorio':''})</span>
+          </label>
+          <button type="button" title="Subir (orden en que aparece al tomar el pedido)" onclick="LS_UI._moverLibMod('${m.id}',-1)" style="background:transparent;border:none;color:var(--tx-3);cursor:pointer;font-size:15px;padding:2px 6px">&#9650;</button>
+          <button type="button" title="Bajar" onclick="LS_UI._moverLibMod('${m.id}',1)" style="background:transparent;border:none;color:var(--tx-3);cursor:pointer;font-size:15px;padding:2px 6px">&#9660;</button>
+        </div>
+        <div id="pp-libmod-${m.id}-opts" style="display:${asignado?'block':'none'};margin-top:8px">${opcionesHTML}</div>
       </div>`;
+  }
+
+  function _moverLibMod(modId, dir) {
+    const el = document.getElementById(`pp-libmod-block-${modId}`);
+    if (!el) return;
+    const sib = dir < 0 ? el.previousElementSibling : el.nextElementSibling;
+    if (!sib || !sib.classList || !sib.classList.contains('pp-libmod-block')) return;
+    if (dir < 0) el.parentNode.insertBefore(el, sib);
+    else el.parentNode.insertBefore(sib, el);
   }
 
   function _toggleLibModOpciones(modId) {
@@ -6820,12 +6833,20 @@ async function guardarVentaDirecta() {
       _formLibModsList = Object.keys(valMods).map(id => Object.assign({ id }, valMods[id])).sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
     } catch(e) {}
     const libModsList = _formLibModsList;
+    // Los ya asignados se muestran primero, en el orden en que se guardaron
+    // (ese es el orden en que apareceran al tomar el pedido en el POS); el
+    // resto, sin asignar, van despues para elegir mas si hace falta.
+    const asignadosOrden = (producto && producto.modAsignados) || [];
+    const libModsOrdenados = [
+      ...asignadosOrden.map(id => libModsList.find(m => m.id === id)).filter(Boolean),
+      ...libModsList.filter(m => asignadosOrden.indexOf(m.id) === -1),
+    ];
 
     const libModsHTML = libModsList.length ? `
       <div class="ff" style="margin-top:6px">
         <label>Modificadores de la biblioteca</label>
-        <div style="font-size:11px;color:var(--tx-4);margin:-4px 0 10px">Elige cuáles usa este producto. Para el efecto en inventario, marca "Agrega" o "Sustituye" en la opción correspondiente.</div>
-        ${libModsList.map(m => _libModCheckboxHTML(m, producto, sizedInicial, sizeKeys)).join('')}
+        <div style="font-size:11px;color:var(--tx-4);margin:-4px 0 10px">Elige cuáles usa este producto. Usa las flechas para ordenar los que ya estan asignados -- ese es el orden en que apareceran al tomar el pedido. Para el efecto en inventario, marca "Agrega" o "Sustituye" en la opción correspondiente.</div>
+        ${libModsOrdenados.map(m => _libModCheckboxHTML(m, producto, sizedInicial, sizeKeys)).join('')}
       </div>` : '';
 
     const tieneMods = esEdicion && producto.mods && producto.mods.length;
@@ -6858,8 +6879,10 @@ async function guardarVentaDirecta() {
             <label for="pp-fav" style="margin:0;text-transform:none;font-size:13px;color:var(--tx-2);cursor:pointer">⭐ Marcar como favorito (aparece primero en el menú del POS)</label>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <div class="ff"><label>Categoría (menú)</label><input type="text" id="pp-menu" value="${_h(producto ? producto.menu : '')}" placeholder="Bebidas, Alimentos..."></div>
-            <div class="ff"><label>Subcategoría</label><input type="text" id="pp-sub" value="${_h(producto ? producto.sub : '')}" placeholder="Cafés Calientes..."></div>
+            <div class="ff"><label>Categoría (menú)</label><input type="text" id="pp-menu" list="pp-menu-list" value="${_h(producto ? producto.menu : '')}" placeholder="Bebidas, Alimentos..."></div>
+            <div class="ff"><label>Subcategoría</label><input type="text" id="pp-sub" list="pp-sub-list" value="${_h(producto ? producto.sub : '')}" placeholder="Cafés Calientes..."></div>
+            <datalist id="pp-menu-list">${Array.from(new Set((_catposProductos||[]).map(p=>p.menu).filter(Boolean))).sort((a,b)=>a.localeCompare(b)).map(m=>`<option value="${_h(m)}">`).join('')}</datalist>
+            <datalist id="pp-sub-list">${Array.from(new Set((_catposProductos||[]).map(p=>p.sub).filter(Boolean))).sort((a,b)=>a.localeCompare(b)).map(s=>`<option value="${_h(s)}">`).join('')}</datalist>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
             <div class="ff"><label>Área de preparación</label>
@@ -8810,7 +8833,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     abrirNuevaReceta, agregarLineaReceta, actualizarIngrediente, calcRecetaCosto, guardarReceta, renderRecetas,
     buscarRecetas, editarReceta,
     renderCatalogoPOS, buscarCatalogoPOS, cambiarSucursalCatalogoPOS, abrirNuevoProductoPOS, editarProductoPOS,
-    guardarProductoPOS, _toggleSizedProductoPOS, _toggleModInventario, _toggleLibModOpciones, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS,
+    guardarProductoPOS, _toggleSizedProductoPOS, _toggleModInventario, _toggleLibModOpciones, _moverLibMod, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS,
     filtrarRecetaPOS, seleccionarRecetaPOS, cerrarRecetaDD, recetaDDNav, toggleCatposSinReceta,
     abrirNuevoProveedorDesdeBusqueda, guardarNuevoProveedorDesdeBusqueda, toggleFavoritoProductoPOS,
     renderModificadores, cambiarSucursalModificadores, buscarModificadores, abrirNuevoModificador, editarModificador,
