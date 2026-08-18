@@ -1164,6 +1164,7 @@
         <div class="nav-item" data-page="catalogopos" onclick="go('catalogopos',this)"><i class="ti ti-cash-register"></i><span class="nav-lbl">Catálogo POS</span></div>
         <div class="nav-item" data-page="modificadores" onclick="go('modificadores',this)"><i class="ti ti-adjustments"></i><span class="nav-lbl">Modificadores</span></div>
         <div class="nav-item" data-page="catalogo-inventario" onclick="go('catalogo-inventario',this)"><i class="ti ti-clipboard-data"></i><span class="nav-lbl">Catálogo de inventario</span></div>
+        <div class="nav-item" data-page="pantallacliente" onclick="go('pantallacliente',this)"><i class="ti ti-device-tv"></i><span class="nav-lbl">Pantalla de cliente</span></div>
       </nav>
 
       <div class="sb-foot">
@@ -1797,6 +1798,51 @@
   </div>
 </div>
 
+<!-- PÁGINA: PANTALLA DE CLIENTE -->
+<style>
+.pcli-upload-row{display:flex;gap:16px;align-items:flex-start}
+.pcli-thumb{width:88px;height:88px;border-radius:var(--r);background:var(--cafe-800);border:1px solid var(--line-2);display:flex;align-items:center;justify-content:center;color:var(--tx-4);font-size:26px;overflow:hidden;flex-shrink:0}
+.pcli-thumb img{width:100%;height:100%;object-fit:contain}
+.pcli-thumb-lg{width:100%;aspect-ratio:16/10;height:auto;font-size:34px}
+.pcli-thumb-lg img{object-fit:cover}
+.pcli-hint{font-size:12px;color:var(--tx-4);margin-top:6px;line-height:1.5}
+.pcli-promo-slot{display:flex;flex-direction:column;gap:6px}
+</style>
+<div id="p-pantallacliente" class="page" data-screen-label="Pantalla de cliente">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title"><i class="ti ti-device-tv"></i>Pantalla de cliente</div>
+        <div class="card-sub">Logo y promociones para la segunda pantalla física del punto de venta -- solo aplica a sucursales con ese hardware, no afecta a las demás</div>
+      </div>
+    </div>
+    <div style="padding:14px 18px 0;display:flex;gap:8px;flex-wrap:wrap" id="pcli-sucursales"></div>
+
+    <div style="padding:18px" id="pcli-body">
+      <div class="ff"><label>Logo del negocio</label>
+        <div class="pcli-upload-row">
+          <div class="pcli-thumb" id="pcli-logo-thumb"><i class="ti ti-photo"></i></div>
+          <div style="flex:1">
+            <input type="file" accept="image/*" id="pcli-logo-input" onchange="LS_UI.pcliSubirLogo(this.files[0])">
+            <div class="pcli-hint">PNG con fondo transparente recomendado -- se muestra dentro de un cuadro de 120×120px. Si no subes uno, se usa el logo genérico "LS".</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:26px">
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--tx-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Promociones en pantalla de espera</label>
+        <div class="pcli-hint" style="margin-bottom:12px">Se muestran en pantalla completa, por turnos, cuando no hay ningún pedido en construcción. Tamaño sugerido: <b>1280×800px</b> (horizontal), JPG o PNG -- se recortan para llenar la pantalla sin deformarse. Puedes dejar slots vacíos.</div>
+        <div id="pcli-promos" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px"></div>
+      </div>
+
+      <div class="ff" style="margin-top:26px;max-width:260px"><label>Duración de cada imagen (segundos)</label>
+        <input type="number" id="pcli-duracion" min="5" max="120" value="30">
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="LS_UI.pcliGuardarDuracion()"><i class="ti ti-device-floppy"></i>Guardar duración</button>
+    </div>
+  </div>
+</div>
+
 <!-- PÁGINA: MODIFICADORES -->
 <div id="p-modificadores" class="page" data-screen-label="Modificadores">
   <div class="card">
@@ -1877,6 +1923,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════
    LUNA SMART — APP LOGIC
@@ -1884,7 +1931,7 @@
 
 // Mismo proyecto Firebase que pos.html y pedidos.suenodeluna.com.mx -- el
 // admin gana acceso de lectura/escritura al catalogo/{sucursal} del POS.
-var fbDb = null, fbAuthReady = Promise.resolve();
+var fbDb = null, fbStorage = null, fbAuthReady = Promise.resolve();
 try {
   firebase.initializeApp({
     apiKey: "AIzaSyAylUrEQGXad-DAZrTCWVrrXeq1rrLVTwM",
@@ -1896,6 +1943,7 @@ try {
     appId: "1:29167679041:web:0959c2161d86552ded38c0"
   });
   fbDb = firebase.database();
+  fbStorage = firebase.storage();
   fbAuthReady = firebase.auth().signInAnonymously().catch(function(e){ console.error('Firebase auth', e); });
 } catch(e) { console.error('No se pudo inicializar Firebase', e); }
 
@@ -1925,6 +1973,7 @@ const PAGES = {
   catalogopos:  { title: 'Catálogo POS',          sub: 'Productos en venta y su receta vinculada' },
   'catalogo-inventario': { title: 'Catálogo de Inventario', sub: 'Listado completo de artículos y stock' },
   modificadores: { title: 'Modificadores',        sub: 'Biblioteca reutilizable de modificadores para el POS' },
+  pantallacliente: { title: 'Pantalla de cliente', sub: 'Logo y promociones de la segunda pantalla del POS' },
 };
 
 const BRANCHES = {
@@ -7272,6 +7321,124 @@ async function guardarVentaDirecta() {
   let _modifUsoPorId = {};
   const TIPO_MODIF_LABEL = { unico: 'Única opción', multiple: 'Varias opciones', cantidad: 'Cantidad (min/max)' };
 
+  /* ============ PANTALLA DE CLIENTE (logo + promos de la 2a pantalla del POS) ============
+     Config en displayConfig/{suc} (RTDB) = {logoUrl, promoImages:[...], duracionSegundos}.
+     Las imagenes en si van a Firebase Storage (displayAssets/{suc}/...) -- solo la URL
+     resultante se guarda en RTDB. display.html escucha este nodo con .on('value'), asi
+     que los cambios aqui se reflejan en vivo en la pantalla fisica sin reinstalar nada. */
+  let _pcliSucursal = 'cafeteria';
+  let _pcliConfig = {};
+
+  async function renderPantallaCliente() {
+    const cont = document.getElementById('pcli-sucursales');
+    if (cont) {
+      cont.innerHTML = CATPOS_SUCURSALES.map(s => `<button class="btn ${s.id===_pcliSucursal?'btn-primary':''} btn-sm" onclick="LS_UI.cambiarSucursalPantallaCliente('${s.id}')">${s.nombre}</button>`).join('');
+    }
+    await _pcliCargar();
+  }
+
+  async function _pcliCargar() {
+    try {
+      if (!fbDb) throw new Error('Firebase no disponible');
+      await fbAuthReady;
+      const snap = await fbDb.ref('displayConfig/' + _pcliSucursal).once('value');
+      _pcliConfig = snap.val() || {};
+      _pcliPintar();
+    } catch(e) {
+      console.error('Error cargando configuración de pantalla de cliente:', e);
+      toast('Error', 'No se pudo cargar la configuración (revisa la conexión con Firebase)', 'err', 'ti-alert-triangle');
+    }
+  }
+
+  function _pcliPintar() {
+    const logoThumb = document.getElementById('pcli-logo-thumb');
+    if (logoThumb) logoThumb.innerHTML = _pcliConfig.logoUrl ? `<img src="${_pcliConfig.logoUrl}">` : '<i class="ti ti-photo"></i>';
+    const promos = _pcliConfig.promoImages || [];
+    const slots = document.getElementById('pcli-promos');
+    if (slots) {
+      const total = Math.max(3, promos.length);
+      let html = '';
+      for (let ix = 0; ix < total; ix++) {
+        const url = promos[ix] || '';
+        html += `<div class="pcli-promo-slot">
+          <div class="pcli-thumb pcli-thumb-lg">${url ? `<img src="${url}">` : '<i class="ti ti-photo"></i>'}</div>
+          <input type="file" accept="image/*" onchange="LS_UI.pcliSubirPromo(${ix}, this.files[0])">
+          ${url ? `<button class="btn btn-sm" onclick="LS_UI.pcliQuitarPromo(${ix})"><i class="ti ti-trash"></i>Quitar</button>` : ''}
+        </div>`;
+      }
+      slots.innerHTML = html;
+    }
+    const durInp = document.getElementById('pcli-duracion');
+    if (durInp) durInp.value = _pcliConfig.duracionSegundos || 30;
+  }
+
+  function cambiarSucursalPantallaCliente(sucId) { _pcliSucursal = sucId; renderPantallaCliente(); }
+
+  async function pcliSubirLogo(file) {
+    if (!file) return;
+    try {
+      await fbAuthReady;
+      const ref = fbStorage.ref('displayAssets/' + _pcliSucursal + '/logo');
+      await ref.put(file);
+      const url = await ref.getDownloadURL();
+      _pcliConfig.logoUrl = url;
+      await fbDb.ref('displayConfig/' + _pcliSucursal).update({ logoUrl: url });
+      _pcliPintar();
+      toast('Logo actualizado', 'Se refleja en la pantalla del POS en unos segundos', 'ok', 'ti-check');
+    } catch(e) {
+      console.error(e);
+      toast('Error al subir el logo', e.message || '', 'err', 'ti-alert-triangle');
+    }
+  }
+
+  async function pcliSubirPromo(ix, file) {
+    if (!file) return;
+    try {
+      await fbAuthReady;
+      const ref = fbStorage.ref('displayAssets/' + _pcliSucursal + '/promo_' + ix);
+      await ref.put(file);
+      const url = await ref.getDownloadURL();
+      const promos = (_pcliConfig.promoImages || []).slice();
+      promos[ix] = url;
+      _pcliConfig.promoImages = promos;
+      await fbDb.ref('displayConfig/' + _pcliSucursal).update({ promoImages: promos });
+      _pcliPintar();
+      toast('Promoción actualizada', 'Se refleja en la pantalla del POS en unos segundos', 'ok', 'ti-check');
+    } catch(e) {
+      console.error(e);
+      toast('Error al subir la imagen', e.message || '', 'err', 'ti-alert-triangle');
+    }
+  }
+
+  async function pcliQuitarPromo(ix) {
+    try {
+      await fbAuthReady;
+      const promos = (_pcliConfig.promoImages || []).slice();
+      promos.splice(ix, 1);
+      _pcliConfig.promoImages = promos;
+      await fbDb.ref('displayConfig/' + _pcliSucursal).update({ promoImages: promos });
+      _pcliPintar();
+      toast('Promoción eliminada', '', 'ok', 'ti-check');
+    } catch(e) {
+      console.error(e);
+      toast('Error al quitar la imagen', e.message || '', 'err', 'ti-alert-triangle');
+    }
+  }
+
+  async function pcliGuardarDuracion() {
+    const v = parseInt(document.getElementById('pcli-duracion').value, 10);
+    if (isNaN(v) || v < 5) { toast('Duración inválida', 'Mínimo 5 segundos', 'err', 'ti-alert-triangle'); return; }
+    try {
+      await fbAuthReady;
+      await fbDb.ref('displayConfig/' + _pcliSucursal).update({ duracionSegundos: v });
+      _pcliConfig.duracionSegundos = v;
+      toast('Duración guardada', v + ' segundos por imagen', 'ok', 'ti-check');
+    } catch(e) {
+      console.error(e);
+      toast('Error al guardar', e.message || '', 'err', 'ti-alert-triangle');
+    }
+  }
+
   async function renderModificadores() {
     const cont = document.getElementById('modif-sucursales');
     if (cont) {
@@ -8365,6 +8532,7 @@ async function guardarVentaDirecta() {
       case 'recetas':      await renderRecetas();       break;
       case 'catalogopos':  await renderCatalogoPOS();   break;
       case 'modificadores': await renderModificadores(); break;
+      case 'pantallacliente': await renderPantallaCliente(); break;
       case 'catalogo-inventario': await abrirCatalogoInventarioPagina(); break;
     }
   }
@@ -8994,6 +9162,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     abrirNuevoProveedorDesdeBusqueda, guardarNuevoProveedorDesdeBusqueda, toggleFavoritoProductoPOS,
     renderModificadores, cambiarSucursalModificadores, buscarModificadores, abrirNuevoModificador, editarModificador,
     _toggleTipoModificador, _agregarOpcionModificador, guardarModificador, confirmarBorrarModificador, ejecutarBorrarModificador,
+    renderPantallaCliente, cambiarSucursalPantallaCliente, pcliSubirLogo, pcliSubirPromo, pcliQuitarPromo, pcliGuardarDuracion,
     closeModal,
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },
