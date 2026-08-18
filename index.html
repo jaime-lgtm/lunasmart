@@ -6995,7 +6995,7 @@ async function guardarVentaDirecta() {
       const precio = p.prices ? Object.entries(p.prices).map(([k,v]) => `${k}: ${LS_API.formatMXNDec(v)}`).join(' / ') : LS_API.formatMXNDec(p.price || 0);
       return `<tr>
         <td style="font-family:var(--mono);color:var(--tx-3)">${_h(p.id)}</td>
-        <td style="font-weight:500">${p.fav===true ? '⭐ ' : ''}${_h(p.name)}${_catposCanalesBadges(p)}</td>
+        <td style="font-weight:500;display:flex;align-items:center;gap:8px">${p.img ? `<img src="${p.img}" style="width:26px;height:26px;border-radius:6px;object-fit:cover;flex-shrink:0">` : ''}<span>${p.fav===true ? '⭐ ' : ''}${_h(p.name)}${_catposCanalesBadges(p)}</span></td>
         <td style="color:var(--tx-2)">${_h(p.menu||'')}${p.sub ? ' · '+_h(p.sub) : ''}</td>
         <td class="num" style="font-family:var(--mono)">${precio}</td>
         <td>${_catposRecetaBadge(p)}</td>
@@ -7150,6 +7150,9 @@ async function guardarVentaDirecta() {
     const preciosSized = producto && producto.prices ? producto.prices : {};
     const sizeKeys = Object.keys(preciosSized);
     const sucNombre = (CATPOS_SUCURSALES.find(s=>s.id===_catposSucursal) || {}).nombre || '';
+    // Se preasigna el ID desde ya (aunque sea producto nuevo) para poder subir
+    // la foto de una vez, sin esperar a que exista el producto guardado.
+    const idParaFoto = producto ? producto.id : _catposSiguienteId();
 
     let artOpts = '';
     try {
@@ -7241,6 +7244,17 @@ async function guardarVentaDirecta() {
         </div>
         <div class="modal-body">
           <div class="ff"><label>Nombre *</label><input type="text" id="pp-nombre" value="${_h(producto ? producto.name : '')}"></div>
+          <div class="ff"><label>Descripción (aparece en el POS y sirve para delivery)</label><textarea id="pp-desc" rows="2" placeholder="Espresso con leche vaporizada y espuma cremosa...">${_h(producto ? (producto.desc||'') : '')}</textarea></div>
+          <div class="ff"><label>Fotografía del artículo</label>
+            <div class="pcli-upload-row">
+              <div class="pcli-thumb" id="pp-foto-thumb">${producto && producto.img ? `<img src="${producto.img}">` : '<i class="ti ti-photo"></i>'}</div>
+              <div style="flex:1">
+                <input type="file" accept="image/*" onchange="LS_UI._catposSubirFoto('${idParaFoto}', this.files[0])">
+                <div class="pcli-hint">Recomendado: foto cuadrada, buena luz -- se usa para delivery (Rappi/Uber Eats) y puede mostrarse en el menú.</div>
+                <div class="pcli-status" id="pp-foto-status"></div>
+              </div>
+            </div>
+          </div>
           <div class="ff" style="flex-direction:row;align-items:center;gap:10px;display:flex">
             <input type="checkbox" id="pp-fav" ${producto && producto.fav===true ? 'checked':''} style="width:18px;height:18px;accent-color:var(--terra-claro)">
             <label for="pp-fav" style="margin:0;text-transform:none;font-size:13px;color:var(--tx-2);cursor:pointer">⭐ Marcar como favorito (aparece primero en el menú del POS)</label>
@@ -7319,11 +7333,36 @@ async function guardarVentaDirecta() {
     document.getElementById('pp-canales-sized').style.display = sized ? 'block' : 'none';
   }
 
+  // Foto del articulo -- mismo patron de subida que el logo de Pantalla de
+  // cliente (vista previa instantanea + estado persistente), reutilizando
+  // esos mismos helpers (_pcliPreviewLocal/_pcliEstado/_pcliConTimeout/_pcliMsgError).
+  // Se guarda directo en Firebase al seleccionar el archivo, no espera al
+  // boton de "Guardar cambios" del producto.
+  async function _catposSubirFoto(productoId, file) {
+    if (!file) return;
+    const thumb = document.getElementById('pp-foto-thumb');
+    const status = document.getElementById('pp-foto-status');
+    await _pcliPreviewLocal(file, thumb);
+    _pcliEstado(status, 'Subiendo...', 'uploading');
+    try {
+      await fbAuthReady;
+      const ref = fbStorage.ref('catalogoAssets/' + _catposSucursal + '/' + productoId);
+      await _pcliConTimeout(ref.put(file), 15000);
+      const url = await ref.getDownloadURL();
+      await fbDb.ref('catalogo/' + _catposSucursal + '/' + productoId).update({ img: url });
+      _pcliEstado(status, '✓ Subida', 'ok');
+    } catch(e) {
+      console.error(e);
+      _pcliEstado(status, '⚠ No se pudo subir: ' + _pcliMsgError(e), 'err');
+    }
+  }
+
   async function guardarProductoPOS(idExistente) {
     const nombre = document.getElementById('pp-nombre').value.trim();
     if (!nombre) { toast('Falta el nombre', 'Escribe el nombre del producto', 'err', 'ti-alert-triangle'); return; }
     const menu = document.getElementById('pp-menu').value.trim();
     const sub = document.getElementById('pp-sub').value.trim();
+    const desc = document.getElementById('pp-desc').value.trim();
     const area = document.getElementById('pp-area').value;
     const sized = document.getElementById('pp-sized').value === 'si';
     const fav = document.getElementById('pp-fav').checked;
@@ -7334,7 +7373,7 @@ async function guardarVentaDirecta() {
     try {
       if (!fbDb) throw new Error('Firebase no disponible');
       const id = idExistente || _catposSiguienteId();
-      const payload = { id, name: nombre, menu, sub, area, fav };
+      const payload = { id, name: nombre, menu, sub, desc, area, fav };
       if (sized) {
         const t1n = document.getElementById('pp-t1-nombre').value.trim() || 'El Chico';
         const t1p = parseFloat(document.getElementById('pp-t1-precio').value) || 0;
@@ -9459,7 +9498,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     buscarRecetas, editarReceta,
     renderCatalogoPOS, buscarCatalogoPOS, cambiarSucursalCatalogoPOS, abrirNuevoProductoPOS, editarProductoPOS,
     filtrarCategoriaCatalogoPOS, filtrarSubCategoriaCatalogoPOS, abrirOrdenCategorias, _cambiarCategoriaOrdenSub, _renderOrdenSubcategorias, guardarOrdenCategorias,
-    guardarProductoPOS, _toggleSizedProductoPOS, _toggleModInventario, _toggleLibModOpciones, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS,
+    guardarProductoPOS, _toggleSizedProductoPOS, _toggleModInventario, _toggleLibModOpciones, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS, _catposSubirFoto,
     filtrarRecetaPOS, seleccionarRecetaPOS, cerrarRecetaDD, recetaDDNav, toggleCatposSinReceta,
     abrirNuevoProveedorDesdeBusqueda, guardarNuevoProveedorDesdeBusqueda, toggleFavoritoProductoPOS,
     renderModificadores, cambiarSucursalModificadores, buscarModificadores, abrirNuevoModificador, editarModificador,
