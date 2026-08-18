@@ -1773,9 +1773,11 @@
         <button class="btn btn-primary btn-sm" onclick="LS_UI.abrirNuevoProductoPOS()"><i class="ti ti-plus"></i>Nuevo producto</button>
       </div>
     </div>
-    <div style="padding:14px 18px 0;display:flex;gap:8px;flex-wrap:wrap" id="catpos-sucursales"></div>
-    <div style="padding:12px 18px 0;display:flex;gap:8px;flex-wrap:wrap" id="catpos-categorias"></div>
-    <div style="padding:8px 18px 0;display:flex;gap:8px;flex-wrap:wrap" id="catpos-subcategorias"></div>
+    <div style="padding:14px 18px 0;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <select id="catpos-sucursal-sel" onchange="LS_UI.cambiarSucursalCatalogoPOS(this.value)" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none"></select>
+      <select id="catpos-categoria-sel" onchange="LS_UI.filtrarCategoriaCatalogoPOS(this.value||null)" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none"></select>
+      <select id="catpos-sub-sel" onchange="LS_UI.filtrarSubCategoriaCatalogoPOS(this.value||null)" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none"></select>
+    </div>
     <div style="padding:12px 18px 12px">
       <div style="position:relative;max-width:460px">
         <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--tx-4);font-size:16px"></i>
@@ -6614,9 +6616,9 @@ async function guardarVentaDirecta() {
     // dentro de esta misma pagina.
     if (mapeada && branchActual !== _catposUltimaBranchSincronizada) _catposSucursal = mapeada;
     _catposUltimaBranchSincronizada = branchActual;
-    const cont = document.getElementById('catpos-sucursales');
-    if (cont) {
-      cont.innerHTML = CATPOS_SUCURSALES.map(s => `<button class="btn ${s.id===_catposSucursal?'btn-primary':''} btn-sm" onclick="LS_UI.cambiarSucursalCatalogoPOS('${s.id}')">${s.nombre}</button>`).join('');
+    const sel = document.getElementById('catpos-sucursal-sel');
+    if (sel) {
+      sel.innerHTML = CATPOS_SUCURSALES.map(s => `<option value="${s.id}" ${s.id===_catposSucursal?'selected':''}>${s.nombre}</option>`).join('');
     }
     await _catposCargar();
   }
@@ -6686,12 +6688,12 @@ async function guardarVentaDirecta() {
   }
 
   function _catposPintarChipsCategoria() {
-    const cont = document.getElementById('catpos-categorias');
-    if (!cont) return;
+    const sel = document.getElementById('catpos-categoria-sel');
+    if (!sel) return;
     const categorias = Array.from(new Set((_catposProductos||[]).map(p => p.menu).filter(Boolean))).sort((a,b) => a.localeCompare(b));
-    if (!categorias.length) { cont.innerHTML = ''; return; }
-    cont.innerHTML = `<button class="btn btn-sm ${!_catposFiltroCategoria?'btn-primary':''}" onclick="LS_UI.filtrarCategoriaCatalogoPOS(null)">Todas</button>` +
-      categorias.map(c => `<button class="btn btn-sm ${_catposFiltroCategoria===c?'btn-primary':''}" onclick="LS_UI.filtrarCategoriaCatalogoPOS('${_h(c).replace(/'/g,"\\'")}')">${_h(c)}</button>`).join('');
+    if (!categorias.length) { sel.innerHTML = ''; return; }
+    sel.innerHTML = `<option value="">Todas las categorías</option>` +
+      categorias.map(c => `<option value="${_h(c)}" ${_catposFiltroCategoria===c?'selected':''}>${_h(c)}</option>`).join('');
     _catposPintarChipsSub();
   }
 
@@ -6699,16 +6701,17 @@ async function guardarVentaDirecta() {
   // que existen dentro de la categoria ya elegida (o todas si no hay categoria
   // elegida), para no mostrar combinaciones que no aplican.
   function _catposPintarChipsSub() {
-    const cont = document.getElementById('catpos-subcategorias');
-    if (!cont) return;
+    const sel = document.getElementById('catpos-sub-sel');
+    if (!sel) return;
     const base = _catposFiltroCategoria
       ? (_catposProductos||[]).filter(p => p.menu === _catposFiltroCategoria)
       : (_catposProductos||[]);
     const subs = Array.from(new Set(base.map(p => p.sub).filter(Boolean))).sort((a,b) => a.localeCompare(b));
-    if (!subs.length) { cont.innerHTML = ''; _catposFiltroSub = null; return; }
+    if (!subs.length) { sel.innerHTML = ''; sel.style.display = 'none'; _catposFiltroSub = null; return; }
     if (_catposFiltroSub && !subs.includes(_catposFiltroSub)) _catposFiltroSub = null;
-    cont.innerHTML = `<button class="btn btn-sm ${!_catposFiltroSub?'btn-primary':''}" style="opacity:.85" onclick="LS_UI.filtrarSubCategoriaCatalogoPOS(null)">Todas las subcategorías</button>` +
-      subs.map(s => `<button class="btn btn-sm ${_catposFiltroSub===s?'btn-primary':''}" style="opacity:.85" onclick="LS_UI.filtrarSubCategoriaCatalogoPOS('${_h(s).replace(/'/g,"\\'")}')">${_h(s)}</button>`).join('');
+    sel.style.display = '';
+    sel.innerHTML = `<option value="">Todas las subcategorías</option>` +
+      subs.map(s => `<option value="${_h(s)}" ${_catposFiltroSub===s?'selected':''}>${_h(s)}</option>`).join('');
   }
 
   function filtrarCategoriaCatalogoPOS(cat) {
