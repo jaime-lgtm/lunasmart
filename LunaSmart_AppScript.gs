@@ -204,6 +204,7 @@ function doPost(e) {
     case 'registrarCliente':           return _registrarCliente(datos);
     case 'registrarReceta':            return _registrarReceta(datos);
     case 'actualizarReceta':           return _actualizarReceta(datos);
+    case 'borrarReceta':               return _borrarReceta(datos);
     case 'guardarInventarioFisico':    return _guardarInventarioFisico(datos);
     case 'sumarStockPorCompra':        return _sumarStockPorCompra(datos);
     case 'actualizarMinMaxInventario': return _actualizarMinMaxInventario(datos);
@@ -930,6 +931,28 @@ function _actualizarReceta(b) {
     return _json({ status: 'ok', idReceta: id });
   } catch (e) { return _err(e.message); }
   finally { lock.releaseLock(); }
+}
+
+function _borrarReceta(b) {
+  try {
+    var id = String(b.id || '').trim();
+    if (!id) return _err('Falta el ID de la receta');
+    var sh = _getSheet(HOJAS.RECETAS);
+    var vals = sh.getDataRange().getValues();
+    var borrada = false;
+    for (var i = vals.length - 1; i >= 1; i--) {
+      if (String(vals[i][0]).trim() === id) { sh.deleteRow(i + 1); borrada = true; break; }
+    }
+    // Cascada: tambien se borran las lineas de ingredientes de esta receta,
+    // si no quedan huerfanas en BD_RECETAS_DETALLES apuntando a un ID que ya no existe.
+    var shD = _getSheet(HOJAS.RECETAS_DET);
+    var dvals = shD.getDataRange().getValues();
+    for (var j = dvals.length - 1; j >= 1; j--) {
+      if (String(dvals[j][0]).trim() === id) shD.deleteRow(j + 1);
+    }
+    if (!borrada) return _err('Receta no encontrada: ' + id);
+    return _json({ status: 'ok' });
+  } catch (e) { return _err(e.message); }
 }
 
 // ── INVENTARIO ───────────────────────────────────────────────────────────
