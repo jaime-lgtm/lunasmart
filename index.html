@@ -7347,6 +7347,11 @@ async function guardarVentaDirecta() {
     } catch(e) {
       console.error('Error cargando configuración de pantalla de cliente:', e);
       toast('Error', 'No se pudo cargar la configuración (revisa la conexión con Firebase)', 'err', 'ti-alert-triangle');
+      // Aunque falle la lectura (ej. reglas de Firebase aún no publicadas), se
+      // pintan los 3 espacios vacíos igual -- si no, la sección de promos se
+      // queda completamente en blanco sin ninguna forma de subir nada.
+      _pcliConfig = _pcliConfig || {};
+      _pcliPintar();
     }
   }
 
