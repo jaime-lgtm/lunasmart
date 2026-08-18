@@ -1165,6 +1165,7 @@
         <div class="nav-item" data-page="modificadores" onclick="go('modificadores',this)"><i class="ti ti-adjustments"></i><span class="nav-lbl">Modificadores</span></div>
         <div class="nav-item" data-page="catalogo-inventario" onclick="go('catalogo-inventario',this)"><i class="ti ti-clipboard-data"></i><span class="nav-lbl">Catálogo de inventario</span></div>
         <div class="nav-item" data-page="pantallacliente" onclick="go('pantallacliente',this)"><i class="ti ti-device-tv"></i><span class="nav-lbl">Pantalla de cliente</span></div>
+        <div class="nav-item" data-page="horariotienda" onclick="go('horariotienda',this)"><i class="ti ti-clock"></i><span class="nav-lbl">Horario de tienda</span></div>
       </nav>
 
       <div class="sb-foot">
@@ -1852,6 +1853,22 @@
   </div>
 </div>
 
+<!-- PÁGINA: HORARIO DE TIENDA -->
+<div id="p-horariotienda" class="page" data-screen-label="Horario de tienda">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title"><i class="ti ti-clock"></i>Horario de tienda</div>
+        <div class="card-sub">Cuando una franja está marcada "Cerrado", pedidos.suenodeluna.com.mx oculta el menú y el carrito, y ofrece programar el pedido en su lugar.</div>
+      </div>
+    </div>
+    <div style="padding:18px" id="horario-body">
+      <div id="horario-dias"></div>
+      <button class="btn btn-primary btn-sm" style="margin-top:16px" onclick="LS_UI.guardarHorarioTienda()"><i class="ti ti-device-floppy"></i>Guardar horario</button>
+    </div>
+  </div>
+</div>
+
 <!-- PÁGINA: MODIFICADORES -->
 <div id="p-modificadores" class="page" data-screen-label="Modificadores">
   <div class="card">
@@ -1988,6 +2005,7 @@ const PAGES = {
   'catalogo-inventario': { title: 'Catálogo de Inventario', sub: 'Listado completo de artículos y stock' },
   modificadores: { title: 'Modificadores',        sub: 'Biblioteca reutilizable de modificadores para el POS' },
   pantallacliente: { title: 'Pantalla de cliente', sub: 'Logo y promociones de la segunda pantalla del POS' },
+  horariotienda: { title: 'Horario de tienda', sub: 'Define cuándo pedidos.suenodeluna.com.mx acepta pedidos' },
 };
 
 const BRANCHES = {
@@ -7579,6 +7597,71 @@ async function guardarVentaDirecta() {
     }
   }
 
+  /* ============ HORARIO DE TIENDA (pedidos.suenodeluna.com.mx) ============
+     horarioTienda/dias/{dia} = {abierto, inicio, fin} en RTDB -- lectura
+     publica (sin login) porque la pagina de pedidos no tiene autenticacion,
+     solo escritura restringida a usuarios autenticados del admin. */
+  const HORARIO_DIAS = [
+    { key: 'domingo', label: 'Domingo' }, { key: 'lunes', label: 'Lunes' }, { key: 'martes', label: 'Martes' },
+    { key: 'miercoles', label: 'Miércoles' }, { key: 'jueves', label: 'Jueves' }, { key: 'viernes', label: 'Viernes' },
+    { key: 'sabado', label: 'Sábado' },
+  ];
+  const HORARIO_DEFAULT = { abierto: true, inicio: '08:00', fin: '20:00' };
+
+  async function renderHorarioTienda() {
+    let dias = {};
+    try {
+      if (!fbDb) throw new Error('Firebase no disponible');
+      await fbAuthReady;
+      const snap = await fbDb.ref('horarioTienda/dias').once('value');
+      dias = snap.val() || {};
+    } catch(e) {
+      console.error('Error cargando horario de tienda:', e);
+      toast('Error', 'No se pudo cargar el horario (revisa la conexión con Firebase)', 'err', 'ti-alert-triangle');
+    }
+    const cont = document.getElementById('horario-dias');
+    if (!cont) return;
+    cont.innerHTML = HORARIO_DIAS.map(d => {
+      const cfg = dias[d.key] || HORARIO_DEFAULT;
+      return `
+      <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var(--line-2)">
+        <div style="width:110px;font-weight:600;font-size:13px">${d.label}</div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx-3);cursor:pointer">
+          <input type="checkbox" id="hor-${d.key}-abierto" ${cfg.abierto ? 'checked' : ''} onchange="LS_UI._horarioToggleDia('${d.key}')" style="width:16px;height:16px;accent-color:var(--terra-claro)">
+          Abierto
+        </label>
+        <input type="time" id="hor-${d.key}-inicio" value="${cfg.inicio || '08:00'}" ${cfg.abierto ? '' : 'disabled'} style="padding:6px 8px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit">
+        <span style="color:var(--tx-4);font-size:12px">a</span>
+        <input type="time" id="hor-${d.key}-fin" value="${cfg.fin || '20:00'}" ${cfg.abierto ? '' : 'disabled'} style="padding:6px 8px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit">
+      </div>`;
+    }).join('');
+  }
+
+  function _horarioToggleDia(dia) {
+    const abierto = document.getElementById(`hor-${dia}-abierto`).checked;
+    document.getElementById(`hor-${dia}-inicio`).disabled = !abierto;
+    document.getElementById(`hor-${dia}-fin`).disabled = !abierto;
+  }
+
+  async function guardarHorarioTienda() {
+    const dias = {};
+    HORARIO_DIAS.forEach(d => {
+      dias[d.key] = {
+        abierto: document.getElementById(`hor-${d.key}-abierto`).checked,
+        inicio: document.getElementById(`hor-${d.key}-inicio`).value || '08:00',
+        fin: document.getElementById(`hor-${d.key}-fin`).value || '20:00',
+      };
+    });
+    try {
+      await fbAuthReady;
+      await fbDb.ref('horarioTienda/dias').set(dias);
+      toast('Horario guardado', 'Se refleja en pedidos.suenodeluna.com.mx de inmediato', 'ok', 'ti-check');
+    } catch(e) {
+      console.error(e);
+      toast('Error al guardar', e.message || '', 'err', 'ti-alert-triangle');
+    }
+  }
+
   async function renderModificadores() {
     const cont = document.getElementById('modif-sucursales');
     if (cont) {
@@ -8673,6 +8756,7 @@ async function guardarVentaDirecta() {
       case 'catalogopos':  await renderCatalogoPOS();   break;
       case 'modificadores': await renderModificadores(); break;
       case 'pantallacliente': await renderPantallaCliente(); break;
+      case 'horariotienda': await renderHorarioTienda(); break;
       case 'catalogo-inventario': await abrirCatalogoInventarioPagina(); break;
     }
   }
@@ -9303,6 +9387,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderModificadores, cambiarSucursalModificadores, buscarModificadores, abrirNuevoModificador, editarModificador,
     _toggleTipoModificador, _agregarOpcionModificador, guardarModificador, confirmarBorrarModificador, ejecutarBorrarModificador,
     renderPantallaCliente, cambiarSucursalPantallaCliente, pcliSubirLogo, pcliSubirPromo, pcliQuitarPromo, pcliGuardarDuracion,
+    renderHorarioTienda, _horarioToggleDia, guardarHorarioTienda,
     closeModal,
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },
