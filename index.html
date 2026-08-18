@@ -1166,6 +1166,7 @@
         <div class="nav-item" data-page="catalogo-inventario" onclick="go('catalogo-inventario',this)"><i class="ti ti-clipboard-data"></i><span class="nav-lbl">Catálogo de inventario</span></div>
         <div class="nav-item" data-page="pantallacliente" onclick="go('pantallacliente',this)"><i class="ti ti-device-tv"></i><span class="nav-lbl">Pantalla de cliente</span></div>
         <div class="nav-item" data-page="horariotienda" onclick="go('horariotienda',this)"><i class="ti ti-clock"></i><span class="nav-lbl">Horario de tienda</span></div>
+        <div class="nav-item" data-page="tiemposproductivos" onclick="go('tiemposproductivos',this)"><i class="ti ti-stopwatch"></i><span class="nav-lbl">Tiempos productivos</span></div>
       </nav>
 
       <div class="sb-foot">
@@ -1869,6 +1870,39 @@
   </div>
 </div>
 
+<!-- PÁGINA: TIEMPOS PRODUCTIVOS -->
+<div id="p-tiemposproductivos" class="page" data-screen-label="Tiempos productivos">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title"><i class="ti ti-stopwatch"></i>Tiempos productivos</div>
+        <div class="card-sub">Tiempo de elaboración por artículo, medido desde que se crea el pedido hasta que se marca "listo" en Estación. Se calcula al cerrar cada turno.</div>
+      </div>
+    </div>
+    <div style="padding:14px 18px 0;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <select id="tp-sucursal-sel" onchange="LS_UI._tpPintarReporte()" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none">
+        <option value="">Todas las sucursales</option>
+      </select>
+    </div>
+    <div style="padding:18px" id="tp-body">
+      <div id="tp-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:28px" id="tp-desgloses"></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div class="card-head">
+      <div>
+        <div class="card-title"><i class="ti ti-target-arrow"></i>Metas de tiempo (semáforo)</div>
+        <div class="card-sub">Verde = dentro de la meta, amarillo = por mejorar, rojo = tiempo excedido. Cambiarlas recalcula el historial completo de inmediato.</div>
+      </div>
+    </div>
+    <div style="padding:18px;display:grid;grid-template-columns:1fr 1fr;gap:24px" id="tp-metas"></div>
+    <div style="padding:0 18px 18px">
+      <button class="btn btn-primary btn-sm" onclick="LS_UI.guardarMetasTiempo()"><i class="ti ti-device-floppy"></i>Guardar metas</button>
+    </div>
+  </div>
+</div>
+
 <!-- PÁGINA: MODIFICADORES -->
 <div id="p-modificadores" class="page" data-screen-label="Modificadores">
   <div class="card">
@@ -2006,6 +2040,7 @@ const PAGES = {
   modificadores: { title: 'Modificadores',        sub: 'Biblioteca reutilizable de modificadores para el POS' },
   pantallacliente: { title: 'Pantalla de cliente', sub: 'Logo y promociones de la segunda pantalla del POS' },
   horariotienda: { title: 'Horario de tienda', sub: 'Define cuándo pedidos.suenodeluna.com.mx acepta pedidos' },
+  tiemposproductivos: { title: 'Tiempos productivos', sub: 'Tiempo de elaboración por artículo, día y hora' },
 };
 
 const BRANCHES = {
@@ -2481,6 +2516,7 @@ const LS_API = (() => {
     DATA_INGRESOS:  'DATA_INGRESOS',
     RECETAS:        'BD_RECETAS',
     RECETAS_DET:    'BD_RECETAS_DETALLES',
+    TIEMPOS:        'BD_TIEMPOS',
   };
 
   // ── ÍNDICES DE COLUMNAS (base 0) ───────────────────────────
@@ -2972,6 +3008,28 @@ const LS_API = (() => {
         correo:  r[COLS.CLIENTES.CORREO]  || '',
         telefono:r[COLS.CLIENTES.TELEFONO]|| '',
       }));
+  }
+
+  // Obtener tiempos de elaboracion (BD_TIEMPOS): ID, SUCURSAL, TURNO, FECHA,
+  // HORA, PRODUCTO, AREA, MINUTOS_ELABORACION, CORTE_ID.
+  async function getBD_TIEMPOS() {
+    try {
+      const rows = await leerHoja(SHEETS.TIEMPOS);
+      if (!rows) return [];
+      return rows.slice(1)
+        .filter(r => r.length > 0 && r[0])
+        .map(r => ({
+          id:        r[0] || '',
+          sucursal:  r[1] || '',
+          turno:     r[2] || '',
+          fecha:     r[3] || '',
+          hora:      r[4] || '',
+          producto:  r[5] || '',
+          area:      r[6] || '',
+          minutos:   parseFloat(r[7]) || 0,
+          corteId:   r[8] || '',
+        }));
+    } catch(e) { console.error('Error cargando tiempos:', e); return []; }
   }
 
   // Obtener recetas
@@ -3855,7 +3913,7 @@ const LS_API = (() => {
   return {
     // Lectura
     getIngresos, getConciliacion, getFacturas,
-    getArticulosDetalle, getClientes, getProveedores, getRecetas,
+    getArticulosDetalle, getClientes, getProveedores, getRecetas, getBD_TIEMPOS,
     getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos, getSucursalesInventario,
     getVentasPorSucursal, aliasSucursal, nombreSucursal, getProductosVenta,
     // Escritura
@@ -7779,6 +7837,176 @@ async function guardarVentaDirecta() {
     }
   }
 
+  /* ============ TIEMPOS PRODUCTIVOS ============
+     Lee BD_TIEMPOS (un renglon por articulo marcado "listo", capturado al
+     cerrar turno en el POS -- pedidos/{suc} se borra al cerrar, asi que esta
+     hoja es el unico historial que sobrevive para comparar dias/semanas).
+     El semaforo NUNCA se guarda fijo: se calcula aqui con las metas actuales
+     (metasTiempo en Firebase), para que cambiarlas recalcule tambien el
+     historial pasado de forma consistente. */
+  const TP_AREA_DEFAULT = { verde: 5, amarillo: 8 };
+  const TP_COLOR = { verde: 'var(--verde)', amarillo: '#d9a441', rojo: 'var(--rojo)' };
+  let _tpDatos = [];
+  let _tpMetas = { barra: { verde: 4, amarillo: 7 }, cocina: { verde: 10, amarillo: 15 } };
+
+  async function renderTiemposProductivos() {
+    // Cada fuente se resuelve por separado (no Promise.all) -- si "metasTiempo"
+    // todavia no tiene reglas publicadas, por ejemplo, no debe tumbar el
+    // reporte completo si los datos de BD_TIEMPOS si cargaron bien.
+    try {
+      _tpDatos = await LS_API.getBD_TIEMPOS();
+    } catch(e) {
+      console.error('Error cargando BD_TIEMPOS:', e);
+      toast('Error', 'No se pudieron cargar los tiempos (revisa la conexión)', 'err', 'ti-alert-triangle');
+    }
+    try {
+      await fbAuthReady;
+      const snapMetas = await fbDb.ref('metasTiempo').once('value');
+      const metasGuardadas = snapMetas.val();
+      if (metasGuardadas) _tpMetas = metasGuardadas;
+    } catch(e) {
+      console.error('Error cargando metas de tiempo (se usan los valores por defecto):', e);
+    }
+    const sel = document.getElementById('tp-sucursal-sel');
+    if (sel) {
+      const sucursales = Array.from(new Set(_tpDatos.map(r => r.sucursal).filter(Boolean))).sort((a,b) => a.localeCompare(b));
+      const actual = sel.value;
+      sel.innerHTML = '<option value="">Todas las sucursales</option>' + sucursales.map(s => `<option value="${_h(s)}">${_h(s)}</option>`).join('');
+      if (sucursales.includes(actual)) sel.value = actual;
+    }
+    _tpPintarMetas();
+    _tpPintarReporte();
+  }
+
+  function _tpSemaforo(area, minutos) {
+    const m = _tpMetas[area] || _tpMetas.barra || TP_AREA_DEFAULT;
+    if (minutos <= m.verde) return 'verde';
+    if (minutos <= m.amarillo) return 'amarillo';
+    return 'rojo';
+  }
+
+  function _tpFechaADiaSemana(fechaStr) {
+    const partes = String(fechaStr || '').split('/');
+    if (partes.length !== 3) return null;
+    const d = new Date(parseInt(partes[2], 10), parseInt(partes[1], 10) - 1, parseInt(partes[0], 10));
+    if (isNaN(d.getTime())) return null;
+    const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    return { nombre: dias[d.getDay()], ix: d.getDay() };
+  }
+
+  function _tpBarraHTML(nombre, prom, n, max) {
+    const pct = Math.min(100, (prom / max) * 100);
+    const color = TP_COLOR[_tpSemaforo('barra', prom)];
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+        <span style="color:var(--tx-2)">${nombre}</span>
+        <span style="color:var(--tx-3)">${prom.toFixed(1)} min · ${n} art.</span>
+      </div>
+      <div style="background:var(--cafe-800);border-radius:6px;height:8px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${color}"></div>
+      </div>
+    </div>`;
+  }
+
+  function _tpPintarReporte() {
+    const sucSel = document.getElementById('tp-sucursal-sel').value;
+    const filtrado = sucSel ? _tpDatos.filter(r => r.sucursal === sucSel) : _tpDatos;
+
+    const kpisCont = document.getElementById('tp-kpis');
+    if (!filtrado.length) {
+      kpisCont.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--tx-4)">Sin datos todavía -- se van juntando cada vez que se cierra un turno con productos marcados "listo" en Estación.</div>`;
+      document.getElementById('tp-desgloses').innerHTML = '';
+      return;
+    }
+
+    const promedio = filtrado.reduce((s, r) => s + r.minutos, 0) / filtrado.length;
+    const conteos = { verde: 0, amarillo: 0, rojo: 0 };
+    filtrado.forEach(r => { conteos[_tpSemaforo(r.area, r.minutos)]++; });
+    const total = filtrado.length;
+    function kpiCard(label, valor, color) {
+      return `<div style="background:var(--cafe-800);border:1px solid var(--line-2);border-radius:var(--r);padding:16px;text-align:center">
+        <div style="font-size:11px;color:var(--tx-4);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">${label}</div>
+        <div style="font-size:24px;font-weight:800;${color ? `color:${color}` : ''}">${valor}</div>
+      </div>`;
+    }
+    kpisCont.innerHTML =
+      kpiCard('Tiempo promedio', promedio.toFixed(1) + ' min') +
+      kpiCard('Artículos medidos', total) +
+      kpiCard('% a tiempo', Math.round(conteos.verde / total * 100) + '%', TP_COLOR.verde) +
+      kpiCard('% por mejorar', Math.round(conteos.amarillo / total * 100) + '%', TP_COLOR.amarillo) +
+      kpiCard('% excedido', Math.round(conteos.rojo / total * 100) + '%', TP_COLOR.rojo);
+
+    const porDia = {};
+    filtrado.forEach(r => {
+      const info = _tpFechaADiaSemana(r.fecha);
+      if (!info) return;
+      if (!porDia[info.nombre]) porDia[info.nombre] = { suma: 0, n: 0, ix: info.ix };
+      porDia[info.nombre].suma += r.minutos; porDia[info.nombre].n++;
+    });
+    const ordenDias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const filasDia = ordenDias.filter(d => porDia[d]).map(d => ({ nombre: d, prom: porDia[d].suma / porDia[d].n, n: porDia[d].n }));
+    const maxDia = Math.max(1, ...filasDia.map(f => f.prom));
+
+    const porHora = {};
+    filtrado.forEach(r => {
+      const hh = parseInt(String(r.hora || '').split(':')[0], 10);
+      if (isNaN(hh)) return;
+      if (!porHora[hh]) porHora[hh] = { suma: 0, n: 0 };
+      porHora[hh].suma += r.minutos; porHora[hh].n++;
+    });
+    const filasHora = Object.keys(porHora).map(Number).sort((a, b) => a - b).map(h => ({ nombre: (h < 10 ? '0' : '') + h + ':00', prom: porHora[h].suma / porHora[h].n, n: porHora[h].n }));
+    const maxHora = Math.max(1, ...filasHora.map(f => f.prom));
+
+    document.getElementById('tp-desgloses').innerHTML = `
+      <div>
+        <div style="font-weight:700;font-size:13px;margin-bottom:12px">Por día de la semana</div>
+        ${filasDia.length ? filasDia.map(f => _tpBarraHTML(f.nombre, f.prom, f.n, maxDia)).join('') : '<div style="color:var(--tx-4);font-size:12px">Sin datos suficientes</div>'}
+      </div>
+      <div>
+        <div style="font-weight:700;font-size:13px;margin-bottom:12px">Por hora del día</div>
+        ${filasHora.length ? filasHora.map(f => _tpBarraHTML(f.nombre, f.prom, f.n, maxHora)).join('') : '<div style="color:var(--tx-4);font-size:12px">Sin datos suficientes</div>'}
+      </div>
+    `;
+  }
+
+  function _tpPintarMetas() {
+    const cont = document.getElementById('tp-metas');
+    if (!cont) return;
+    function bloque(area, label) {
+      const m = _tpMetas[area] || TP_AREA_DEFAULT;
+      return `<div>
+        <div style="font-weight:600;font-size:13px;margin-bottom:10px">${label}</div>
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
+          <span style="width:110px;font-size:12px;color:var(--verde)">🟢 Verde ≤</span>
+          <input type="number" id="tp-meta-${area}-verde" value="${m.verde}" min="1" style="width:80px;padding:6px 8px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px"> min
+        </div>
+        <div style="display:flex;gap:12px;align-items:center">
+          <span style="width:110px;font-size:12px;color:#d9a441">🟡 Amarillo ≤</span>
+          <input type="number" id="tp-meta-${area}-amarillo" value="${m.amarillo}" min="1" style="width:80px;padding:6px 8px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px"> min
+        </div>
+        <div style="font-size:11px;color:var(--tx-4);margin-top:6px">Arriba de esto se marca en rojo</div>
+      </div>`;
+    }
+    cont.innerHTML = bloque('barra', 'Barra (bebidas)') + bloque('cocina', 'Cocina (alimentos)');
+  }
+
+  async function guardarMetasTiempo() {
+    const metas = {
+      barra: { verde: parseFloat(document.getElementById('tp-meta-barra-verde').value) || 4, amarillo: parseFloat(document.getElementById('tp-meta-barra-amarillo').value) || 7 },
+      cocina: { verde: parseFloat(document.getElementById('tp-meta-cocina-verde').value) || 10, amarillo: parseFloat(document.getElementById('tp-meta-cocina-amarillo').value) || 15 },
+    };
+    try {
+      await fbAuthReady;
+      await fbDb.ref('metasTiempo').set(metas);
+      _tpMetas = metas;
+      toast('Metas guardadas', 'El semáforo se recalculó con los nuevos valores', 'ok', 'ti-check');
+      _tpPintarReporte();
+    } catch(e) {
+      console.error(e);
+      toast('Error al guardar', e.message || '', 'err', 'ti-alert-triangle');
+    }
+  }
+
   async function renderModificadores() {
     const cont = document.getElementById('modif-sucursales');
     if (cont) {
@@ -8874,6 +9102,7 @@ async function guardarVentaDirecta() {
       case 'modificadores': await renderModificadores(); break;
       case 'pantallacliente': await renderPantallaCliente(); break;
       case 'horariotienda': await renderHorarioTienda(); break;
+      case 'tiemposproductivos': await renderTiemposProductivos(); break;
       case 'catalogo-inventario': await abrirCatalogoInventarioPagina(); break;
     }
   }
@@ -9505,6 +9734,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     _toggleTipoModificador, _agregarOpcionModificador, guardarModificador, confirmarBorrarModificador, ejecutarBorrarModificador,
     renderPantallaCliente, cambiarSucursalPantallaCliente, pcliSubirLogo, pcliSubirPromo, pcliQuitarPromo, pcliGuardarDuracion,
     renderHorarioTienda, _horarioToggleDia, guardarHorarioTienda,
+    renderTiemposProductivos, _tpPintarReporte, guardarMetasTiempo,
     closeModal,
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },

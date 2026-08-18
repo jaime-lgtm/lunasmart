@@ -42,6 +42,7 @@ const HOJAS = {
   CLIENTES_DOM:   'CLIENTES_DOMICILIO',   // clientes de domicilio (POS)
   RECETAS:        'BD_RECETAS',
   RECETAS_DET:    'BD_RECETAS_DETALLES',
+  TIEMPOS:        'BD_TIEMPOS',
 };
 
 // ── JSON OUTPUT ─────────────────────────────────────────────────────────────
@@ -143,6 +144,7 @@ function doGet(e) {
     getVENTASPARROT:               HOJAS.VENTAS_PARROT,
     getBD_RECETAS:                 HOJAS.RECETAS,
     getBD_RECETAS_DETALLES:        HOJAS.RECETAS_DET,
+    getBD_TIEMPOS:                 HOJAS.TIEMPOS,
   };
 
   if (accion === 'getUSUARIOS') return _getUsuarios();
@@ -205,6 +207,7 @@ function doPost(e) {
     case 'registrarReceta':            return _registrarReceta(datos);
     case 'actualizarReceta':           return _actualizarReceta(datos);
     case 'borrarReceta':               return _borrarReceta(datos);
+    case 'registrarTiempos':           return _registrarTiempos(datos);
     case 'guardarInventarioFisico':    return _guardarInventarioFisico(datos);
     case 'sumarStockPorCompra':        return _sumarStockPorCompra(datos);
     case 'actualizarMinMaxInventario': return _actualizarMinMaxInventario(datos);
@@ -952,6 +955,38 @@ function _borrarReceta(b) {
     }
     if (!borrada) return _err('Receta no encontrada: ' + id);
     return _json({ status: 'ok' });
+  } catch (e) { return _err(e.message); }
+}
+
+// Un renglon por articulo marcado "listo" en Estacion, capturado justo antes
+// de cerrar turno (pedidos/{suc} se borra al cerrar, asi que esto es lo unico
+// que sobrevive para poder comparar dias/semanas despues). Columnas de
+// BD_TIEMPOS: ID, SUCURSAL, TURNO, FECHA, HORA, PRODUCTO, AREA,
+// MINUTOS_ELABORACION, CORTE_ID. El semaforo (verde/amarillo/rojo) NO se
+// guarda aqui -- se calcula al vuelo en el reporte usando las metas
+// configuradas en ese momento (metasTiempo en Firebase), para que cambiar
+// las metas despues recalcule tambien el historial de forma consistente.
+function _registrarTiempos(b) {
+  try {
+    const registros = b.registros || [];
+    if (!registros.length) return _json({ status: 'ok', insertados: 0 });
+    const sh = _getSheet(HOJAS.TIEMPOS);
+    const filas = registros.map(function(r) {
+      return [
+        Utilities.getUuid().substring(0, 8),
+        r.sucursal || '',
+        r.turno || '',
+        r.fecha || '',
+        r.hora || '',
+        r.producto || '',
+        r.area || '',
+        r.minutos != null ? r.minutos : '',
+        r.corteId || '',
+      ];
+    });
+    const fi = _siguienteFilaLibre(sh, 1);
+    sh.getRange(fi, 1, filas.length, 9).setValues(filas);
+    return _json({ status: 'ok', insertados: filas.length });
   } catch (e) { return _err(e.message); }
 }
 
