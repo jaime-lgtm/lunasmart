@@ -1807,6 +1807,10 @@
 .pcli-thumb-lg img{object-fit:cover}
 .pcli-hint{font-size:12px;color:var(--tx-4);margin-top:6px;line-height:1.5}
 .pcli-promo-slot{display:flex;flex-direction:column;gap:6px}
+.pcli-status{font-size:12px;font-weight:600;margin-top:6px;min-height:16px}
+.pcli-status.uploading{color:var(--tx-4)}
+.pcli-status.ok{color:var(--verde)}
+.pcli-status.err{color:var(--rojo)}
 </style>
 <div id="p-pantallacliente" class="page" data-screen-label="Pantalla de cliente">
   <div class="card">
@@ -1825,6 +1829,7 @@
           <div style="flex:1">
             <input type="file" accept="image/*" id="pcli-logo-input" onchange="LS_UI.pcliSubirLogo(this.files[0])">
             <div class="pcli-hint">PNG con fondo transparente recomendado -- se muestra dentro de un cuadro de 120×120px. Si no subes uno, se usa el logo genérico "LS".</div>
+            <div class="pcli-status" id="pcli-logo-status"></div>
           </div>
         </div>
       </div>
@@ -1944,6 +1949,11 @@ try {
   });
   fbDb = firebase.database();
   fbStorage = firebase.storage();
+  // Por defecto el SDK reintenta subidas fallidas hasta 2 minutos antes de
+  // avisar del error -- muy largo para feedback en pantalla; se acorta para
+  // que un fallo real (ej. bucket de Storage aun no listo) se note pronto.
+  fbStorage.setMaxUploadRetryTime(12000);
+  fbStorage.setMaxOperationRetryTime(12000);
   fbAuthReady = firebase.auth().signInAnonymously().catch(function(e){ console.error('Firebase auth', e); });
 } catch(e) { console.error('No se pudo inicializar Firebase', e); }
 
@@ -7366,9 +7376,10 @@ async function guardarVentaDirecta() {
       for (let ix = 0; ix < total; ix++) {
         const url = promos[ix] || '';
         html += `<div class="pcli-promo-slot">
-          <div class="pcli-thumb pcli-thumb-lg">${url ? `<img src="${url}">` : '<i class="ti ti-photo"></i>'}</div>
+          <div class="pcli-thumb pcli-thumb-lg" id="pcli-promo-thumb-${ix}">${url ? `<img src="${url}">` : '<i class="ti ti-photo"></i>'}</div>
           <input type="file" accept="image/*" onchange="LS_UI.pcliSubirPromo(${ix}, this.files[0])">
           ${url ? `<button class="btn btn-sm" onclick="LS_UI.pcliQuitarPromo(${ix})"><i class="ti ti-trash"></i>Quitar</button>` : ''}
+          <div class="pcli-status" id="pcli-promo-status-${ix}"></div>
         </div>`;
       }
       slots.innerHTML = html;
@@ -7379,39 +7390,75 @@ async function guardarVentaDirecta() {
 
   function cambiarSucursalPantallaCliente(sucId) { _pcliSucursal = sucId; renderPantallaCliente(); }
 
+  // Vista previa local instantanea (antes de que termine -- o falle -- la subida
+  // real a Storage), para que el usuario vea de inmediato que archivo escogio.
+  function _pcliPreviewLocal(file, thumbEl) {
+    return new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => { if (thumbEl) thumbEl.innerHTML = `<img src="${reader.result}">`; resolve(); };
+      reader.onerror = () => resolve();
+      reader.readAsDataURL(file);
+    });
+  }
+  function _pcliEstado(el, texto, clase) {
+    if (!el) return;
+    el.className = 'pcli-status' + (clase ? ' ' + clase : '');
+    el.textContent = texto;
+  }
+  function _pcliConTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Tiempo de espera agotado')), ms)),
+    ]);
+  }
+  function _pcliMsgError(e) {
+    const base = e && e.message ? e.message : 'Error desconocido';
+    // El error mas comun en este momento es que Firebase Storage todavia no
+    // termina de activarse en el proyecto (tarda minutos/horas tras pasar a
+    // Blaze) -- se agrega el aviso solo quand la subida realmente falla, para
+    // no confundir una vez que Storage ya este funcionando.
+    return base + ' -- si Storage se activó hace poco, puede tardar en estar listo. Intenta de nuevo en un rato.';
+  }
+
   async function pcliSubirLogo(file) {
     if (!file) return;
+    const thumb = document.getElementById('pcli-logo-thumb');
+    const status = document.getElementById('pcli-logo-status');
+    await _pcliPreviewLocal(file, thumb);
+    _pcliEstado(status, 'Subiendo...', 'uploading');
     try {
       await fbAuthReady;
       const ref = fbStorage.ref('displayAssets/' + _pcliSucursal + '/logo');
-      await ref.put(file);
+      await _pcliConTimeout(ref.put(file), 15000);
       const url = await ref.getDownloadURL();
       _pcliConfig.logoUrl = url;
       await fbDb.ref('displayConfig/' + _pcliSucursal).update({ logoUrl: url });
-      _pcliPintar();
-      toast('Logo actualizado', 'Se refleja en la pantalla del POS en unos segundos', 'ok', 'ti-check');
+      _pcliEstado(status, '✓ Subido -- se refleja en la pantalla del POS en unos segundos', 'ok');
     } catch(e) {
       console.error(e);
-      toast('Error al subir el logo', e.message || '', 'err', 'ti-alert-triangle');
+      _pcliEstado(status, '⚠ No se pudo subir: ' + _pcliMsgError(e), 'err');
     }
   }
 
   async function pcliSubirPromo(ix, file) {
     if (!file) return;
+    const thumb = document.getElementById('pcli-promo-thumb-' + ix);
+    const status = document.getElementById('pcli-promo-status-' + ix);
+    await _pcliPreviewLocal(file, thumb);
+    _pcliEstado(status, 'Subiendo...', 'uploading');
     try {
       await fbAuthReady;
       const ref = fbStorage.ref('displayAssets/' + _pcliSucursal + '/promo_' + ix);
-      await ref.put(file);
+      await _pcliConTimeout(ref.put(file), 15000);
       const url = await ref.getDownloadURL();
       const promos = (_pcliConfig.promoImages || []).slice();
       promos[ix] = url;
       _pcliConfig.promoImages = promos;
       await fbDb.ref('displayConfig/' + _pcliSucursal).update({ promoImages: promos });
-      _pcliPintar();
-      toast('Promoción actualizada', 'Se refleja en la pantalla del POS en unos segundos', 'ok', 'ti-check');
+      _pcliEstado(status, '✓ Subido -- se refleja en la pantalla del POS en unos segundos', 'ok');
     } catch(e) {
       console.error(e);
-      toast('Error al subir la imagen', e.message || '', 'err', 'ti-alert-triangle');
+      _pcliEstado(status, '⚠ No se pudo subir: ' + _pcliMsgError(e), 'err');
     }
   }
 
