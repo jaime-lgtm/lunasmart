@@ -1048,9 +1048,15 @@ function _crearPreferenciaMP(b) {
 // terminal a esa caja, y usar _mpListarTerminales para obtener su
 // terminal_id real (algo como "NEWLAND_N950__N950NCB801293324"). Ese id se
 // guarda en Firebase (terminalesMP/{sucursal}) desde el admin.
+//
+// Usa un Access Token SEPARADO de MP_ACCESS_TOKEN (el de Checkout Pro /
+// pagos online) porque en Mercado Pago cada aplicación se declara para un
+// solo "producto integrado" (Pagos online O Pagos presencial) -- se creó una
+// segunda aplicación exclusiva para Point, con su propio token, en vez de
+// arriesgar la que ya funciona para pedidos.suenodeluna.com.mx.
 function _mpHeaders() {
-  var token = PropertiesService.getScriptProperties().getProperty('MP_ACCESS_TOKEN');
-  if (!token) throw new Error('Falta configurar MP_ACCESS_TOKEN en Propiedades del script');
+  var token = PropertiesService.getScriptProperties().getProperty('MP_ACCESS_TOKEN_POINT');
+  if (!token) throw new Error('Falta configurar MP_ACCESS_TOKEN_POINT en Propiedades del script (token de la app de Pagos presenciales, distinto al de pagos en línea)');
   return { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
 }
 

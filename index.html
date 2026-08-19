@@ -1919,7 +1919,7 @@
         1. Crea una tienda y una caja para tu negocio en tu cuenta de Mercado Pago.<br>
         2. Asocia tu terminal física a esa caja desde la app móvil.<br>
         3. Activa el "Modo integrado / PDV" de la terminal (no "Standalone").<br>
-        4. Guarda tu Access Token en Apps Script (Configuración del proyecto → Propiedades del script → <code>MP_ACCESS_TOKEN</code>).<br>
+        4. Crea una aplicación aparte en Mercado Pago con el producto "Pagos presenciales" (no la misma app del pago en línea) y guarda su Access Token en Apps Script (Configuración del proyecto → Propiedades del script → <code>MP_ACCESS_TOKEN_POINT</code>).<br>
         Hecho eso, usa el botón de abajo para ver el ID exacto de tu terminal y copiarlo en la sucursal correspondiente.
       </div>
       <button class="btn btn-outline btn-sm" onclick="LS_UI.mpListarTerminalesUI()"><i class="ti ti-refresh"></i>Buscar terminales conectadas</button>
