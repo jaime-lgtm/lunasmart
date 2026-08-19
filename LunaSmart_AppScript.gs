@@ -209,6 +209,10 @@ function doPost(e) {
     case 'borrarReceta':               return _borrarReceta(datos);
     case 'registrarTiempos':           return _registrarTiempos(datos);
     case 'crearPreferenciaMP':         return _crearPreferenciaMP(datos);
+    case 'mpListarTerminales':         return _mpListarTerminales();
+    case 'mpCrearCobroTerminal':       return _mpCrearCobroTerminal(datos);
+    case 'mpConsultarCobroTerminal':   return _mpConsultarCobroTerminal(datos);
+    case 'mpCancelarCobroTerminal':    return _mpCancelarCobroTerminal(datos);
     case 'guardarInventarioFisico':    return _guardarInventarioFisico(datos);
     case 'sumarStockPorCompra':        return _sumarStockPorCompra(datos);
     case 'actualizarMinMaxInventario': return _actualizarMinMaxInventario(datos);
@@ -1035,6 +1039,80 @@ function _crearPreferenciaMP(b) {
       return _err('Mercado Pago rechazó la solicitud: ' + (data.message || resp.getContentText()));
     }
     return _json({ status: 'ok', initPoint: data.init_point, preferenceId: data.id });
+  } catch (e) { return _err(e.message); }
+}
+
+// ── MERCADO PAGO POINT (terminal física, cobro con tarjeta desde el POS) ──
+// Requiere que la terminal ya esté dada de alta en modo PDV (integrado)
+// desde la app móvil de Mercado Pago: crear tienda + caja, asociar la
+// terminal a esa caja, y usar _mpListarTerminales para obtener su
+// terminal_id real (algo como "NEWLAND_N950__N950NCB801293324"). Ese id se
+// guarda en Firebase (terminalesMP/{sucursal}) desde el admin.
+function _mpHeaders() {
+  var token = PropertiesService.getScriptProperties().getProperty('MP_ACCESS_TOKEN');
+  if (!token) throw new Error('Falta configurar MP_ACCESS_TOKEN en Propiedades del script');
+  return { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
+}
+
+function _mpListarTerminales() {
+  try {
+    var resp = UrlFetchApp.fetch('https://api.mercadopago.com/terminals/v1/list', {
+      method: 'get', headers: _mpHeaders(), muteHttpExceptions: true,
+    });
+    var data = JSON.parse(resp.getContentText());
+    if (resp.getResponseCode() >= 400) return _err('Mercado Pago: ' + (data.message || resp.getContentText()));
+    return _json({ status: 'ok', terminales: data.terminals || data.results || [] });
+  } catch (e) { return _err(e.message); }
+}
+
+function _mpCrearCobroTerminal(b) {
+  try {
+    var terminalId = b.terminalId;
+    var monto = parseFloat(b.monto);
+    if (!terminalId) return _err('Falta el ID de la terminal (configúralo en el admin)');
+    if (!(monto > 0)) return _err('Monto inválido');
+    var payload = {
+      type: 'point',
+      external_reference: b.referencia || ('pos_' + Date.now()),
+      transactions: { payments: [{ amount: monto.toFixed(2) }] },
+      config: { point: { terminal_id: terminalId } },
+    };
+    var headers = _mpHeaders();
+    headers['X-Idempotency-Key'] = Utilities.getUuid();
+    var resp = UrlFetchApp.fetch('https://api.mercadopago.com/v1/orders', {
+      method: 'post', headers: headers, payload: JSON.stringify(payload), muteHttpExceptions: true,
+    });
+    var data = JSON.parse(resp.getContentText());
+    if (resp.getResponseCode() >= 400) return _err('Mercado Pago rechazó el cobro: ' + (data.message || resp.getContentText()));
+    return _json({ status: 'ok', orderId: data.id, estado: data.status });
+  } catch (e) { return _err(e.message); }
+}
+
+function _mpConsultarCobroTerminal(b) {
+  try {
+    var orderId = b.orderId;
+    if (!orderId) return _err('Falta el ID de la orden');
+    var resp = UrlFetchApp.fetch('https://api.mercadopago.com/v1/orders/' + orderId, {
+      method: 'get', headers: _mpHeaders(), muteHttpExceptions: true,
+    });
+    var data = JSON.parse(resp.getContentText());
+    if (resp.getResponseCode() >= 400) return _err('Mercado Pago: ' + (data.message || resp.getContentText()));
+    return _json({ status: 'ok', estado: data.status, detalle: data.status_detail || '' });
+  } catch (e) { return _err(e.message); }
+}
+
+function _mpCancelarCobroTerminal(b) {
+  try {
+    var orderId = b.orderId;
+    if (!orderId) return _err('Falta el ID de la orden');
+    var headers = _mpHeaders();
+    headers['X-Idempotency-Key'] = Utilities.getUuid();
+    var resp = UrlFetchApp.fetch('https://api.mercadopago.com/v1/orders/' + orderId + '/cancel', {
+      method: 'post', headers: headers, muteHttpExceptions: true,
+    });
+    var data = JSON.parse(resp.getContentText());
+    if (resp.getResponseCode() >= 400) return _err('No se pudo cancelar en la terminal: ' + (data.message || resp.getContentText()));
+    return _json({ status: 'ok', estado: data.status });
   } catch (e) { return _err(e.message); }
 }
 

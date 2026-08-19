@@ -1167,6 +1167,7 @@
         <div class="nav-item" data-page="pantallacliente" onclick="go('pantallacliente',this)"><i class="ti ti-device-tv"></i><span class="nav-lbl">Pantalla de cliente</span></div>
         <div class="nav-item" data-page="horariotienda" onclick="go('horariotienda',this)"><i class="ti ti-clock"></i><span class="nav-lbl">Horario de tienda</span></div>
         <div class="nav-item" data-page="tiemposproductivos" onclick="go('tiemposproductivos',this)"><i class="ti ti-stopwatch"></i><span class="nav-lbl">Tiempos productivos</span></div>
+        <div class="nav-item" data-page="terminalmp" onclick="go('terminalmp',this)"><i class="ti ti-credit-card"></i><span class="nav-lbl">Terminal Mercado Pago</span></div>
       </nav>
 
       <div class="sb-foot">
@@ -1903,6 +1904,34 @@
   </div>
 </div>
 
+<!-- PÁGINA: TERMINAL MERCADO PAGO -->
+<div id="p-terminalmp" class="page" data-screen-label="Terminal Mercado Pago">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title"><i class="ti ti-credit-card"></i>Terminal física Mercado Pago</div>
+        <div class="card-sub">Al cobrar "Tarjeta" en Sueño de Luna POS, el monto se envía solo a la terminal asociada a esa sucursal -- sin teclear nada en la terminal.</div>
+      </div>
+    </div>
+    <div style="padding:18px 18px 8px">
+      <div style="background:var(--cafe-800);border:1px solid var(--line-2);border-radius:var(--r);padding:14px;font-size:12.5px;color:var(--tx-3);line-height:1.6;margin-bottom:18px">
+        <b style="color:var(--tx)">Antes de configurar aquí, en la app de Mercado Pago (una sola vez):</b><br>
+        1. Crea una tienda y una caja para tu negocio en tu cuenta de Mercado Pago.<br>
+        2. Asocia tu terminal física a esa caja desde la app móvil.<br>
+        3. Activa el "Modo integrado / PDV" de la terminal (no "Standalone").<br>
+        4. Guarda tu Access Token en Apps Script (Configuración del proyecto → Propiedades del script → <code>MP_ACCESS_TOKEN</code>).<br>
+        Hecho eso, usa el botón de abajo para ver el ID exacto de tu terminal y copiarlo en la sucursal correspondiente.
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="LS_UI.mpListarTerminalesUI()"><i class="ti ti-refresh"></i>Buscar terminales conectadas</button>
+      <div id="mp-terminales-encontradas" style="margin-top:10px;font-size:12.5px;color:var(--tx-3)"></div>
+    </div>
+    <div style="padding:8px 18px 18px" id="mp-terminal-body">
+      <div id="mp-terminal-filas"></div>
+      <button class="btn btn-primary btn-sm" style="margin-top:16px" onclick="LS_UI.guardarTerminalesMP()"><i class="ti ti-device-floppy"></i>Guardar</button>
+    </div>
+  </div>
+</div>
+
 <!-- PÁGINA: MODIFICADORES -->
 <div id="p-modificadores" class="page" data-screen-label="Modificadores">
   <div class="card">
@@ -2041,6 +2070,7 @@ const PAGES = {
   pantallacliente: { title: 'Pantalla de cliente', sub: 'Logo y promociones de la segunda pantalla del POS' },
   horariotienda: { title: 'Horario de tienda', sub: 'Define cuándo pedidos.suenodeluna.com.mx acepta pedidos' },
   tiemposproductivos: { title: 'Tiempos productivos', sub: 'Tiempo de elaboración por artículo, día y hora' },
+  terminalmp: { title: 'Terminal Mercado Pago', sub: 'Cobro automático con la terminal física por sucursal' },
 };
 
 const BRANCHES = {
@@ -7837,6 +7867,64 @@ async function guardarVentaDirecta() {
     }
   }
 
+  /* ============ TERMINAL FÍSICA MERCADO PAGO (cobro con tarjeta en POS) ====
+     terminalesMP/{sucursalId} = terminal_id en RTDB -- el POS lo lee para
+     saber a qué terminal enviar el cobro cuando el cajero selecciona
+     "Tarjeta". Usa los mismos IDs de sucursal que CATPOS_SUCURSALES/POS
+     (cafeteria, grano, helfy, eventos, barbacoa), no los del sidebar. */
+  async function renderTerminalMP() {
+    let mapa = {};
+    try {
+      if (!fbDb) throw new Error('Firebase no disponible');
+      await fbAuthReady;
+      const snap = await fbDb.ref('terminalesMP').once('value');
+      mapa = snap.val() || {};
+    } catch(e) {
+      console.error('Error cargando terminalesMP:', e);
+      toast('Error', 'No se pudo cargar la configuración (revisa Firebase)', 'err', 'ti-alert-triangle');
+    }
+    const cont = document.getElementById('mp-terminal-filas');
+    if (!cont) return;
+    cont.innerHTML = CATPOS_SUCURSALES.map(s => `
+      <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var(--line-2)">
+        <div style="width:190px;font-weight:600;font-size:13px">${s.nombre}</div>
+        <input type="text" id="mpterm-${s.id}" value="${mapa[s.id] || ''}" placeholder="ID de terminal (ej. NEWLAND_N950__XXXXXXXX)" style="flex:1;padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit">
+      </div>`).join('');
+  }
+
+  async function guardarTerminalesMP() {
+    const mapa = {};
+    CATPOS_SUCURSALES.forEach(s => {
+      const v = (document.getElementById(`mpterm-${s.id}`).value || '').trim();
+      if (v) mapa[s.id] = v;
+    });
+    try {
+      await fbAuthReady;
+      await fbDb.ref('terminalesMP').set(mapa);
+      toast('Guardado', 'El POS ya puede cobrar con la terminal configurada', 'ok', 'ti-check');
+    } catch(e) {
+      console.error(e);
+      toast('Error al guardar', e.message || '', 'err', 'ti-alert-triangle');
+    }
+  }
+
+  async function mpListarTerminalesUI() {
+    const cont = document.getElementById('mp-terminales-encontradas');
+    if (cont) cont.innerHTML = 'Buscando terminales...';
+    const res = await escribirViaScript('mpListarTerminales', {});
+    if (!res || res.status !== 'ok') {
+      if (cont) cont.innerHTML = `<span style="color:var(--rojo)">${(res && res.msg) || 'No se pudo consultar Mercado Pago'}</span>`;
+      return;
+    }
+    const terminales = res.terminales || [];
+    if (!terminales.length) {
+      if (cont) cont.innerHTML = 'No se encontró ninguna terminal asociada a esta cuenta todavía.';
+      return;
+    }
+    if (cont) cont.innerHTML = '<b style="color:var(--tx)">Terminales encontradas (copia el ID a la sucursal correcta):</b><br>' +
+      terminales.map(t => `• <code>${t.id}</code> — modo: ${t.operating_mode || '?'}`).join('<br>');
+  }
+
   /* ============ TIEMPOS PRODUCTIVOS ============
      Lee BD_TIEMPOS (un renglon por articulo marcado "listo", capturado al
      cerrar turno en el POS -- pedidos/{suc} se borra al cerrar, asi que esta
@@ -9103,6 +9191,7 @@ async function guardarVentaDirecta() {
       case 'pantallacliente': await renderPantallaCliente(); break;
       case 'horariotienda': await renderHorarioTienda(); break;
       case 'tiemposproductivos': await renderTiemposProductivos(); break;
+      case 'terminalmp': await renderTerminalMP(); break;
       case 'catalogo-inventario': await abrirCatalogoInventarioPagina(); break;
     }
   }
@@ -9735,6 +9824,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderPantallaCliente, cambiarSucursalPantallaCliente, pcliSubirLogo, pcliSubirPromo, pcliQuitarPromo, pcliGuardarDuracion,
     renderHorarioTienda, _horarioToggleDia, guardarHorarioTienda,
     renderTiemposProductivos, _tpPintarReporte, guardarMetasTiempo,
+    renderTerminalMP, guardarTerminalesMP, mpListarTerminalesUI,
     closeModal,
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },
