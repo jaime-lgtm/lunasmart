@@ -208,6 +208,7 @@ function doPost(e) {
     case 'actualizarReceta':           return _actualizarReceta(datos);
     case 'borrarReceta':               return _borrarReceta(datos);
     case 'registrarTiempos':           return _registrarTiempos(datos);
+    case 'crearPreferenciaMP':         return _crearPreferenciaMP(datos);
     case 'guardarInventarioFisico':    return _guardarInventarioFisico(datos);
     case 'sumarStockPorCompra':        return _sumarStockPorCompra(datos);
     case 'actualizarMinMaxInventario': return _actualizarMinMaxInventario(datos);
@@ -987,6 +988,53 @@ function _registrarTiempos(b) {
     const fi = _siguienteFilaLibre(sh, 1);
     sh.getRange(fi, 1, filas.length, 9).setValues(filas);
     return _json({ status: 'ok', insertados: filas.length });
+  } catch (e) { return _err(e.message); }
+}
+
+// ── MERCADO PAGO (Checkout Pro para pedidos.suenodeluna.com.mx) ───────────
+// El Access Token NUNCA va aqui en el codigo (a diferencia de WRITE_TOKEN):
+// se puede mover dinero real, asi que se guarda en Propiedades del Script
+// (Configuracion del proyecto -> Propiedades del script -> MP_ACCESS_TOKEN),
+// que no viaja en el archivo .gs ni queda visible para nadie que solo tenga
+// este texto.
+function _crearPreferenciaMP(b) {
+  try {
+    const accessToken = PropertiesService.getScriptProperties().getProperty('MP_ACCESS_TOKEN');
+    if (!accessToken) return _err('Falta configurar MP_ACCESS_TOKEN en Propiedades del script (Configuración del proyecto de Apps Script)');
+    const items = (b.items || []).map(function(it) {
+      return {
+        title: String(it.nombre || '').substring(0, 256) || 'Producto',
+        quantity: parseInt(it.cantidad, 10) || 1,
+        unit_price: parseFloat(it.precio) || 0,
+        currency_id: 'MXN',
+      };
+    }).filter(function(it) { return it.unit_price > 0; });
+    if (!items.length) return _err('Sin artículos válidos para cobrar');
+    const baseUrl = b.baseUrl || 'https://pedidos.suenodeluna.com.mx';
+    const payload = {
+      items: items,
+      payer: { name: b.nombre || '', phone: { number: b.telefono || '' } },
+      back_urls: {
+        success: baseUrl + '?mp_status=success',
+        failure: baseUrl + '?mp_status=failure',
+        pending: baseUrl + '?mp_status=pending',
+      },
+      auto_return: 'approved',
+      external_reference: b.referencia || ('pedido_' + Date.now()),
+      statement_descriptor: 'SUENO DE LUNA',
+    };
+    const resp = UrlFetchApp.fetch('https://api.mercadopago.com/checkout/preferences', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + accessToken },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true,
+    });
+    const data = JSON.parse(resp.getContentText());
+    if (resp.getResponseCode() >= 400) {
+      return _err('Mercado Pago rechazó la solicitud: ' + (data.message || resp.getContentText()));
+    }
+    return _json({ status: 'ok', initPoint: data.init_point, preferenceId: data.id });
   } catch (e) { return _err(e.message); }
 }
 
