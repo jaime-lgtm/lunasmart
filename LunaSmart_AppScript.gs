@@ -990,6 +990,11 @@ function _registrarTiempos(b) {
       ];
     });
     const fi = _siguienteFilaLibre(sh, 1);
+    // HORA (columna 5) se guarda como texto plano "HH:MM" -- si no se fuerza
+    // el formato ANTES de escribir, Sheets la auto-convierte a un serial de
+    // fecha/hora y la columna termina mostrando "30/12/1899" (su fecha cero),
+    // perdiendo la hora real que necesita el desglose "Por hora del día".
+    sh.getRange(fi, 5, filas.length, 1).setNumberFormat('@');
     sh.getRange(fi, 1, filas.length, 9).setValues(filas);
     return _json({ status: 'ok', insertados: filas.length });
   } catch (e) { return _err(e.message); }
