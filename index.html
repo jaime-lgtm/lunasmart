@@ -1166,7 +1166,6 @@
         <div class="nav-item" data-page="catalogo-inventario" onclick="go('catalogo-inventario',this)"><i class="ti ti-clipboard-data"></i><span class="nav-lbl">Catálogo de inventario</span></div>
         <div class="nav-item" data-page="pantallacliente" onclick="go('pantallacliente',this)"><i class="ti ti-device-tv"></i><span class="nav-lbl">Pantalla de cliente</span></div>
         <div class="nav-item" data-page="horariotienda" onclick="go('horariotienda',this)"><i class="ti ti-clock"></i><span class="nav-lbl">Horario de tienda</span></div>
-        <div class="nav-item" data-page="tiemposproductivos" onclick="go('tiemposproductivos',this)"><i class="ti ti-stopwatch"></i><span class="nav-lbl">Tiempos productivos</span></div>
         <div class="nav-item" data-page="terminalmp" onclick="go('terminalmp',this)"><i class="ti ti-credit-card"></i><span class="nav-lbl">Terminal Mercado Pago</span></div>
       </nav>
 
@@ -1320,6 +1319,35 @@
     <div class="card-head"><div><div class="card-title"><i class="ti ti-clock-hour-9"></i>Turno mañana vs tarde</div><div class="card-sub" id="dash-turno-sub">Venta por turno del período</div></div></div>
     <div class="card-pad" id="dash-turno">
       <div style="padding:20px;text-align:center;color:var(--tx-4);font-size:12px"><i class="ti ti-loader-2"></i> Cargando...</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title"><i class="ti ti-stopwatch"></i>Tiempos productivos</div>
+        <div class="card-sub">Tiempo de elaboración por artículo, medido desde que se crea el pedido hasta que se marca "listo" en Estación. Se calcula al cerrar cada turno.</div>
+      </div>
+    </div>
+    <div style="padding:14px 18px 0;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <select id="tp-sucursal-sel" onchange="LS_UI._tpPintarReporte()" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none">
+        <option value="">Todas las sucursales</option>
+      </select>
+    </div>
+    <div style="padding:18px" id="tp-body">
+      <div id="tp-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:28px" id="tp-desgloses"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title"><i class="ti ti-target-arrow"></i>Metas de tiempo (semáforo)</div>
+        <div class="card-sub">Verde = dentro de la meta, amarillo = por mejorar, rojo = tiempo excedido. Cambiarlas recalcula el historial completo de inmediato.</div>
+      </div>
+    </div>
+    <div style="padding:18px;display:grid;grid-template-columns:1fr 1fr;gap:24px" id="tp-metas"></div>
+    <div style="padding:0 18px 18px">
+      <button class="btn btn-primary btn-sm" onclick="LS_UI.guardarMetasTiempo()"><i class="ti ti-device-floppy"></i>Guardar metas</button>
     </div>
   </div>
 </div>
@@ -1871,39 +1899,6 @@
   </div>
 </div>
 
-<!-- PÁGINA: TIEMPOS PRODUCTIVOS -->
-<div id="p-tiemposproductivos" class="page" data-screen-label="Tiempos productivos">
-  <div class="card">
-    <div class="card-head">
-      <div>
-        <div class="card-title"><i class="ti ti-stopwatch"></i>Tiempos productivos</div>
-        <div class="card-sub">Tiempo de elaboración por artículo, medido desde que se crea el pedido hasta que se marca "listo" en Estación. Se calcula al cerrar cada turno.</div>
-      </div>
-    </div>
-    <div style="padding:14px 18px 0;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <select id="tp-sucursal-sel" onchange="LS_UI._tpPintarReporte()" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none">
-        <option value="">Todas las sucursales</option>
-      </select>
-    </div>
-    <div style="padding:18px" id="tp-body">
-      <div id="tp-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:28px" id="tp-desgloses"></div>
-    </div>
-  </div>
-  <div class="card" style="margin-top:16px">
-    <div class="card-head">
-      <div>
-        <div class="card-title"><i class="ti ti-target-arrow"></i>Metas de tiempo (semáforo)</div>
-        <div class="card-sub">Verde = dentro de la meta, amarillo = por mejorar, rojo = tiempo excedido. Cambiarlas recalcula el historial completo de inmediato.</div>
-      </div>
-    </div>
-    <div style="padding:18px;display:grid;grid-template-columns:1fr 1fr;gap:24px" id="tp-metas"></div>
-    <div style="padding:0 18px 18px">
-      <button class="btn btn-primary btn-sm" onclick="LS_UI.guardarMetasTiempo()"><i class="ti ti-device-floppy"></i>Guardar metas</button>
-    </div>
-  </div>
-</div>
-
 <!-- PÁGINA: TERMINAL MERCADO PAGO -->
 <div id="p-terminalmp" class="page" data-screen-label="Terminal Mercado Pago">
   <div class="card">
@@ -2069,7 +2064,6 @@ const PAGES = {
   modificadores: { title: 'Modificadores',        sub: 'Biblioteca reutilizable de modificadores para el POS' },
   pantallacliente: { title: 'Pantalla de cliente', sub: 'Logo y promociones de la segunda pantalla del POS' },
   horariotienda: { title: 'Horario de tienda', sub: 'Define cuándo pedidos.suenodeluna.com.mx acepta pedidos' },
-  tiemposproductivos: { title: 'Tiempos productivos', sub: 'Tiempo de elaboración por artículo, día y hora' },
   terminalmp: { title: 'Terminal Mercado Pago', sub: 'Cobro automático con la terminal física por sucursal' },
 };
 
@@ -4383,6 +4377,8 @@ const LS_UI = (() => {
           ? `${subcats.length} subcategoría(s) · ${rango.label}`
           : 'Sin gastos en el período';
       } catch (e) { console.error('Error subcategorías:', e); }
+
+      renderTiemposProductivos(); // no bloquea el resto del dashboard, maneja sus propios errores
 
     } catch (err) {
       console.error('Error dashboard:', err);
@@ -9190,7 +9186,6 @@ async function guardarVentaDirecta() {
       case 'modificadores': await renderModificadores(); break;
       case 'pantallacliente': await renderPantallaCliente(); break;
       case 'horariotienda': await renderHorarioTienda(); break;
-      case 'tiemposproductivos': await renderTiemposProductivos(); break;
       case 'terminalmp': await renderTerminalMP(); break;
       case 'catalogo-inventario': await abrirCatalogoInventarioPagina(); break;
     }
