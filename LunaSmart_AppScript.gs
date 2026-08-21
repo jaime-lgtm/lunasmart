@@ -1067,12 +1067,13 @@ function _mpHeaders() {
 
 function _mpListarTerminales() {
   try {
-    var resp = UrlFetchApp.fetch('https://api.mercadopago.com/terminals/v1/list', {
+    var resp = UrlFetchApp.fetch('https://api.mercadopago.com/terminals/v1/list?limit=50&offset=0', {
       method: 'get', headers: _mpHeaders(), muteHttpExceptions: true,
     });
     var data = JSON.parse(resp.getContentText());
     if (resp.getResponseCode() >= 400) return _err('Mercado Pago: ' + (data.message || resp.getContentText()));
-    return _json({ status: 'ok', terminales: data.terminals || data.results || [] });
+    var terminales = data.terminals || data.results || (Array.isArray(data) ? data : []);
+    return _json({ status: 'ok', terminales: terminales, _raw: data });
   } catch (e) { return _err(e.message); }
 }
 

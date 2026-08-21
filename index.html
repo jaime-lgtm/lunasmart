@@ -3958,6 +3958,7 @@ const LS_API = (() => {
     setBranch, invalidarCache, precargar,
     // Configurar
     setConfig(cfg) { Object.assign(CONFIG, cfg); },
+    mpListarTerminales: () => escribirViaScript('mpListarTerminales', {}),
   };
 })();
 
@@ -7907,14 +7908,22 @@ async function guardarVentaDirecta() {
   async function mpListarTerminalesUI() {
     const cont = document.getElementById('mp-terminales-encontradas');
     if (cont) cont.innerHTML = 'Buscando terminales...';
-    const res = await escribirViaScript('mpListarTerminales', {});
+    let res;
+    try {
+      res = await LS_API.mpListarTerminales();
+    } catch(e) {
+      console.error(e);
+      if (cont) cont.innerHTML = `<span style="color:var(--rojo)">Error inesperado: ${e.message || e}</span>`;
+      return;
+    }
     if (!res || res.status !== 'ok') {
       if (cont) cont.innerHTML = `<span style="color:var(--rojo)">${(res && res.msg) || 'No se pudo consultar Mercado Pago'}</span>`;
       return;
     }
     const terminales = res.terminales || [];
     if (!terminales.length) {
-      if (cont) cont.innerHTML = 'No se encontró ninguna terminal asociada a esta cuenta todavía.';
+      const crudo = res._raw ? `<div style="margin-top:8px;font-family:monospace;font-size:11px;white-space:pre-wrap;word-break:break-all;color:var(--tx-3)">${JSON.stringify(res._raw)}</div>` : '';
+      if (cont) cont.innerHTML = 'No se encontró ninguna terminal asociada a esta cuenta todavía (respuesta cruda de Mercado Pago abajo, cópiala si necesitas ayuda):' + crudo;
       return;
     }
     if (cont) cont.innerHTML = '<b style="color:var(--tx)">Terminales encontradas (copia el ID a la sucursal correcta):</b><br>' +
