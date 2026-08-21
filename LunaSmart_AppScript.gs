@@ -1072,8 +1072,9 @@ function _mpListarTerminales() {
     });
     var data = JSON.parse(resp.getContentText());
     if (resp.getResponseCode() >= 400) return _err('Mercado Pago: ' + (data.message || resp.getContentText()));
-    var terminales = data.terminals || data.results || (Array.isArray(data) ? data : []);
-    return _json({ status: 'ok', terminales: terminales, _raw: data });
+    // La respuesta viene anidada como { data: { terminals: [...] }, paging: {...} }.
+    var terminales = (data.data && data.data.terminals) || data.terminals || data.results || (Array.isArray(data) ? data : []);
+    return _json({ status: 'ok', terminales: terminales });
   } catch (e) { return _err(e.message); }
 }
 
