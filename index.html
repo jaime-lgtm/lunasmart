@@ -1167,6 +1167,7 @@
         <div class="nav-item" data-page="pantallacliente" onclick="go('pantallacliente',this)"><i class="ti ti-device-tv"></i><span class="nav-lbl">Pantalla de cliente</span></div>
         <div class="nav-item" data-page="horariotienda" onclick="go('horariotienda',this)"><i class="ti ti-clock"></i><span class="nav-lbl">Horario de tienda</span></div>
         <div class="nav-item" data-page="terminalmp" onclick="go('terminalmp',this)"><i class="ti ti-credit-card"></i><span class="nav-lbl">Terminal Mercado Pago</span></div>
+        <div class="nav-item" data-page="usuariospos" onclick="go('usuariospos',this)"><i class="ti ti-users"></i><span class="nav-lbl">Usuarios POS</span></div>
       </nav>
 
       <div class="sb-foot">
@@ -1927,6 +1928,25 @@
   </div>
 </div>
 
+<!-- PÁGINA: USUARIOS POS -->
+<div id="p-usuariospos" class="page" data-screen-label="Usuarios POS">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title"><i class="ti ti-users"></i>Usuarios del POS</div>
+        <div class="card-sub">El PIN es único en todo el negocio -- entra en cualquier sucursal donde el usuario esté asignado</div>
+      </div>
+      <div class="card-actions"><button class="btn btn-primary btn-sm" onclick="LS_UI.abrirNuevoUsuarioPOS()"><i class="ti ti-plus"></i>Nuevo usuario</button></div>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Nombre</th><th>PIN</th><th>Rol</th><th>Sucursales</th><th>Estado</th><th style="width:90px">Acciones</th></tr></thead>
+        <tbody id="upos-filas"><tr><td colspan="6" style="text-align:center;padding:24px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <!-- PÁGINA: MODIFICADORES -->
 <div id="p-modificadores" class="page" data-screen-label="Modificadores">
   <div class="card">
@@ -2065,6 +2085,7 @@ const PAGES = {
   pantallacliente: { title: 'Pantalla de cliente', sub: 'Logo y promociones de la segunda pantalla del POS' },
   horariotienda: { title: 'Horario de tienda', sub: 'Define cuándo pedidos.suenodeluna.com.mx acepta pedidos' },
   terminalmp: { title: 'Terminal Mercado Pago', sub: 'Cobro automático con la terminal física por sucursal' },
+  usuariospos: { title: 'Usuarios POS', sub: 'Altas, roles y PIN de acceso al punto de venta' },
 };
 
 const BRANCHES = {
@@ -7931,6 +7952,153 @@ async function guardarVentaDirecta() {
       terminales.map(t => `• <code>${t.id}</code> — modo: ${t.operating_mode || '?'}`).join('<br>');
   }
 
+  /* ============ USUARIOS POS ============
+     usuariosPOS/{id} = {nombre, pin, rol, sucursales:['cafeteria',...]|'todas', activo}
+     El PIN es unico en todo el negocio (no por sucursal) -- pos.html lo valida
+     contra este nodo al hacer login, en vez del USERS_MOCK hardcodeado de antes. */
+  const UPOS_ROLES = [
+    { id: 'cajero', label: 'Cajero' },
+    { id: 'monitor', label: 'Monitor (solo Estación)' },
+    { id: 'supervisor', label: 'Supervisor' },
+    { id: 'admin', label: 'Administrador' },
+  ];
+  let _uposLista = [];
+
+  async function renderUsuariosPOS() {
+    try {
+      await fbAuthReady;
+      const snap = await fbDb.ref('usuariosPOS').once('value');
+      const val = snap.val() || {};
+      _uposLista = Object.keys(val).map(id => Object.assign({ id }, val[id]));
+      _uposLista.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+    } catch(e) {
+      console.error('Error cargando usuariosPOS:', e);
+      toast('Error', 'No se pudieron cargar los usuarios', 'err', 'ti-alert-triangle');
+      _uposLista = [];
+    }
+    const tbody = document.getElementById('upos-filas');
+    if (!tbody) return;
+    if (!_uposLista.length) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--tx-4)">Aún no hay usuarios -- crea el primero con "Nuevo usuario".</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = _uposLista.map(u => {
+      const sucTxt = (!u.sucursales || u.sucursales === 'todas') ? 'Todas' : (u.sucursales || []).map(sid => (CATPOS_SUCURSALES.find(s => s.id === sid) || {}).nombre || sid).join(', ');
+      const rolLabel = (UPOS_ROLES.find(r => r.id === u.rol) || {}).label || u.rol || '';
+      return `<tr>
+        <td>${_h(u.nombre || '')}</td>
+        <td style="font-family:monospace">${_h(u.pin || '')}</td>
+        <td>${_h(rolLabel)}</td>
+        <td style="font-size:12px;color:var(--tx-3)">${_h(sucTxt)}</td>
+        <td>${u.activo === false ? '<span class="badge" style="background:var(--rojo-bg);color:var(--rojo)">Inactivo</span>' : '<span class="badge" style="background:var(--verde-bg);color:var(--verde)">Activo</span>'}</td>
+        <td>
+          <button class="btn-icon" title="Editar" onclick="LS_UI.editarUsuarioPOS('${u.id}')" style="background:none;border:none;color:var(--azul);cursor:pointer"><i class="ti ti-pencil"></i></button>
+          <button class="btn-icon" title="Eliminar" onclick="LS_UI.confirmarBorrarUsuarioPOS('${u.id}')" style="background:none;border:none;color:var(--rojo);cursor:pointer"><i class="ti ti-trash"></i></button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function abrirNuevoUsuarioPOS() { _formUsuarioPOS(null); }
+  function editarUsuarioPOS(id) { const u = _uposLista.find(x => x.id === id); if (u) _formUsuarioPOS(u); }
+
+  function _formUsuarioPOS(u) {
+    const esEdicion = !!u;
+    const sucursalesSel = (u && u.sucursales && u.sucursales !== 'todas') ? u.sucursales : [];
+    const todasSel = !u || !u.sucursales || u.sucursales === 'todas';
+    openModal(`
+    <div class="modal-overlay" id="modal-usuario-pos" onclick="if(event.target===this)_cerrarModal()">
+      <div class="modal" style="max-width:460px">
+        <div class="modal-header">
+          <div class="modal-title">${esEdicion ? 'Editar usuario' : 'Nuevo usuario'}</div>
+          <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="ff"><label>Nombre</label><input type="text" id="upos-nombre" value="${_h(u ? u.nombre || '' : '')}" placeholder="Ej. María Sáenz"></div>
+          <div class="ff"><label>PIN (4-6 dígitos, único en todo el negocio)</label><input type="text" inputmode="numeric" id="upos-pin" value="${_h(u ? u.pin || '' : '')}" placeholder="Ej. 4821" maxlength="6"></div>
+          <div class="ff"><label>Rol</label>
+            <select id="upos-rol">${UPOS_ROLES.map(r => `<option value="${r.id}" ${u && u.rol === r.id ? 'selected' : ''}>${r.label}</option>`).join('')}</select>
+          </div>
+          <div class="ff">
+            <label>Sucursales donde puede iniciar sesión</label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;margin:6px 0;cursor:pointer">
+              <input type="checkbox" id="upos-todas" ${todasSel ? 'checked' : ''} onchange="document.getElementById('upos-suc-lista').style.display=this.checked?'none':'block'" style="width:16px;height:16px;accent-color:var(--terra-claro)">
+              Todas las sucursales
+            </label>
+            <div id="upos-suc-lista" style="display:${todasSel ? 'none' : 'block'};padding-left:4px">
+              ${CATPOS_SUCURSALES.map(s => `<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;margin:4px 0;cursor:pointer"><input type="checkbox" class="upos-suc-check" value="${s.id}" ${sucursalesSel.includes(s.id) ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--terra-claro)">${_h(s.nombre)}</label>`).join('')}
+            </div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:6px;cursor:pointer">
+            <input type="checkbox" id="upos-activo" ${!u || u.activo !== false ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--terra-claro)">
+            Activo (desmarca para bloquear su acceso sin borrarlo)
+          </label>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
+          <button class="btn-save" onclick="LS_UI.guardarUsuarioPOS(${esEdicion ? `'${u.id}'` : 'null'})">Guardar</button>
+        </div>
+      </div>
+    </div>`);
+  }
+
+  async function guardarUsuarioPOS(id) {
+    const nombre = document.getElementById('upos-nombre').value.trim();
+    const pin = document.getElementById('upos-pin').value.trim();
+    const rol = document.getElementById('upos-rol').value;
+    const activo = document.getElementById('upos-activo').checked;
+    const todas = document.getElementById('upos-todas').checked;
+    const sucursales = todas ? 'todas' : Array.from(document.querySelectorAll('.upos-suc-check:checked')).map(el => el.value);
+    if (!nombre) { toast('Falta el nombre', '', 'err', 'ti-alert-triangle'); return; }
+    if (!/^\d{4,6}$/.test(pin)) { toast('PIN inválido', 'Debe ser numérico, de 4 a 6 dígitos', 'err', 'ti-alert-triangle'); return; }
+    if (!todas && !sucursales.length) { toast('Falta la sucursal', 'Elige al menos una, o marca "Todas"', 'err', 'ti-alert-triangle'); return; }
+    const pinDuplicado = _uposLista.some(u => u.id !== id && u.pin === pin);
+    if (pinDuplicado) { toast('PIN en uso', 'Ya lo tiene otro usuario -- elige uno distinto', 'err', 'ti-alert-triangle'); return; }
+    try {
+      await fbAuthReady;
+      const ref = id ? fbDb.ref('usuariosPOS/' + id) : fbDb.ref('usuariosPOS').push();
+      await ref.set({ nombre, pin, rol, sucursales, activo });
+      _cerrarModal();
+      toast(id ? 'Usuario actualizado' : 'Usuario creado', '', 'ok', 'ti-check');
+      await renderUsuariosPOS();
+    } catch(e) {
+      console.error(e);
+      toast('Error al guardar', e.message || '', 'err', 'ti-alert-triangle');
+    }
+  }
+
+  function confirmarBorrarUsuarioPOS(id) {
+    const u = _uposLista.find(x => x.id === id);
+    if (!u) return;
+    openModal(`
+    <div class="modal-overlay" id="modal-del-upos" onclick="if(event.target===this)_cerrarModal()">
+      <div class="modal" style="max-width:420px">
+        <div class="modal-header">
+          <div class="modal-title">¿Eliminar a "${_h(u.nombre)}"?</div>
+          <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-body"><p style="color:var(--tx-2);font-size:13px">Ya no podrá iniciar sesión en el POS con su PIN. Esta acción no se puede deshacer.</p></div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
+          <button class="btn-save" style="background:var(--rojo)" onclick="LS_UI.ejecutarBorrarUsuarioPOS('${id}')">Eliminar</button>
+        </div>
+      </div>
+    </div>`);
+  }
+
+  async function ejecutarBorrarUsuarioPOS(id) {
+    try {
+      await fbAuthReady;
+      await fbDb.ref('usuariosPOS/' + id).remove();
+      _cerrarModal();
+      toast('Usuario eliminado', '', 'ok', 'ti-check');
+      await renderUsuariosPOS();
+    } catch(e) {
+      console.error(e);
+      toast('Error', 'No se pudo eliminar', 'err', 'ti-alert-triangle');
+    }
+  }
+
   /* ============ TIEMPOS PRODUCTIVOS ============
      Lee BD_TIEMPOS (un renglon por articulo marcado "listo", capturado al
      cerrar turno en el POS -- pedidos/{suc} se borra al cerrar, asi que esta
@@ -9197,6 +9365,7 @@ async function guardarVentaDirecta() {
       case 'pantallacliente': await renderPantallaCliente(); break;
       case 'horariotienda': await renderHorarioTienda(); break;
       case 'terminalmp': await renderTerminalMP(); break;
+      case 'usuariospos': await renderUsuariosPOS(); break;
       case 'catalogo-inventario': await abrirCatalogoInventarioPagina(); break;
     }
   }
@@ -9830,6 +9999,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderHorarioTienda, _horarioToggleDia, guardarHorarioTienda,
     renderTiemposProductivos, _tpPintarReporte, guardarMetasTiempo,
     renderTerminalMP, guardarTerminalesMP, mpListarTerminalesUI,
+    renderUsuariosPOS, abrirNuevoUsuarioPOS, editarUsuarioPOS, guardarUsuarioPOS, confirmarBorrarUsuarioPOS, ejecutarBorrarUsuarioPOS,
     closeModal,
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },
