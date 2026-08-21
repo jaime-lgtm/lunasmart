@@ -7238,6 +7238,9 @@ async function guardarVentaDirecta() {
             <span style="font-weight:600;font-size:13px">${_h(m.nombre)}</span>
             <span style="font-size:11px;color:var(--tx-4)">(${tipoCorto}${m.obligatorio?' · obligatorio':''})</span>
           </label>
+          <button type="button" id="pp-libmod-${m.id}-arrow" onclick="LS_UI._toggleLibModColapso('${m.id}')" title="Mostrar/ocultar opciones" style="background:none;border:none;cursor:pointer;color:var(--tx-3);padding:4px;transform:rotate(${asignado?'0':'-90'}deg);transition:transform .15s">
+            <i class="ti ti-chevron-down"></i>
+          </button>
         </div>
         <div id="pp-libmod-${m.id}-opts" style="display:${asignado?'block':'none'};margin-top:8px">${opcionesHTML}</div>
       </div>`;
@@ -7246,7 +7249,19 @@ async function guardarVentaDirecta() {
   function _toggleLibModOpciones(modId) {
     const chk = document.querySelector(`.pp-libmod-chk[data-modid="${modId}"]`);
     const wrap = document.getElementById(`pp-libmod-${modId}-opts`);
-    if (wrap) wrap.style.display = (chk && chk.checked) ? 'block' : 'none';
+    const arrow = document.getElementById(`pp-libmod-${modId}-arrow`);
+    const abierto = !!(chk && chk.checked);
+    if (wrap) wrap.style.display = abierto ? 'block' : 'none';
+    if (arrow) arrow.style.transform = `rotate(${abierto ? 0 : -90}deg)`;
+  }
+
+  function _toggleLibModColapso(modId) {
+    const wrap = document.getElementById(`pp-libmod-${modId}-opts`);
+    const arrow = document.getElementById(`pp-libmod-${modId}-arrow`);
+    if (!wrap) return;
+    const abierto = wrap.style.display !== 'none';
+    wrap.style.display = abierto ? 'none' : 'block';
+    if (arrow) arrow.style.transform = `rotate(${abierto ? -90 : 0}deg)`;
   }
 
   async function _formProductoPOS(producto) {
@@ -9990,7 +10005,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     buscarRecetas, editarReceta,
     renderCatalogoPOS, buscarCatalogoPOS, cambiarSucursalCatalogoPOS, abrirNuevoProductoPOS, editarProductoPOS,
     filtrarCategoriaCatalogoPOS, filtrarSubCategoriaCatalogoPOS, abrirOrdenCategorias, _cambiarCategoriaOrdenSub, _renderOrdenSubcategorias, guardarOrdenCategorias,
-    guardarProductoPOS, _toggleSizedProductoPOS, _toggleModInventario, _toggleLibModOpciones, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS, _catposSubirFoto,
+    guardarProductoPOS, _toggleSizedProductoPOS, _toggleModInventario, _toggleLibModOpciones, _toggleLibModColapso, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS, _catposSubirFoto,
     filtrarRecetaPOS, seleccionarRecetaPOS, cerrarRecetaDD, recetaDDNav, toggleCatposSinReceta,
     abrirNuevoProveedorDesdeBusqueda, guardarNuevoProveedorDesdeBusqueda, toggleFavoritoProductoPOS,
     renderModificadores, cambiarSucursalModificadores, buscarModificadores, abrirNuevoModificador, editarModificador,
