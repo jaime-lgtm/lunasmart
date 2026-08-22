@@ -1586,6 +1586,12 @@
   </div>
   <div class="card">
     <div class="card-head"><div><div class="card-title"><i class="ti ti-alert-octagon"></i>Alertas de stock crítico</div><div class="card-sub">Insumos por debajo del mínimo</div></div><div class="card-actions"><span class="filter-note" id="fn-inventario"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><div class="seg" style="margin-right:6px"><button class="on" data-inv-filtro="critico" onclick="LS_UI.filtrarInventarioEstado('critico')">Stock crítico</button><button data-inv-filtro="sobre" onclick="LS_UI.filtrarInventarioEstado('sobre')">Sobre inventariado</button><button data-inv-filtro="ok" onclick="LS_UI.filtrarInventarioEstado('ok')">Niveles controlado</button></div><button class="btn btn-outline btn-sm" onclick="LS_UI.abrirRegistrarInventario()"><i class="ti ti-clipboard-list"></i>Registrar inventario</button><button class="btn btn-primary btn-sm" onclick="LS_UI.abrirGenerarOrden()"><i class="ti ti-shopping-cart-plus"></i>Generar orden</button></div></div>
+    <div style="padding:0 18px 12px">
+      <div style="position:relative;max-width:420px">
+        <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--tx-4);font-size:16px"></i>
+        <input type="text" id="inv-buscar" placeholder="Buscar artículo o categoría..." oninput="LS_UI.buscarInventarioAlertas(this.value)" style="width:100%;padding:9px 12px 9px 36px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none">
+      </div>
+    </div>
     <div class="tbl-wrap">
       <table class="tbl" data-sortable data-filterable="inventario">
         <thead><tr>
@@ -5421,7 +5427,16 @@ const LS_UI = (() => {
   // ══════════════════════════════════════════════════════════
   // INVENTARIO
   // ══════════════════════════════════════════════════════════
+  let _invFiltroActual = 'critico';
+  let _invBusqueda = '';
+
+  function buscarInventarioAlertas(v) {
+    _invBusqueda = (v || '').trim();
+    renderInventario(_invFiltroActual);
+  }
+
   async function renderInventario(filtroEstado = 'critico') {
+    _invFiltroActual = filtroEstado;
     const containerId = 'tabla-inventario';
     showLoading(containerId);
 
@@ -5443,10 +5458,15 @@ document.querySelectorAll('[data-inv-filtro]').forEach(function(b) {
 b.classList.toggle('on', b.dataset.invFiltro === filtroEstado);
 });
 
-const alertas = clasificados.filter(function(i) { return i.estado === filtroEstado; });
+const q = _invBusqueda.toLowerCase();
+const alertas = clasificados.filter(function(i) {
+  if (i.estado !== filtroEstado) return false;
+  if (!q) return true;
+  return (i.articulo || '').toLowerCase().includes(q) || (i.categoria || '').toLowerCase().includes(q) || (i.sucursal || '').toLowerCase().includes(q);
+});
 
 if (alertas.length === 0) {
-setEl(containerId, '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--verde)"><i class="ti ti-check"></i> Sin artículos en este filtro</td></tr>');
+setEl(containerId, `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--tx-4)">${q ? 'Sin resultados para "' + _h(_invBusqueda) + '"' : '<span style="color:var(--verde)"><i class="ti ti-check"></i> Sin artículos en este filtro</span>'}</td></tr>`);
 return;
 }
 
@@ -9995,7 +10015,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     onPageChange, reloadPage, invalidarCacheYRecargar, recargarPagina,
     filtrarRentabilidad: (f) => renderRentabilidad(f),
     buscarRentabilidad,
-    filtrarInventarioEstado: (f) => renderInventario(f), mostrarTipConteo,
+    filtrarInventarioEstado: (f) => renderInventario(f), buscarInventarioAlertas, mostrarTipConteo,
     buscarFacturas, verFactura, editarFactura, confirmarBorrarFactura, ejecutarBorrarFactura,
     verIngreso, editarIngreso, confirmarBorrarIngreso, ejecutarBorrarIngreso, buscarIngresos,
     editarIngresoParrot, confirmarBorrarIngresoParrot, ejecutarBorrarIngresoParrot,
