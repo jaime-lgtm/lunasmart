@@ -9435,11 +9435,20 @@ async function guardarVentaDirecta() {
           <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
         </div>
         <div class="modal-body">
-          <div class="ff" style="max-width:320px;margin-bottom:14px">
-            <label>Sucursal</label>
-            <select id="reginv-sucursal" onchange="LS_UI.filtrarArticulosInventarioModal(this.value)">
-              <option value="">Cargando sucursales...</option>
-            </select>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+            <div class="ff" style="max-width:320px;margin-bottom:0">
+              <label>Sucursal</label>
+              <select id="reginv-sucursal" onchange="LS_UI.filtrarArticulosInventarioModal(this.value)">
+                <option value="">Cargando sucursales...</option>
+              </select>
+            </div>
+            <div class="ff" style="flex:1;min-width:200px;margin-bottom:0">
+              <label>Buscar artículo</label>
+              <div style="position:relative">
+                <i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--tx-4);font-size:15px"></i>
+                <input type="text" id="reginv-buscar" oninput="LS_UI.buscarArticulosInventarioModal(this.value)" placeholder="Escribe para filtrar la lista..." style="width:100%;padding:8px 10px 8px 32px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none">
+              </div>
+            </div>
           </div>
           <div class="tbl-wrap" style="max-height:400px;overflow:auto">
             <table class="tbl">
@@ -9524,6 +9533,30 @@ async function guardarVentaDirecta() {
     });
     tbody.innerHTML = html;
     if (btnGuardar) btnGuardar.disabled = false;
+    const buscador = document.getElementById('reginv-buscar');
+    if (buscador) buscador.value = '';
+  }
+
+  function buscarArticulosInventarioModal(v) {
+    const q = (v || '').trim().toLowerCase();
+    const tbody = document.getElementById('reginv-tbody');
+    if (!tbody) return;
+    const rows = Array.from(tbody.children);
+    let cabeceraActual = null;
+    let algunoVisible = false;
+    rows.forEach(row => {
+      if (row.classList.contains('reginv-cat-header')) {
+        if (cabeceraActual) cabeceraActual.style.display = algunoVisible ? '' : 'none';
+        cabeceraActual = row;
+        algunoVisible = false;
+        return;
+      }
+      const nombre = (row.children[0] && row.children[0].textContent || '').toLowerCase();
+      const visible = !q || nombre.includes(q);
+      row.style.display = visible ? '' : 'none';
+      if (visible) algunoVisible = true;
+    });
+    if (cabeceraActual) cabeceraActual.style.display = algunoVisible ? '' : 'none';
   }
 
   async function guardarRegistroInventario() {
@@ -10008,7 +10041,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderDashboard, renderConciliacion, renderIngresos,
     renderFacturas, renderArticulos, renderRentabilidad,
     renderGastos, renderBalance, renderInventario, renderProveedores, renderCatalogo,
-    abrirRegistrarInventario, filtrarArticulosInventarioModal, guardarRegistroInventario, enviarRegistroInventarioWhatsApp, abrirStockCritico, abrirGenerarOrden, imprimirOrdenCompra, enviarOrdenWhatsApp,
+    abrirRegistrarInventario, filtrarArticulosInventarioModal, buscarArticulosInventarioModal, guardarRegistroInventario, enviarRegistroInventarioWhatsApp, abrirStockCritico, abrirGenerarOrden, imprimirOrdenCompra, enviarOrdenWhatsApp,
     abrirCatalogoInventario, buscarCatalogoInventario, filtrarCatalogoInventario,  abrirCatalogoInventarioPagina, buscarCatalogoInventarioPagina, filtrarCatalogoInventarioPagina, filtrarSucursalCatalogoPagina, filtrarSucursalCatalogo, verArticuloInventario, editarArticuloInventario, guardarMinMaxInventario, abrirAgregarArticuloInventario, guardarNuevoArticuloInventario,
     buscarProveedores, verProveedor, editarProveedor, nuevoProveedor, guardarProveedor, confirmarBorrarProveedor, ejecutarBorrarProveedor,
     buscarCatalogo, verArticulo, editarArticulo, nuevoArticulo, guardarArticulo, setModoArticulos, confirmarBorrarArticulo, ejecutarBorrarArticulo,
