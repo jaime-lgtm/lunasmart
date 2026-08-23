@@ -1835,13 +1835,16 @@
       <table class="tbl" data-sortable>
         <thead><tr>
           <th class="sortable" data-type="text">ID<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th>Imagen</th>
           <th class="sortable" data-type="text">Producto<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
           <th>Categoría</th>
+          <th class="num">Costo</th>
           <th class="num">Precio</th>
+          <th class="num">% Ganancia</th>
           <th id="catpos-th-receta" style="cursor:pointer;user-select:none" onclick="LS_UI.toggleCatposSinReceta()" title="Clic para mostrar solo los productos a los que les falta receta">Receta vinculada <i class="ti ti-filter" style="font-size:13px;margin-left:2px"></i></th>
           <th>Acciones</th>
         </tr></thead>
-        <tbody id="tabla-catalogopos"><tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+        <tbody id="tabla-catalogopos"><tr><td colspan="9" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -7175,20 +7178,69 @@ async function guardarVentaDirecta() {
     }
   }
 
+  // Costo de elaboración de una receta, ya normalizado por porción
+  // (mismo cálculo que usa la página Rentabilidad).
+  function _catposCostoUnit(idReceta) {
+    if (!idReceta) return null;
+    const r = (_catposRecetas || []).find(x => x.id === idReceta);
+    if (!r) return null;
+    return (r.costo_elaboracion || 0) / (r.porciones || 1);
+  }
+
+  function _catposMargenColor(m) {
+    if (m == null) return 'var(--tx-4)';
+    return m >= 60 ? 'var(--verde)' : m >= 40 ? 'var(--ambar)' : 'var(--rojo)';
+  }
+
+  // Costo y % de ganancia por producto -- si el producto tiene tamaños
+  // (sized), calcula uno por cada tamaño (cada uno con su propia receta).
+  function _catposCostoMargen(p) {
+    const fmtD = LS_API.formatMXNDec, fmtP = LS_API.formatPct;
+    if (p.sized && p.prices) {
+      const keys = Object.keys(p.prices);
+      const partes = keys.map(k => {
+        const costo = _catposCostoUnit(p.recetas && p.recetas[k]);
+        const precio = parseFloat(p.prices[k]) || 0;
+        const margen = (costo != null && precio > 0) ? ((precio - costo) / precio) * 100 : null;
+        return { k, costo, margen };
+      });
+      const costoTxt = partes.map(x => `${x.k}: ${x.costo != null ? fmtD(x.costo) : '—'}`).join(' / ');
+      const margenTxt = partes.map(x => `${x.k}: ${x.margen != null ? fmtP(x.margen) : '—'}`).join(' / ');
+      const validos = partes.map(x => x.margen).filter(m => m != null);
+      const promedio = validos.length ? validos.reduce((a, b) => a + b, 0) / validos.length : null;
+      return { costoTxt, margenTxt, color: _catposMargenColor(promedio) };
+    }
+    const costo = _catposCostoUnit(p.idReceta);
+    const precio = parseFloat(p.price) || 0;
+    const margen = (costo != null && precio > 0) ? ((precio - costo) / precio) * 100 : null;
+    return {
+      costoTxt: costo != null ? fmtD(costo) : '—',
+      margenTxt: margen != null ? fmtP(margen) : '—',
+      color: _catposMargenColor(margen),
+    };
+  }
+
   function _pintarCatalogoPOS(lista) {
     const tbody = document.getElementById('tabla-catalogopos');
     if (!tbody) return;
     if (!lista || !lista.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)">Sin productos en esta sucursal</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--tx-4)">Sin productos en esta sucursal</td></tr>';
       return;
     }
     tbody.innerHTML = lista.map(p => {
       const precio = p.prices ? Object.entries(p.prices).map(([k,v]) => `${k}: ${LS_API.formatMXNDec(v)}`).join(' / ') : LS_API.formatMXNDec(p.price || 0);
+      const cm = _catposCostoMargen(p);
+      const imgCell = p.img
+        ? `<img src="${p.img}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;display:block">`
+        : `<div style="width:32px;height:32px;border-radius:6px;background:var(--cafe-800);display:flex;align-items:center;justify-content:center;color:var(--tx-4);font-size:14px">🌙</div>`;
       return `<tr>
         <td style="font-family:var(--mono);color:var(--tx-3)">${_h(p.id)}</td>
-        <td style="font-weight:500;display:flex;align-items:center;gap:8px">${p.img ? `<img src="${p.img}" style="width:26px;height:26px;border-radius:6px;object-fit:cover;flex-shrink:0">` : ''}<span>${p.fav===true ? '⭐ ' : ''}${_h(p.name)}${_catposCanalesBadges(p)}</span></td>
+        <td>${imgCell}</td>
+        <td style="font-weight:500">${p.fav===true ? '⭐ ' : ''}${_h(p.name)}${_catposCanalesBadges(p)}</td>
         <td style="color:var(--tx-2)">${_h(p.menu||'')}${p.sub ? ' · '+_h(p.sub) : ''}</td>
+        <td class="num" style="font-family:var(--mono);font-size:12px">${cm.costoTxt}</td>
         <td class="num" style="font-family:var(--mono)">${precio}</td>
+        <td class="num" style="font-family:var(--mono);font-weight:700;color:${cm.color}">${cm.margenTxt}</td>
         <td>${_catposRecetaBadge(p)}</td>
         <td style="white-space:nowrap">
           <button class="icon-btn" title="${p.fav===true ? 'Quitar de favoritos' : 'Marcar como favorito'}" onclick="LS_UI.toggleFavoritoProductoPOS('${p.id}')" style="${p.fav===true ? 'color:#e0a300' : ''}"><i class="ti ${p.fav===true ? 'ti-star-filled' : 'ti-star'}"></i></button>
