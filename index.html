@@ -2069,14 +2069,6 @@ try {
   fbAuthReady = firebase.auth().signInAnonymously().catch(function(e){ console.error('Firebase auth', e); });
 } catch(e) { console.error('No se pudo inicializar Firebase', e); }
 
-const USERS = {
-  'jaime@suenodeluna.com.mx':   { pass: 'Luna2026!',    name: 'Jaime Sáenz',      role: 'Administrador',   ini: 'JS' },
-  'admin@suenodeluna.com.mx':   { pass: 'Admin2026!',   name: 'Administrador',    role: 'Gerente General', ini: 'AG' },
-  'gerente@suenodeluna.com.mx': { pass: 'Gerente2026!', name: 'Gerente Sucursal', role: 'Gerente',         ini: 'GS' },
-  'cajero@suenodeluna.com.mx':  { pass: 'Cajero2026!',  name: 'Personal Caja',    role: 'Cajero',          ini: 'PC' },
-  'almacen@suenodeluna.com.mx': { pass: 'Almacen2026!Kv9', name: '', role: 'Inventario', ini: 'IN' },
-};
-
 const PAGES = {
   dashboard:    { title: 'Dashboard Corporativo', sub: 'Resumen general' },
   conciliacion: { title: 'Conciliación',          sub: 'Parrot vs declarado por turno' },
@@ -2191,14 +2183,7 @@ function doLogin() {
     sessionStorage.setItem('ls_user', JSON.stringify({ ...u, email }));
     enterApp(u);
   };
-  _loginFirebase(email, pass).then(onOk).catch(() => {
-    // Respaldo temporal mientras se termina de migrar todo el equipo a
-    // Firebase Authentication -- quitar en cuanto las 5 cuentas reales
-    // esten confirmadas funcionando.
-    const u = USERS[email];
-    if (u && u.pass === pass) { onOk(u); return; }
-    onFail();
-  });
+  _loginFirebase(email, pass).then(onOk).catch(onFail);
 }
 function _inicialesDe(nombre) {
   const partes = String(nombre || '').trim().split(/\s+/).filter(Boolean);
