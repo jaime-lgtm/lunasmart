@@ -2284,11 +2284,13 @@ window.addEventListener('hashchange', () => {
 // Al cargar la app, leer el hash y navegar a esa página
 function restaurarPaginaDelHash() {
   const hash = window.location.hash.substring(1); // Quita el #
+  const perm = window._permActual;
+  const inicio = (perm && perm.inicio) || 'dashboard';
   if (hash && PAGES[hash]) {
     go(hash, null);
   } else {
-    // Si no hay hash o no es válido, ir al dashboard
-    go('dashboard', null);
+    // Si no hay hash o no es válido, ir a la pantalla de inicio de esta cuenta
+    go(inicio, null);
   }
 }
 
@@ -8031,6 +8033,7 @@ async function guardarVentaDirecta() {
   // Paginas del admin que se pueden restringir por persona -- "dashboard" no
   // esta aqui porque siempre se concede, es la pantalla de aterrizaje segura.
   const PAGINAS_ADMIN = [
+    { id: 'dashboard', label: 'Dashboard' },
     { id: 'conciliacion', label: 'Conciliación' },
     { id: 'sucursales', label: 'Sucursales' },
     { id: 'articulos', label: 'Artículos estrella' },
@@ -8192,6 +8195,7 @@ async function guardarVentaDirecta() {
     const paginasTodas = document.getElementById('upos-paginas-todas').checked;
     const paginasAdmin = paginasTodas ? 'todas' : Array.from(document.querySelectorAll('.upos-paginas-check:checked')).map(el => el.value);
     if (!nombre) { toast('Falta el nombre', '', 'err', 'ti-alert-triangle'); return; }
+    if (correoAdmin && !paginasTodas && !paginasAdmin.length) { toast('Falta al menos una página', 'Si tiene correo de acceso, elige qué puede ver (o marca "Todas")', 'err', 'ti-alert-triangle'); return; }
     if (!/^\d{4,6}$/.test(pin)) { toast('PIN inválido', 'Debe ser numérico, de 4 a 6 dígitos', 'err', 'ti-alert-triangle'); return; }
     if (!todas && !sucursales.length) { toast('Falta la sucursal', 'Elige al menos una, o marca "Todas"', 'err', 'ti-alert-triangle'); return; }
     if (correoAdmin && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoAdmin)) { toast('Correo inválido', '', 'err', 'ti-alert-triangle'); return; }
@@ -10219,9 +10223,10 @@ go = function(id, el) {
   // "dashboard" siempre es válido -- es donde se redirige a quien intenta
   // entrar a algo que no le toca, en vez de dejar la pantalla en blanco.
   const perm = window._permActual;
-  if (perm && perm.pages !== 'ALL' && id !== 'dashboard' && perm.pages.indexOf(id) === -1) {
+  if (perm && perm.pages !== 'ALL' && perm.pages.indexOf(id) === -1) {
     if (typeof toast !== 'undefined') toast('Sin acceso', 'Tu cuenta no tiene permiso para ver esa sección', 'err', 'ti-lock');
-    if (state.page !== 'dashboard') go('dashboard', null);
+    const inicio = perm.inicio || 'dashboard';
+    if (state.page !== inicio && id !== inicio) go(inicio, null);
     return;
   }
   _go_orig(id, el);
@@ -10266,12 +10271,14 @@ function aplicarPermisos(u) {
   if (paginasAdmin === 'todas' || paginasAdmin == null) {
     perm = paginasAdmin === 'todas' ? PERMISOS.admin : PERMISOS[_rolTier(role)];
   } else {
-    const pages = Array.from(new Set(['dashboard'].concat(paginasAdmin)));
+    // Dashboard ya NO se concede automáticamente -- si la persona no lo
+    // tiene marcado, no lo ve, y "inicio" es la primera página que sí tiene.
+    const pages = Array.from(new Set(paginasAdmin));
     perm = {
       pages,
       verFinanzas: pages.indexOf('gastos') !== -1 || pages.indexOf('balance') !== -1,
       verFacturas: pages.indexOf('facturas') !== -1,
-      inicio: 'dashboard',
+      inicio: pages.indexOf('dashboard') !== -1 ? 'dashboard' : (pages[0] || 'dashboard'),
     };
   }
   window._permActual = perm;
