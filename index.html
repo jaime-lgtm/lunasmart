@@ -224,9 +224,9 @@
       position: relative;
       overflow: hidden;
       background:
-        radial-gradient(900px 600px at 78% -10%, rgba(177,70,24,0.14), transparent 60%),
-        radial-gradient(700px 500px at -5% 110%, rgba(61,32,16,0.85), transparent 65%),
-        var(--cafe-950);
+        radial-gradient(900px 600px at 78% -10%, rgba(177,70,24,0.10), transparent 60%),
+        radial-gradient(700px 500px at -5% 110%, rgba(177,70,24,0.08), transparent 65%),
+        #e9ddc5;
       padding: 24px;
     }
     #login .grain {
@@ -255,10 +255,10 @@
     }
     .login-head h1 {
       font-family: 'Playfair Display', serif; font-weight: 500;
-      font-size: 27px; letter-spacing: 0.01em; color: var(--tx);
+      font-size: 27px; letter-spacing: 0.01em; color: #3a2c17;
     }
     .login-head .tag {
-      font-size: 10.5px; color: var(--tx-3); margin-top: 7px;
+      font-size: 10.5px; color: #6b5a3e; margin-top: 7px;
       letter-spacing: 0.22em; text-transform: uppercase; font-weight: 500;
     }
     .login-rule { width: 38px; height: 1px; background: var(--terra); margin: 16px auto 0; opacity: 0.7; }
@@ -317,7 +317,7 @@
     }
     .login-secure i { font-size: 14px; color: var(--terra-claro); flex-shrink: 0; }
 
-    .login-foot { text-align: center; font-size: 10.5px; color: var(--tx-4); margin-top: 26px; letter-spacing: 0.04em; }
+    .login-foot { text-align: center; font-size: 10.5px; color: #8a7857; margin-top: 26px; letter-spacing: 0.04em; }
 
     /* ═══════════════════════════════════════════════════════
        APP SHELL
@@ -8089,6 +8089,51 @@ async function guardarVentaDirecta() {
     }).join('');
   }
 
+  // Multi-select como desplegable: un botón con resumen ("3 sucursales
+  // seleccionadas") que al tocarlo abre un panel con checkboxes -- reusado
+  // para "páginas del admin" y "sucursales" en el formulario de usuario.
+  function _uposResumenTexto(todas, n, singular, plural) {
+    if (todas) return 'Todas las ' + plural;
+    if (!n) return 'Ninguna seleccionada';
+    return n + ' ' + (n === 1 ? singular : plural) + ' seleccionada' + (n === 1 ? '' : 's');
+  }
+  function _uposDropdownHTML(prefix, items, selectedIds, singular, plural) {
+    const todasSel = !selectedIds;
+    const seleccion = selectedIds || [];
+    const resumen = _uposResumenTexto(todasSel, seleccion.length, singular, plural);
+    return `
+      <div style="position:relative">
+        <button type="button" onclick="LS_UI._toggleUposDropdown('${prefix}')" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--cafe-800);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;font-size:13px;color:var(--tx);font-family:inherit;cursor:pointer">
+          <span id="upos-dd-${prefix}-resumen">${_h(resumen)}</span>
+          <i class="ti ti-chevron-down" style="color:var(--tx-4)"></i>
+        </button>
+        <div id="upos-dd-${prefix}-panel" style="display:none;margin-top:6px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--cafe-card)">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;margin:2px 0 6px;cursor:pointer">
+            <input type="checkbox" id="upos-${prefix}-todas" ${todasSel ? 'checked' : ''} onchange="LS_UI._uposDropdownTodasChange('${prefix}','${singular}','${plural}')" style="width:16px;height:16px;accent-color:var(--terra-claro)">
+            Todas las ${plural}
+          </label>
+          <div id="upos-${prefix}-lista" style="display:${todasSel ? 'none' : 'block'};padding-left:4px;max-height:200px;overflow-y:auto;border-top:1px solid var(--line-2);padding-top:6px">
+            ${items.map(it => `<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;margin:4px 0;cursor:pointer"><input type="checkbox" class="upos-${prefix}-check" value="${it.id}" ${seleccion.includes(it.id) ? 'checked' : ''} onchange="LS_UI._uposDropdownResumen('${prefix}','${singular}','${plural}')" style="width:16px;height:16px;accent-color:var(--terra-claro)">${_h(it.label)}</label>`).join('')}
+          </div>
+        </div>
+      </div>`;
+  }
+  function _toggleUposDropdown(prefix) {
+    const panel = document.getElementById(`upos-dd-${prefix}-panel`);
+    if (panel) panel.style.display = panel.style.display !== 'none' ? 'none' : 'block';
+  }
+  function _uposDropdownTodasChange(prefix, singular, plural) {
+    const todas = document.getElementById(`upos-${prefix}-todas`).checked;
+    document.getElementById(`upos-${prefix}-lista`).style.display = todas ? 'none' : 'block';
+    _uposDropdownResumen(prefix, singular, plural);
+  }
+  function _uposDropdownResumen(prefix, singular, plural) {
+    const todas = document.getElementById(`upos-${prefix}-todas`).checked;
+    const n = document.querySelectorAll(`.upos-${prefix}-check:checked`).length;
+    const el = document.getElementById(`upos-dd-${prefix}-resumen`);
+    if (el) el.textContent = _uposResumenTexto(todas, n, singular, plural);
+  }
+
   function abrirNuevoUsuarioPOS() { _formUsuarioPOS(null); }
   function editarUsuarioPOS(id) { const u = _uposLista.find(x => x.id === id); if (u) _formUsuarioPOS(u); }
 
@@ -8117,23 +8162,11 @@ async function guardarVentaDirecta() {
           <div class="ff" id="upos-paginas-wrap" style="display:${(u && u.correoAdmin) ? 'block' : 'none'}">
             <label>Páginas del admin a las que tiene acceso</label>
             <div style="font-size:11px;color:var(--tx-4);margin:-2px 0 6px">Dashboard siempre lo puede ver. Esto solo importa si tiene correo de acceso arriba.</div>
-            <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;margin:6px 0;cursor:pointer">
-              <input type="checkbox" id="upos-paginas-todas" ${(!u || !u.paginasAdmin || u.paginasAdmin === 'todas') ? 'checked' : ''} onchange="document.getElementById('upos-paginas-lista').style.display=this.checked?'none':'block'" style="width:16px;height:16px;accent-color:var(--terra-claro)">
-              Todas las páginas
-            </label>
-            <div id="upos-paginas-lista" style="display:${(u && u.paginasAdmin && u.paginasAdmin !== 'todas') ? 'block' : 'none'};padding-left:4px;max-height:220px;overflow-y:auto">
-              ${PAGINAS_ADMIN.map(p => `<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;margin:4px 0;cursor:pointer"><input type="checkbox" class="upos-pagina-check" value="${p.id}" ${(u && u.paginasAdmin && u.paginasAdmin !== 'todas' && u.paginasAdmin.includes(p.id)) ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--terra-claro)">${_h(p.label)}</label>`).join('')}
-            </div>
+            ${_uposDropdownHTML('paginas', PAGINAS_ADMIN, (u && u.paginasAdmin && u.paginasAdmin !== 'todas') ? u.paginasAdmin : null, 'página', 'páginas')}
           </div>
           <div class="ff">
             <label>Sucursales donde puede iniciar sesión</label>
-            <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;margin:6px 0;cursor:pointer">
-              <input type="checkbox" id="upos-todas" ${todasSel ? 'checked' : ''} onchange="document.getElementById('upos-suc-lista').style.display=this.checked?'none':'block'" style="width:16px;height:16px;accent-color:var(--terra-claro)">
-              Todas las sucursales
-            </label>
-            <div id="upos-suc-lista" style="display:${todasSel ? 'none' : 'block'};padding-left:4px">
-              ${CATPOS_SUCURSALES.map(s => `<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;margin:4px 0;cursor:pointer"><input type="checkbox" class="upos-suc-check" value="${s.id}" ${sucursalesSel.includes(s.id) ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--terra-claro)">${_h(s.nombre)}</label>`).join('')}
-            </div>
+            ${_uposDropdownHTML('suc', CATPOS_SUCURSALES.map(s => ({ id: s.id, label: s.nombre })), (u && u.sucursales && u.sucursales !== 'todas') ? u.sucursales : null, 'sucursal', 'sucursales')}
           </div>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:6px;cursor:pointer">
             <input type="checkbox" id="upos-activo" ${!u || u.activo !== false ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--terra-claro)">
@@ -8153,11 +8186,11 @@ async function guardarVentaDirecta() {
     const pin = document.getElementById('upos-pin').value.trim();
     const rol = document.getElementById('upos-rol').value;
     const activo = document.getElementById('upos-activo').checked;
-    const todas = document.getElementById('upos-todas').checked;
+    const todas = document.getElementById('upos-suc-todas').checked;
     const sucursales = todas ? 'todas' : Array.from(document.querySelectorAll('.upos-suc-check:checked')).map(el => el.value);
     const correoAdmin = document.getElementById('upos-correo-admin').value.trim().toLowerCase();
     const paginasTodas = document.getElementById('upos-paginas-todas').checked;
-    const paginasAdmin = paginasTodas ? 'todas' : Array.from(document.querySelectorAll('.upos-pagina-check:checked')).map(el => el.value);
+    const paginasAdmin = paginasTodas ? 'todas' : Array.from(document.querySelectorAll('.upos-paginas-check:checked')).map(el => el.value);
     if (!nombre) { toast('Falta el nombre', '', 'err', 'ti-alert-triangle'); return; }
     if (!/^\d{4,6}$/.test(pin)) { toast('PIN inválido', 'Debe ser numérico, de 4 a 6 dígitos', 'err', 'ti-alert-triangle'); return; }
     if (!todas && !sucursales.length) { toast('Falta la sucursal', 'Elige al menos una, o marca "Todas"', 'err', 'ti-alert-triangle'); return; }
@@ -10145,6 +10178,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderTiemposProductivos, _tpPintarReporte, guardarMetasTiempo,
     renderTerminalMP, guardarTerminalesMP, mpListarTerminalesUI,
     renderUsuariosPOS, abrirNuevoUsuarioPOS, editarUsuarioPOS, guardarUsuarioPOS, confirmarBorrarUsuarioPOS, ejecutarBorrarUsuarioPOS,
+    _toggleUposDropdown, _uposDropdownTodasChange, _uposDropdownResumen,
     closeModal,
     // Abrir modales
     async abrirNuevoIngreso() { await buildFormIngreso(); },
