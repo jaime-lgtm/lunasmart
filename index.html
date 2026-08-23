@@ -1996,10 +1996,10 @@
     <!-- MOBILE BOTTOM NAV -->
     <nav class="m-nav">
       <div class="m-nav-items">
-        <div class="m-nav-item active" data-mnav="dashboard" onclick="mgo('dashboard',this)"><i class="ti ti-layout-dashboard"></i><span>Inicio</span></div>
-        <div class="m-nav-item" data-mnav="conciliacion" onclick="mgo('conciliacion',this)"><i class="ti ti-scale"></i><span>Concilia</span><div class="m-nav-badge">3</div></div>
-        <div class="m-nav-item" data-mnav="ingresos" onclick="mgo('ingresos',this)"><i class="ti ti-cash"></i><span>Ingresos</span></div>
-        <div class="m-nav-item" data-mnav="sucursales" onclick="mgo('sucursales',this)"><i class="ti ti-building-store"></i><span>Sucursal</span></div>
+        <div class="m-nav-item active" data-mnav="dashboard" data-page="dashboard" onclick="mgo('dashboard',this)"><i class="ti ti-layout-dashboard"></i><span>Inicio</span></div>
+        <div class="m-nav-item" data-mnav="conciliacion" data-page="conciliacion" onclick="mgo('conciliacion',this)"><i class="ti ti-scale"></i><span>Concilia</span><div class="m-nav-badge">3</div></div>
+        <div class="m-nav-item" data-mnav="ingresos" data-page="ingresos" onclick="mgo('ingresos',this)"><i class="ti ti-cash"></i><span>Ingresos</span></div>
+        <div class="m-nav-item" data-mnav="sucursales" data-page="sucursales" onclick="mgo('sucursales',this)"><i class="ti ti-building-store"></i><span>Sucursal</span></div>
         <div class="m-nav-item" onclick="toggleDrawer()"><i class="ti ti-dots"></i><span>Más</span></div>
       </div>
     </nav>
@@ -2011,13 +2011,13 @@
         <div class="handle"></div>
         <div class="d-title">Todos los módulos</div>
         <div class="d-grid">
-          <div class="d-item" onclick="mdrawerGo('articulos')"><i class="ti ti-star"></i><span>Estrella</span></div>
-          <div class="d-item" onclick="mdrawerGo('canales')"><i class="ti ti-router"></i><span>Canales</span></div>
-          <div class="d-item" onclick="mdrawerGo('rentabilidad')"><i class="ti ti-chart-arrows-vertical"></i><span>Rentab.</span></div>
-          <div class="d-item" onclick="mdrawerGo('gastos')"><i class="ti ti-receipt"></i><span>Gastos</span></div>
-          <div class="d-item" onclick="mdrawerGo('balance')"><i class="ti ti-report-money"></i><span>Balance</span></div>
-          <div class="d-item" onclick="mdrawerGo('inventario')"><i class="ti ti-packages"></i><span>Inventario</span></div>
-          <div class="d-item" onclick="mdrawerGo('facturas')"><i class="ti ti-file-invoice"></i><span>Egresos</span></div>
+          <div class="d-item" data-page="articulos" onclick="mdrawerGo('articulos')"><i class="ti ti-star"></i><span>Estrella</span></div>
+          <div class="d-item" data-page="canales" onclick="mdrawerGo('canales')"><i class="ti ti-router"></i><span>Canales</span></div>
+          <div class="d-item" data-page="rentabilidad" onclick="mdrawerGo('rentabilidad')"><i class="ti ti-chart-arrows-vertical"></i><span>Rentab.</span></div>
+          <div class="d-item" data-page="gastos" onclick="mdrawerGo('gastos')"><i class="ti ti-receipt"></i><span>Gastos</span></div>
+          <div class="d-item" data-page="balance" onclick="mdrawerGo('balance')"><i class="ti ti-report-money"></i><span>Balance</span></div>
+          <div class="d-item" data-page="inventario" onclick="mdrawerGo('inventario')"><i class="ti ti-packages"></i><span>Inventario</span></div>
+          <div class="d-item" data-page="facturas" onclick="mdrawerGo('facturas')"><i class="ti ti-file-invoice"></i><span>Egresos</span></div>
           <div class="d-item" onclick="toggleDrawer();doLogout()"><i class="ti ti-logout"></i><span>Salir</span></div>
         </div>
       </div>
@@ -2208,9 +2208,12 @@ function _loginFirebase(email, pass) {
     if (match) {
       const ROL_LABEL = { cajero: 'Cajero', monitor: 'Monitor', supervisor: 'Supervisor', admin: 'Administrador' };
       const rolLabel = ROL_LABEL[match.rol] || match.rol || 'Usuario';
-      return { name: match.nombre || email.split('@')[0], role: rolLabel, ini: _inicialesDe(match.nombre || email) };
+      return { name: match.nombre || email.split('@')[0], role: rolLabel, ini: _inicialesDe(match.nombre || email), paginasAdmin: match.paginasAdmin || 'todas' };
     }
-    return { name: email.split('@')[0], role: 'Usuario', ini: email.slice(0, 2).toUpperCase() };
+    // Cuenta de Firebase sin vincular en Usuarios POS todavia -- se le deja
+    // acceso completo para no bloquear por un olvido de vinculacion, pero
+    // no aparece con nombre/rol reales hasta que se vincule.
+    return { name: email.split('@')[0], role: 'Usuario', ini: email.slice(0, 2).toUpperCase(), paginasAdmin: 'todas' };
   });
 }
 function enterApp(u) {
@@ -8025,6 +8028,30 @@ async function guardarVentaDirecta() {
     { id: 'supervisor', label: 'Supervisor' },
     { id: 'admin', label: 'Administrador' },
   ];
+  // Paginas del admin que se pueden restringir por persona -- "dashboard" no
+  // esta aqui porque siempre se concede, es la pantalla de aterrizaje segura.
+  const PAGINAS_ADMIN = [
+    { id: 'conciliacion', label: 'Conciliación' },
+    { id: 'sucursales', label: 'Sucursales' },
+    { id: 'articulos', label: 'Artículos estrella' },
+    { id: 'canales', label: 'Canales de venta' },
+    { id: 'rentabilidad', label: 'Rentabilidad' },
+    { id: 'gastos', label: 'Gastos' },
+    { id: 'balance', label: 'Balance' },
+    { id: 'inventario', label: 'Inventario' },
+    { id: 'ingresos', label: 'Ingresos' },
+    { id: 'facturas', label: 'Egresos' },
+    { id: 'proveedores', label: 'Proveedores' },
+    { id: 'catalogo', label: 'Artículos (catálogo maestro)' },
+    { id: 'recetas', label: 'Recetas' },
+    { id: 'catalogopos', label: 'Catálogo POS' },
+    { id: 'modificadores', label: 'Modificadores' },
+    { id: 'catalogo-inventario', label: 'Catálogo de inventario' },
+    { id: 'pantallacliente', label: 'Pantalla de cliente' },
+    { id: 'horariotienda', label: 'Horario de tienda' },
+    { id: 'terminalmp', label: 'Terminal Mercado Pago' },
+    { id: 'usuariospos', label: 'Usuarios POS' },
+  ];
   let _uposLista = [];
 
   async function renderUsuariosPOS() {
@@ -8084,8 +8111,19 @@ async function guardarVentaDirecta() {
           </div>
           <div class="ff">
             <label>Correo de acceso al admin (opcional)</label>
-            <input type="email" id="upos-correo-admin" value="${_h(u ? u.correoAdmin || '' : '')}" placeholder="correo@suenodeluna.com.mx">
+            <input type="email" id="upos-correo-admin" value="${_h(u ? u.correoAdmin || '' : '')}" placeholder="correo@suenodeluna.com.mx" oninput="document.getElementById('upos-paginas-wrap').style.display=this.value.trim()?'block':'none'">
             <div style="font-size:11px;color:var(--tx-4);margin-top:4px">Si lo llenas, esta persona podrá entrar a lunasmart.suenodeluna.com.mx -- primero debes darla de alta tú mismo en Firebase Authentication con este mismo correo y una contraseña.</div>
+          </div>
+          <div class="ff" id="upos-paginas-wrap" style="display:${(u && u.correoAdmin) ? 'block' : 'none'}">
+            <label>Páginas del admin a las que tiene acceso</label>
+            <div style="font-size:11px;color:var(--tx-4);margin:-2px 0 6px">Dashboard siempre lo puede ver. Esto solo importa si tiene correo de acceso arriba.</div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;margin:6px 0;cursor:pointer">
+              <input type="checkbox" id="upos-paginas-todas" ${(!u || !u.paginasAdmin || u.paginasAdmin === 'todas') ? 'checked' : ''} onchange="document.getElementById('upos-paginas-lista').style.display=this.checked?'none':'block'" style="width:16px;height:16px;accent-color:var(--terra-claro)">
+              Todas las páginas
+            </label>
+            <div id="upos-paginas-lista" style="display:${(u && u.paginasAdmin && u.paginasAdmin !== 'todas') ? 'block' : 'none'};padding-left:4px;max-height:220px;overflow-y:auto">
+              ${PAGINAS_ADMIN.map(p => `<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;margin:4px 0;cursor:pointer"><input type="checkbox" class="upos-pagina-check" value="${p.id}" ${(u && u.paginasAdmin && u.paginasAdmin !== 'todas' && u.paginasAdmin.includes(p.id)) ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--terra-claro)">${_h(p.label)}</label>`).join('')}
+            </div>
           </div>
           <div class="ff">
             <label>Sucursales donde puede iniciar sesión</label>
@@ -8118,6 +8156,8 @@ async function guardarVentaDirecta() {
     const todas = document.getElementById('upos-todas').checked;
     const sucursales = todas ? 'todas' : Array.from(document.querySelectorAll('.upos-suc-check:checked')).map(el => el.value);
     const correoAdmin = document.getElementById('upos-correo-admin').value.trim().toLowerCase();
+    const paginasTodas = document.getElementById('upos-paginas-todas').checked;
+    const paginasAdmin = paginasTodas ? 'todas' : Array.from(document.querySelectorAll('.upos-pagina-check:checked')).map(el => el.value);
     if (!nombre) { toast('Falta el nombre', '', 'err', 'ti-alert-triangle'); return; }
     if (!/^\d{4,6}$/.test(pin)) { toast('PIN inválido', 'Debe ser numérico, de 4 a 6 dígitos', 'err', 'ti-alert-triangle'); return; }
     if (!todas && !sucursales.length) { toast('Falta la sucursal', 'Elige al menos una, o marca "Todas"', 'err', 'ti-alert-triangle'); return; }
@@ -8129,7 +8169,7 @@ async function guardarVentaDirecta() {
     try {
       await fbAuthReady;
       const ref = id ? fbDb.ref('usuariosPOS/' + id) : fbDb.ref('usuariosPOS').push();
-      await ref.set({ nombre, pin, rol, sucursales, activo, correoAdmin: correoAdmin || null });
+      await ref.set({ nombre, pin, rol, sucursales, activo, correoAdmin: correoAdmin || null, paginasAdmin });
       _cerrarModal();
       toast(id ? 'Usuario actualizado' : 'Usuario creado', '', 'ok', 'ti-check');
       await renderUsuariosPOS();
@@ -10141,10 +10181,13 @@ LS_API.setConfig({
 /* ── OVERRIDE: go() para carga lazy de datos ─────────────── */
 const _go_orig = go;
 go = function(id, el) {
-  // Guardia de permisos: bloquear páginas no permitidas para el rol
+  // Guardia de permisos: bloquear páginas no permitidas para el rol/usuario.
+  // "dashboard" siempre es válido -- es donde se redirige a quien intenta
+  // entrar a algo que no le toca, en vez de dejar la pantalla en blanco.
   const perm = window._permActual;
-  if (perm && perm.pages !== 'ALL' && perm.pages.indexOf(id) === -1) {
-    if (typeof toast !== 'undefined') toast('Sin acceso', 'Tu rol no tiene permiso para ver esa sección', 'err', 'ti-lock');
+  if (perm && perm.pages !== 'ALL' && id !== 'dashboard' && perm.pages.indexOf(id) === -1) {
+    if (typeof toast !== 'undefined') toast('Sin acceso', 'Tu cuenta no tiene permiso para ver esa sección', 'err', 'ti-lock');
+    if (state.page !== 'dashboard') go('dashboard', null);
     return;
   }
   _go_orig(id, el);
@@ -10177,9 +10220,26 @@ function _rolTier(role) {
   return 'admin';
 }
 
-function aplicarPermisos(role) {
-  const tier = _rolTier(role);
-  const perm = PERMISOS[tier];
+function aplicarPermisos(u) {
+  // u puede ser el objeto de usuario completo (con paginasAdmin, lo
+  // configurado por persona en "Usuarios POS") o, por compatibilidad con
+  // llamadas viejas, un string de rol -- en ese caso se usa el sistema de
+  // niveles fijos de antes (PERMISOS/_rolTier).
+  const esObjeto = u && typeof u === 'object';
+  const role = esObjeto ? u.role : u;
+  const paginasAdmin = esObjeto ? u.paginasAdmin : null;
+  let perm;
+  if (paginasAdmin === 'todas' || paginasAdmin == null) {
+    perm = paginasAdmin === 'todas' ? PERMISOS.admin : PERMISOS[_rolTier(role)];
+  } else {
+    const pages = Array.from(new Set(['dashboard'].concat(paginasAdmin)));
+    perm = {
+      pages,
+      verFinanzas: pages.indexOf('gastos') !== -1 || pages.indexOf('balance') !== -1,
+      verFacturas: pages.indexOf('facturas') !== -1,
+      inicio: 'dashboard',
+    };
+  }
   window._permActual = perm;
 
   // 1) Mostrar/ocultar items de navegación según páginas permitidas
@@ -10189,6 +10249,9 @@ function aplicarPermisos(role) {
   });
   document.querySelectorAll('.m-nav-item[data-mnav]').forEach(el => {
     el.style.display = visible(el.dataset.mnav) ? '' : 'none';
+  });
+  document.querySelectorAll('.d-item[data-page]').forEach(el => {
+    el.style.display = visible(el.dataset.page) ? '' : 'none';
   });
 
   // 2) Ocultar KPIs financieros sensibles (utilidad, gastos) si no puede verlos
@@ -10213,7 +10276,7 @@ enterApp = function(u) {
   document.getElementById('u-avatar').textContent = u.ini;
   document.getElementById('login').style.display  = 'none';
   document.getElementById('app').style.display    = 'block';
-  const perm = aplicarPermisos(u.role);
+  const perm = aplicarPermisos(u);
   setTimeout(() => {
     toast('Bienvenido, ' + u.name.split(' ')[0], 'Sesión iniciada como ' + u.role, 'ok', 'ti-confetti');
     // Si hay un hash válido, restaurarlo; si no, ir a perm.inicio
@@ -10328,7 +10391,7 @@ window.addEventListener('load', () => {
       document.getElementById('u-avatar').textContent = u.ini;
       document.getElementById('login').style.display  = 'none';
       document.getElementById('app').style.display    = 'block';
-      const perm = aplicarPermisos(u.role);   // aplicar permisos al restaurar sesión
+      const perm = aplicarPermisos(u);   // aplicar permisos al restaurar sesión
       setTimeout(() => { const _h = window.location.hash.substring(1); if (_h && PAGES[_h]) { restaurarPaginaDelHash(); } else { go(perm.inicio, document.querySelector('[data-page="'+perm.inicio+'"\']')); } }, 200);
     } catch(e) {}
   }
