@@ -7134,14 +7134,14 @@ async function guardarVentaDirecta() {
     if (dd) dd.style.display = 'none';
   }
 
-  const CANAL_BADGE_INFO = { rappi: { l: 'R', color: '#ff4c1f' }, ubereats: { l: 'U', color: '#06c167' }, didi: { l: 'D', color: '#ff8100' }, sitioweb: { l: 'W', color: '#3a86ff' } };
+  const CANAL_BADGE_INFO = { rappi: { l: 'R', color: '#ff4c1f', nombre: 'Rappi' }, ubereats: { l: 'U', color: '#06c167', nombre: 'Uber Eats' }, didi: { l: 'D', color: '#ff8100', nombre: 'DiDi Food' }, sitioweb: { l: 'T', color: '#3a86ff', nombre: 'Tienda en Línea' } };
   function _catposCanalesBadges(p) {
     if (!p.canales) return '';
     const activos = Object.keys(p.canales).filter(cid => p.canales[cid] && p.canales[cid].activo);
     if (!activos.length) return '';
     return ' ' + activos.map(cid => {
-      const info = CANAL_BADGE_INFO[cid] || { l: '?', color: 'var(--tx-4)' };
-      return `<span title="${_h(cid)}" style="display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;border-radius:50%;background:${info.color};color:#fff;font-size:9px;font-weight:800;margin-left:2px">${info.l}</span>`;
+      const info = CANAL_BADGE_INFO[cid] || { l: '?', color: 'var(--tx-4)', nombre: cid };
+      return `<span title="${_h(info.nombre)}" style="display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;border-radius:50%;background:${info.color};color:#fff;font-size:9px;font-weight:800;margin-left:2px">${info.l}</span>`;
     }).join('');
   }
   function _catposRecetaBadge(p) {
@@ -7391,7 +7391,7 @@ async function guardarVentaDirecta() {
       { id: 'rappi', label: 'Rappi' },
       { id: 'ubereats', label: 'Uber Eats' },
       { id: 'didi', label: 'DiDi Food' },
-      { id: 'sitioweb', label: 'Sitio Web' },
+      { id: 'sitioweb', label: 'Tienda en Línea' },
     ];
     const canalesGuardados = (producto && producto.canales) || {};
     function _canalBloqueSimpleHTML(canal) {
@@ -7420,7 +7420,7 @@ async function guardarVentaDirecta() {
     }
     const canalesHTML = `
       <div class="ff" style="margin-top:6px">
-        <label>Precios para delivery y sitio web (Rappi / Uber Eats / DiDi / Sitio Web)</label>
+        <label>Precios para delivery y tienda en línea (Rappi / Uber Eats / DiDi / Tienda en Línea)</label>
         <div style="font-size:11px;color:var(--tx-4);margin:-4px 0 10px">Marca en qué plataformas se vende y captura el precio final que quieres cobrar ahí (ya con margen para su comisión). Sin marcar, no se ofrece en esa plataforma.</div>
         <div id="pp-canales-simple" style="display:${sizedInicial ? 'none' : 'block'}">${CANALES_DELIVERY.map(_canalBloqueSimpleHTML).join('')}</div>
         <div id="pp-canales-sized" style="display:${sizedInicial ? 'block' : 'none'}">${CANALES_DELIVERY.map(_canalBloqueSizedHTML).join('')}</div>
