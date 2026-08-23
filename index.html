@@ -4549,8 +4549,8 @@ const LS_UI = (() => {
       const mejorTurno = datos.reduce((mejor, r) => (!mejor || (r.ventaTotal || 0) > (mejor.ventaTotal || 0)) ? r : mejor, null);
       if (mejorTurno) {
         const turnoTxt = turnoLabel(mejorTurno.cliente).replace(/<[^>]*>/g, '') || mejorTurno.cliente || '';
-        setTxt('ing-top-turno', LS_API.nombreSucursal(mejorTurno.sucursal) + ' · ' + turnoTxt);
-        setTxt('ing-top-turno-sub', mejorTurno.fecha + ' — ' + fmt(mejorTurno.ventaTotal));
+        setTxt('ing-top-turno', turnoTxt + ' — ' + fmt(mejorTurno.ventaTotal));
+        setTxt('ing-top-turno-sub', LS_API.nombreSucursal(mejorTurno.sucursal) + ' · ' + mejorTurno.fecha);
       } else {
         setTxt('ing-top-turno', '—'); setTxt('ing-top-turno-sub', '—');
       }
