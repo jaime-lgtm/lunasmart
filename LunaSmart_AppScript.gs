@@ -608,7 +608,7 @@ function _registrarFacturaCompleta(b) {
     var id = _nextId(HOJAS.FACTURAS, 'FACT');
     _escribirFila(shF, [
       id, b.fecha || _fechaHoy(), b.unidad || '', b.proveedor || '',
-      b.folio || '', '', parseFloat(b.total || 0)
+      b.folio || '', b.foto || '', parseFloat(b.total || 0)
     ]);
 
     var lineas = b.lineas || [];
