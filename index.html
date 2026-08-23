@@ -1611,10 +1611,11 @@
 
 <!-- ════════ INGRESOS ════════ -->
 <div id="p-ingresos" class="page" data-screen-label="Ingresos">
-  <div class="kpis">
+  <div class="kpis k5">
     <div class="kpi"><div class="kpi-top"><div class="kpi-label" id="ing-venta-label">Venta total · período</div><div class="kpi-ico"><i class="ti ti-cash"></i></div></div><div class="kpi-val" id="ing-venta-total">—</div><div class="kpi-sub">Suma de todos los cortes</div></div>
     <div class="kpi"><div class="kpi-top"><div class="kpi-label">Cortes</div><div class="kpi-ico"><i class="ti ti-receipt-2"></i></div></div><div class="kpi-val" id="ing-num-cortes">—</div><div class="kpi-sub">Registrados en el período</div></div>
     <div class="kpi"><div class="kpi-top"><div class="kpi-label">Mejor sucursal</div><div class="kpi-ico d"><i class="ti ti-building-store"></i></div></div><div class="kpi-val" id="ing-top-sucursal" style="font-size:16px;line-height:1.4">—</div><div class="kpi-sub" id="ing-top-suc-monto">—</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Turno con mejor venta</div><div class="kpi-ico a"><i class="ti ti-trophy"></i></div></div><div class="kpi-val" id="ing-top-turno" style="font-size:16px;line-height:1.4">—</div><div class="kpi-sub" id="ing-top-turno-sub">—</div></div>
     <div class="kpi"><div class="kpi-top"><div class="kpi-label">Exactitud de caja</div><div class="kpi-ico g"><i class="ti ti-circle-check"></i></div></div><div class="kpi-val" id="ing-exactitud">—</div><div class="kpi-sub" id="ing-exactitud-sub">Turnos cuadrados</div></div>
   </div>
   <div class="card">
@@ -4559,6 +4560,15 @@ const LS_UI = (() => {
       const cuadrados = datos.filter(r => Math.abs(r.diferencia || 0) < 0.5).length;
       setTxt('ing-exactitud', datos.length ? Math.round(cuadrados / datos.length * 100) + '%' : '—');
       setTxt('ing-exactitud-sub', cuadrados + ' de ' + datos.length + ' turno(s) cuadrados');
+
+      const mejorTurno = datos.reduce((mejor, r) => (!mejor || (r.ventaTotal || 0) > (mejor.ventaTotal || 0)) ? r : mejor, null);
+      if (mejorTurno) {
+        const turnoTxt = turnoLabel(mejorTurno.cliente).replace(/<[^>]*>/g, '') || mejorTurno.cliente || '';
+        setTxt('ing-top-turno', LS_API.nombreSucursal(mejorTurno.sucursal) + ' · ' + turnoTxt);
+        setTxt('ing-top-turno-sub', mejorTurno.fecha + ' — ' + fmt(mejorTurno.ventaTotal));
+      } else {
+        setTxt('ing-top-turno', '—'); setTxt('ing-top-turno-sub', '—');
+      }
 
     } catch (err) {
       showError(containerId, 'Error cargando ingresos');
