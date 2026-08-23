@@ -1611,6 +1611,12 @@
 
 <!-- ════════ INGRESOS ════════ -->
 <div id="p-ingresos" class="page" data-screen-label="Ingresos">
+  <div class="kpis">
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label" id="ing-venta-label">Venta total · período</div><div class="kpi-ico"><i class="ti ti-cash"></i></div></div><div class="kpi-val" id="ing-venta-total">—</div><div class="kpi-sub">Suma de todos los cortes</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Cortes</div><div class="kpi-ico"><i class="ti ti-receipt-2"></i></div></div><div class="kpi-val" id="ing-num-cortes">—</div><div class="kpi-sub">Registrados en el período</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Mejor sucursal</div><div class="kpi-ico d"><i class="ti ti-building-store"></i></div></div><div class="kpi-val" id="ing-top-sucursal" style="font-size:16px;line-height:1.4">—</div><div class="kpi-sub" id="ing-top-suc-monto">—</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Exactitud de caja</div><div class="kpi-ico g"><i class="ti ti-circle-check"></i></div></div><div class="kpi-val" id="ing-exactitud">—</div><div class="kpi-sub" id="ing-exactitud-sub">Turnos cuadrados</div></div>
+  </div>
   <div class="card">
     <div class="card-head"><div><div class="card-title"><i class="ti ti-cash"></i>Cortes registrados <span id="ing-titulo-periodo"></span></div><div class="card-sub">Desglose de caja por turno</div></div><div class="card-actions"><span class="filter-note" id="fn-ingresos"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><button class="btn btn-primary btn-sm" onclick="openRegister('corte')"><i class="ti ti-plus"></i>Nuevo corte</button></div></div>
     <!-- Buscador -->
@@ -4534,6 +4540,25 @@ const LS_UI = (() => {
       window._ingresosVista = datos;
       const q = document.getElementById('ing-buscar')?.value || '';
       if (q.trim()) buscarIngresos(q); else _pintarIngresos(datos);
+
+      // KPIs del período
+      const lblP = period === 'mes' ? 'mes' : period === 'ano' ? 'año' : period === 'semana' ? 'semana' : 'hoy';
+      setTxt('ing-venta-label', 'Venta total · ' + lblP);
+      const ventaTotalPeriodo = datos.reduce((s, r) => s + (r.ventaTotal || 0), 0);
+      setTxt('ing-venta-total', fmt(ventaTotalPeriodo));
+      setTxt('ing-num-cortes', datos.length);
+      const sucAgg = {};
+      datos.forEach(r => { const n = LS_API.nombreSucursal(r.sucursal); sucAgg[n] = (sucAgg[n] || 0) + (r.ventaTotal || 0); });
+      const topSuc = Object.entries(sucAgg).map(([nombre, total]) => ({ nombre, total })).sort((a, b) => b.total - a.total);
+      if (topSuc.length > 0) {
+        setTxt('ing-top-sucursal', topSuc[0].nombre);
+        setTxt('ing-top-suc-monto', fmt(topSuc[0].total));
+      } else {
+        setTxt('ing-top-sucursal', '—'); setTxt('ing-top-suc-monto', '$0');
+      }
+      const cuadrados = datos.filter(r => Math.abs(r.diferencia || 0) < 0.5).length;
+      setTxt('ing-exactitud', datos.length ? Math.round(cuadrados / datos.length * 100) + '%' : '—');
+      setTxt('ing-exactitud-sub', cuadrados + ' de ' + datos.length + ' turno(s) cuadrados');
 
     } catch (err) {
       showError(containerId, 'Error cargando ingresos');
