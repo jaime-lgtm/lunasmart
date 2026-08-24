@@ -124,6 +124,20 @@ function _fechaHoy() {
   return Utilities.formatDate(d, Session.getScriptTimeZone(), 'dd/MM/yyyy');
 }
 
+// Los <input type="date"> del admin mandan YYYY-MM-DD (ISO); el POS y el
+// resto del backend usan dd/MM/yyyy. Si se escriben ambos formatos en la
+// misma columna, Sheets solo reconoce como fecha real el que coincide con
+// el locale (dd/MM/yyyy) y deja el otro como texto plano -- se ven
+// distintos y además ordenan/filtran mal. Normaliza todo a dd/MM/yyyy
+// antes de escribir.
+function _normalizarFecha(f) {
+  if (!f) return '';
+  const s = String(f).trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return iso[3] + '/' + iso[2] + '/' + iso[1];
+  return s;
+}
+
 // ── doGet: lectura ─────────────────────────────────────────────────────────
 function doGet(e) {
   const accion = (e.parameter && e.parameter.accion) ? e.parameter.accion : '';
@@ -262,7 +276,7 @@ function _registrarIngresoCompleto(b) {
     var retiros       = parseFloat(b.retiros       || 0);
     var ventaTotal    = parseFloat(b.ventaTotal    || total);
     var puntosCanjeados = parseFloat(b.puntosCanjeados || 0);
-    var fecha         = b.fecha || _fechaHoy();
+    var fecha         = _normalizarFecha(b.fecha) || _fechaHoy();
 
     // Migración additiva: la hoja ya existía sin estas columnas -- se agregan
     // los encabezados solo si aún no están, sin tocar las columnas A-O existentes.
@@ -331,7 +345,7 @@ function _obtenerCorteDia(b) {
   try {
     var sh = _getSheet(HOJAS.INGRESOS);
     var vals = sh.getDataRange().getValues();
-    var fecha = b.fecha || _fechaHoy();
+    var fecha = _normalizarFecha(b.fecha) || _fechaHoy();
     var sucursal = b.sucursal || '';
     var turno = b.turno || 'TURNO MAÑANA';
     for (var i = vals.length - 1; i >= 1; i--) {
@@ -371,9 +385,10 @@ function _actualizarIngreso(b) {
     var rappi         = parseFloat(b.rappi || 0);
     var total         = efectivo + tarjeta + transferencia + rappi;
     var ventaTotal    = parseFloat(b.ventaTotal || total);
+    var fechaNorm     = _normalizarFecha(b.fecha);
 
     sh.getRange(fila, 2, 1, 14).setValues([[
-      b.fecha || vals[fila-1][1],
+      fechaNorm || vals[fila-1][1],
       b.sucursal || '',
       b.cliente || '',
       parseFloat(b.inicioCaja || 0),
@@ -392,7 +407,7 @@ function _actualizarIngreso(b) {
       }
       var filas = (b.detalles || []).filter(function(d){ return d && d.articulo; }).map(function(d){
         var c = parseFloat(d.cantidad || 0) || 0, p = parseFloat(d.precio || 0) || 0;
-        return [Utilities.getUuid().substring(0,8), id, b.fecha || '', d.articulo, c, p, c*p, '', 0];
+        return [Utilities.getUuid().substring(0,8), id, fechaNorm || '', d.articulo, c, p, c*p, '', 0];
       });
       if (filas.length) {
         var fi = _siguienteFilaLibre(shD, 4);
@@ -467,9 +482,10 @@ function _actualizarIngresoParrot(b) {
     var rappi         = parseFloat(b.rappi         || 0);
     var total         = efectivo + tarjeta + transferencia + rappi;
     var ventaTotal    = parseFloat(b.ventaTotal || total);
+    var fechaNorm     = _normalizarFecha(b.fecha);
 
     sh.getRange(fila, 2, 1, 14).setValues([[
-      b.fecha || '', b.sucursal || '', b.cliente || '',
+      fechaNorm || '', b.sucursal || '', b.cliente || '',
       parseFloat(b.inicioCaja || 0), parseFloat(b.retiros || 0), parseFloat(b.depositos || 0),
       efectivo, tarjeta, transferencia, rappi,
       total, ventaTotal, total - ventaTotal,
@@ -487,7 +503,7 @@ function _actualizarIngresoParrot(b) {
       }
       var filas = (b.detalles || []).filter(function(d){ return d && d.articulo; }).map(function(d){
         var c = parseFloat(d.cantidad || 0) || 0, p = parseFloat(d.precio || 0) || 0;
-        return [Utilities.getUuid().substring(0, 8), b.cliente || b.clienteOriginal, b.fecha || b.fechaOriginal, d.articulo, c, p, c * p, '', 0];
+        return [Utilities.getUuid().substring(0, 8), b.cliente || b.clienteOriginal, fechaNorm || b.fechaOriginal, d.articulo, c, p, c * p, '', 0];
       });
       if (filas.length) {
         var fi = _siguienteFilaLibre(shD, 4);
@@ -557,7 +573,7 @@ function _registrarIngreso(b) {
 
     _escribirFila(sh, [
       id,
-      b.fecha || _fechaHoy(),
+      _normalizarFecha(b.fecha) || _fechaHoy(),
       b.sucursal || '',
       b.cliente  || '',
       inicioCaja,
@@ -587,7 +603,7 @@ function _registrarFactura(b) {
 
     _escribirFila(sh, [
       id,
-      b.fecha     || _fechaHoy(),
+      _normalizarFecha(b.fecha) || _fechaHoy(),
       b.unidad    || '',
       b.proveedor || '',
       b.folio     || '',
@@ -606,8 +622,9 @@ function _registrarFacturaCompleta(b) {
   try {
     var shF = _getSheet(HOJAS.FACTURAS);
     var id = _nextId(HOJAS.FACTURAS, 'FACT');
+    var fechaNorm = _normalizarFecha(b.fecha) || _fechaHoy();
     _escribirFila(shF, [
-      id, b.fecha || _fechaHoy(), b.unidad || '', b.proveedor || '',
+      id, fechaNorm, b.unidad || '', b.proveedor || '',
       b.folio || '', b.foto || '', parseFloat(b.total || 0)
     ]);
 
@@ -619,7 +636,7 @@ function _registrarFacturaCompleta(b) {
         var qty = parseFloat(l.cantidad) || 0;
         var precio = parseFloat(l.precioUnit) || 0;
         var sub = qty * precio;
-        return [ Utilities.getUuid().substring(0,8), id, b.fecha || '', l.articulo || '', qty, precio, 'NO', 0, sub ];
+        return [ Utilities.getUuid().substring(0,8), id, fechaNorm, l.articulo || '', qty, precio, 'NO', 0, sub ];
       });
       shD.getRange(filaInicio, 1, filas.length, 9).setValues(filas);
       var mapa = {};
@@ -657,9 +674,10 @@ function _actualizarFactura(b) {
       if (String(vals[i][0]).trim() === idF) { fila = i + 1; break; }
     }
     if (fila === -1) return _err('Factura no encontrada: ' + idF);
+    var fechaNorm = _normalizarFecha(b.fecha);
 
     sh.getRange(fila, 2, 1, 6).setValues([[
-      b.fecha     || vals[fila-1][1],
+      fechaNorm   || vals[fila-1][1],
       b.unidad    || '',
       b.proveedor || '',
       b.folio     || '',
@@ -682,7 +700,7 @@ function _actualizarFactura(b) {
         var sub = qty * precio;
         var f2 = _siguienteFilaLibre(shD, 2);
         shD.getRange(f2, 2, 1, 8).setValues([[
-          idF, b.fecha || '', l.articulo || '', qty, precio, 'NO', 0, sub
+          idF, fechaNorm || '', l.articulo || '', qty, precio, 'NO', 0, sub
         ]]);
         _actualizarCostoDinamico(l.articulo, precio);
       });
@@ -728,7 +746,7 @@ function _registrarArticuloDetalle(b) {
     var fila = _siguienteFilaLibre(sh, 2);
     sh.getRange(fila, 2, 1, 8).setValues([[
       b.idFactura  || '',
-      b.fecha      || _fechaHoy(),
+      _normalizarFecha(b.fecha) || _fechaHoy(),
       b.articulo   || '',
       qty,
       precio,
@@ -876,7 +894,7 @@ function _registrarReceta(b) {
       b.clase || '',
       b.tipoVenta || 'RESTAURANTE',
       parseFloat(b.costoElaboracion || 0) || 0,
-      b.fecha || _fechaHoy(),
+      _normalizarFecha(b.fecha) || _fechaHoy(),
     ]);
 
     const ingredientes = b.ingredientes || [];
@@ -919,7 +937,7 @@ function _actualizarReceta(b) {
       b.clase || '',
       b.tipoVenta || 'RESTAURANTE',
       parseFloat(b.costoElaboracion || 0) || 0,
-      b.fecha || vals[fila - 1][9],
+      _normalizarFecha(b.fecha) || vals[fila - 1][9],
     ]]);
 
     if (b.ingredientes) {

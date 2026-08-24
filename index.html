@@ -7137,15 +7137,19 @@ async function guardarVentaDirecta() {
     if (dd) dd.style.display = 'none';
   }
 
-  const CANAL_BADGE_INFO = { rappi: { l: 'R', color: '#ff4c1f', nombre: 'Rappi' }, ubereats: { l: 'U', color: '#06c167', nombre: 'Uber Eats' }, didi: { l: 'D', color: '#ff8100', nombre: 'DiDi Food' }, sitioweb: { l: 'T', color: '#3a86ff', nombre: 'Tienda en Línea' } };
+  const CANAL_BADGE_INFO = { rappi: { l: 'R', color: '#ff4c1f', nombre: 'Rappi' }, ubereats: { l: 'U', color: '#06c167', nombre: 'Uber Eats' }, didi: { l: 'D', color: '#ff8100', nombre: 'DiDi Food' }, sitioweb: { l: 'T', color: '#3a86ff', nombre: 'Tienda en Línea' }, pos: { l: 'P', color: '#5ba972', nombre: 'POS Luna Smart' } };
   function _catposCanalesBadges(p) {
-    if (!p.canales) return '';
-    const activos = Object.keys(p.canales).filter(cid => p.canales[cid] && p.canales[cid].activo);
-    if (!activos.length) return '';
+    // POS Luna Smart es al revés que los demás: por defecto SI se vende ahí
+    // (sin badge, es lo normal), solo se marca cuando se apagó a propósito.
+    const posOculto = p.canales && p.canales.pos && p.canales.pos.activo === false;
+    const ocultoBadge = posOculto ? `<span title="Oculto en POS Luna Smart" style="display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;border-radius:50%;background:var(--tx-4);color:#fff;font-size:9px;font-weight:800;margin-left:2px">🚫</span>` : '';
+    if (!p.canales) return ocultoBadge ? ' ' + ocultoBadge : '';
+    const activos = Object.keys(p.canales).filter(cid => cid !== 'pos' && p.canales[cid] && p.canales[cid].activo);
+    if (!activos.length && !ocultoBadge) return '';
     return ' ' + activos.map(cid => {
       const info = CANAL_BADGE_INFO[cid] || { l: '?', color: 'var(--tx-4)', nombre: cid };
       return `<span title="${_h(info.nombre)}" style="display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;border-radius:50%;background:${info.color};color:#fff;font-size:9px;font-weight:800;margin-left:2px">${info.l}</span>`;
-    }).join('');
+    }).join('') + ocultoBadge;
   }
   function _catposRecetaBadge(p) {
     if (p.sized) {
@@ -7232,7 +7236,7 @@ async function guardarVentaDirecta() {
       const cm = _catposCostoMargen(p);
       const imgCell = p.img
         ? `<img src="${p.img}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;display:block">`
-        : `<div style="width:32px;height:32px;border-radius:6px;background:var(--cafe-800);display:flex;align-items:center;justify-content:center;color:var(--tx-4);font-size:14px">🌙</div>`;
+        : `<div title="Sin foto -- edita el producto para subir una" style="width:32px;height:32px;border-radius:6px;background:var(--cafe-800);border:1px dashed var(--line-2);display:flex;align-items:center;justify-content:center;color:var(--tx-4);font-size:15px"><i class="ti ti-photo-plus"></i></div>`;
       return `<tr>
         <td style="font-family:var(--mono);color:var(--tx-3)">${_h(p.id)}</td>
         <td>${imgCell}</td>
@@ -7470,6 +7474,17 @@ async function guardarVentaDirecta() {
         <input type="number" id="pp-canal-${canal.id}-p2" placeholder="Precio T2" value="${p2}" inputmode="decimal" style="width:100px;padding:6px 8px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:12px;font-family:inherit">
       </div>`;
     }
+    const posCfg = canalesGuardados.pos || {};
+    const posActivo = posCfg.activo !== false; // por defecto SI se vende en el POS (asi ya estaban todos)
+    const posHTML = `
+      <div class="ff" style="margin-top:6px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="pp-canal-pos-activo" ${posActivo ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--terra-claro)">
+          Disponible en POS Luna Smart
+        </label>
+        <div style="font-size:11px;color:var(--tx-4);margin-top:4px">Desmárcalo si este producto no se debe vender desde la terminal física del POS (ej. es solo para delivery).</div>
+      </div>`;
+
     const canalesHTML = `
       <div class="ff" style="margin-top:6px">
         <label>Precios para delivery y tienda en línea (Rappi / Uber Eats / DiDi / Tienda en Línea)</label>
@@ -7509,7 +7524,7 @@ async function guardarVentaDirecta() {
               <div class="pcli-thumb" id="pp-foto-thumb">${producto && producto.img ? `<img src="${producto.img}">` : '<i class="ti ti-photo"></i>'}</div>
               <div style="flex:1">
                 <input type="file" accept="image/*" onchange="LS_UI._catposSubirFoto('${idParaFoto}', this.files[0])">
-                <div class="pcli-hint">Recomendado: foto cuadrada, buena luz -- se usa para delivery (Rappi/Uber Eats) y puede mostrarse en el menú.</div>
+                <div class="pcli-hint">Recomendado: foto <b>cuadrada (1:1)</b>, 800×800px a 1200×1200px, JPG, buena luz -- se usa para delivery (Rappi/Uber Eats) y se muestra en pedidos.suenodeluna.com.mx.</div>
                 <div class="pcli-status" id="pp-foto-status"></div>
               </div>
             </div>
@@ -7569,6 +7584,7 @@ async function guardarVentaDirecta() {
             </div>
           </div>
           ${esEdicion ? `<div class="ff" style="margin-top:2px"><label style="text-transform:none;font-size:11px;color:var(--tx-4);font-weight:400">ID: <span style="font-family:var(--mono)">${producto.id}</span></label></div>` : ''}
+          ${posHTML}
           ${canalesHTML}
           ${libModsHTML}
           ${modsHTML}
@@ -7678,6 +7694,12 @@ async function guardarVentaDirecta() {
             }
           }
         });
+        // POS Luna Smart: no es un canal de delivery (sin precio propio, usa
+        // el precio base) -- se guarda siempre, explícito, porque por defecto
+        // esta prendido (a diferencia de los de arriba que por defecto estan
+        // apagados hasta que se marcan).
+        const posActivoEl = document.getElementById('pp-canal-pos-activo');
+        if (posActivoEl) canales.pos = { activo: posActivoEl.checked };
         payload.canales = Object.keys(canales).length ? canales : null;
       }
 
