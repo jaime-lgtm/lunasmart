@@ -1149,6 +1149,7 @@
         <div class="nav-item" data-page="articulos" onclick="go('articulos',this)"><i class="ti ti-star"></i><span class="nav-lbl">Artículos estrella</span></div>
         <div class="nav-item" data-page="canales" onclick="go('canales',this)"><i class="ti ti-router"></i><span class="nav-lbl">Canales de venta</span></div>
         <div class="nav-item" data-page="rentabilidad" onclick="go('rentabilidad',this)"><i class="ti ti-chart-arrows-vertical"></i><span class="nav-lbl">Rentabilidad</span></div>
+        <div class="nav-item" data-page="ganancia-diaria" onclick="go('ganancia-diaria',this)"><i class="ti ti-report-money"></i><span class="nav-lbl">Ganancia diaria</span></div>
         <div class="nav-sec">Finanzas</div>
         <div class="nav-item" data-page="gastos" onclick="go('gastos',this)"><i class="ti ti-receipt"></i><span class="nav-lbl">Gastos</span></div>
         <div class="nav-item" data-page="balance" onclick="go('balance',this)"><i class="ti ti-report-money"></i><span class="nav-lbl">Balance</span></div>
@@ -1513,6 +1514,36 @@
         </tr></thead>
         <tbody id="tabla-rentabilidad">
           <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ GANANCIA DIARIA ════════ -->
+<div id="p-ganancia-diaria" class="page" data-screen-label="Ganancia diaria">
+  <div class="kpis">
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Venta · período</div><div class="kpi-ico"><i class="ti ti-cash"></i></div></div><div class="kpi-val" id="gd-venta">—</div><div class="kpi-sub">de INGRESOS DETALLES</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Costo de receta estimado</div><div class="kpi-ico a"><i class="ti ti-chef-hat"></i></div></div><div class="kpi-val" id="gd-costo">—</div><div class="kpi-sub">de lo vendido</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Ganancia estimada</div><div class="kpi-ico g"><i class="ti ti-trending-up"></i></div></div><div class="kpi-val" id="gd-ganancia">—</div><div class="kpi-sub" id="gd-margen-sub">margen <span id="gd-margen">—</span></div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Mejor día</div><div class="kpi-ico"><i class="ti ti-calendar-star"></i></div></div><div class="kpi-val" id="gd-mejor-dia" style="font-size:18px">—</div><div class="kpi-sub" id="gd-mejor-dia-sub">—</div></div>
+  </div>
+  <div class="card">
+    <div class="card-head">
+      <div><div class="card-title"><i class="ti ti-report-money"></i>Ganancia por día</div><div class="card-sub">Venta real (INGRESOS DETALLES) menos costo de receta de lo vendido -- no es contabilidad exacta, es una estimación operativa</div></div>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>Fecha</th>
+          <th class="num">Venta</th>
+          <th class="num">Costo receta</th>
+          <th class="num">Ganancia</th>
+          <th class="num">Margen</th>
+          <th class="num">Cobertura</th>
+        </tr></thead>
+        <tbody id="tabla-ganancia-diaria">
+          <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -2025,6 +2056,7 @@
           <div class="d-item" data-page="articulos" onclick="mdrawerGo('articulos')"><i class="ti ti-star"></i><span>Estrella</span></div>
           <div class="d-item" data-page="canales" onclick="mdrawerGo('canales')"><i class="ti ti-router"></i><span>Canales</span></div>
           <div class="d-item" data-page="rentabilidad" onclick="mdrawerGo('rentabilidad')"><i class="ti ti-chart-arrows-vertical"></i><span>Rentab.</span></div>
+          <div class="d-item" data-page="ganancia-diaria" onclick="mdrawerGo('ganancia-diaria')"><i class="ti ti-report-money"></i><span>Ganancia</span></div>
           <div class="d-item" data-page="gastos" onclick="mdrawerGo('gastos')"><i class="ti ti-receipt"></i><span>Gastos</span></div>
           <div class="d-item" data-page="balance" onclick="mdrawerGo('balance')"><i class="ti ti-report-money"></i><span>Balance</span></div>
           <div class="d-item" data-page="inventario" onclick="mdrawerGo('inventario')"><i class="ti ti-packages"></i><span>Inventario</span></div>
@@ -2091,6 +2123,7 @@ const PAGES = {
   articulos:    { title: 'Artículos Estrella',    sub: 'Top productos más vendidos' },
   canales:      { title: 'Canales de Venta',      sub: 'Participación por canal y sucursal' },
   rentabilidad: { title: 'Rentabilidad',          sub: 'Costo de elaboración vs precio real' },
+  'ganancia-diaria': { title: 'Ganancia Diaria',   sub: 'Venta real menos costo de receta, día por día' },
   gastos:       { title: 'Gastos y Proveedores',  sub: 'Control de egresos' },
   balance:      { title: 'Balance de Resultados', sub: 'Estado de resultados 2026' },
   inventario:   { title: 'Inventario General',    sub: 'Stock y alertas de reabastecimiento' },
@@ -5282,6 +5315,122 @@ const LS_UI = (() => {
     return filas;
   }
 
+  // ══════════════════════════════════════════════════════════
+  // GANANCIA DIARIA (venta real del día menos costo de receta de lo
+  // vendido ese día -- a diferencia de Rentabilidad, que es margen
+  // teórico por producto, esto usa las ventas reales de INGRESOS
+  // DETALLES día por día).
+  // ══════════════════════════════════════════════════════════
+  let _gananciaDiariaData = [];
+
+  function _fechaDisplay(fISO) {
+    if (!fISO) return '—';
+    const p = fISO.split('-');
+    return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : fISO;
+  }
+
+  // Costo de elaboración por nombre de producto (promedio entre tamaños
+  // si el producto tiene varios) -- cruza Catálogo POS (todas las
+  // sucursales) con Recetas, igual que Rentabilidad.
+  async function _construirCostoPorArticulo() {
+    await fbAuthReady;
+    const [recetas, ...snaps] = await Promise.all([
+      LS_API.getRecetas(),
+      ...CATPOS_SUCURSALES.map(s => fbDb.ref('catalogo/' + s.id).once('value')),
+    ]);
+    const costoPorReceta = {};
+    recetas.forEach(r => { costoPorReceta[r.id] = (r.costo_elaboracion || 0) / (r.porciones || 1); });
+    const costoPorNombre = {};
+    snaps.forEach(snap => {
+      const val = snap.val() || {};
+      Object.values(val).forEach(p => {
+        if (!p.name) return;
+        let costo = null;
+        if (p.sized && p.recetas) {
+          const costos = Object.values(p.recetas).map(id => costoPorReceta[id]).filter(c => c != null);
+          if (costos.length) costo = costos.reduce((a, b) => a + b, 0) / costos.length;
+        } else if (p.idReceta) {
+          costo = costoPorReceta[p.idReceta];
+        }
+        if (costo != null) costoPorNombre[_norm(p.name)] = costo;
+      });
+    });
+    return costoPorNombre;
+  }
+
+  // Agrupa INGRESOS DETALLES (ventas reales, línea por línea) por día,
+  // sumando venta y costo estimado -- respeta el filtro de sucursal
+  // global (getIngresos ya lo aplica) cruzando por idIngreso.
+  async function _construirGananciaDiaria() {
+    const [ingresos, detalle, costoPorNombre] = await Promise.all([
+      LS_API.getIngresos(),
+      LS_API.getIngresoDetalle(),
+      _construirCostoPorArticulo(),
+    ]);
+    const idsValidos = new Set(ingresos.map(i => i.id));
+    const porDia = {};
+    detalle.forEach(d => {
+      if (!idsValidos.has(d.idIngreso)) return;
+      const fISO = LS_API._fechaISO(d.fecha);
+      if (!fISO) return;
+      if (!porDia[fISO]) porDia[fISO] = { fISO, venta: 0, costo: 0, unidades: 0, unidadesConCosto: 0 };
+      porDia[fISO].venta += d.total;
+      porDia[fISO].unidades += d.cantidad;
+      const costoUnit = costoPorNombre[_norm(d.articulo)];
+      if (costoUnit != null) {
+        porDia[fISO].costo += costoUnit * d.cantidad;
+        porDia[fISO].unidadesConCosto += d.cantidad;
+      }
+    });
+    return Object.values(porDia).sort((a, b) => b.fISO.localeCompare(a.fISO));
+  }
+
+  async function renderGananciaDiaria() {
+    const containerId = 'tabla-ganancia-diaria';
+    showLoading(containerId);
+    try {
+      const period = (typeof state !== 'undefined' && state.period) ? state.period : 'mes';
+      const { desde, hasta } = LS_API.getRangoPeriodo(period);
+      if (_gananciaDiariaData.length === 0) {
+        _gananciaDiariaData = await _construirGananciaDiaria();
+      }
+      const dias = _gananciaDiariaData.filter(d => d.fISO >= desde && d.fISO <= hasta);
+
+      const totVenta = dias.reduce((s, d) => s + d.venta, 0);
+      const totCosto = dias.reduce((s, d) => s + d.costo, 0);
+      const totGanancia = totVenta - totCosto;
+      const margenProm = totVenta > 0 ? (totGanancia / totVenta) * 100 : 0;
+      const mejorDia = dias.slice().sort((a, b) => (b.venta - b.costo) - (a.venta - a.costo))[0];
+
+      setTxt('gd-venta', fmt(totVenta));
+      setTxt('gd-costo', fmt(totCosto));
+      setTxt('gd-ganancia', fmt(totGanancia));
+      setTxt('gd-margen', fmtP(margenProm));
+      if (mejorDia) {
+        setTxt('gd-mejor-dia', _fechaDisplay(mejorDia.fISO));
+        setTxt('gd-mejor-dia-sub', fmt(mejorDia.venta - mejorDia.costo) + ' ganancia');
+      } else { setTxt('gd-mejor-dia', '—'); setTxt('gd-mejor-dia-sub', '—'); }
+
+      setEl(containerId, dias.length ? dias.map(d => {
+        const ganancia = d.venta - d.costo;
+        const margen = d.venta > 0 ? (ganancia / d.venta) * 100 : 0;
+        const cobertura = d.unidades > 0 ? Math.round((d.unidadesConCosto / d.unidades) * 100) : 0;
+        const colM = margen >= 60 ? 'var(--verde)' : margen >= 40 ? 'var(--ambar)' : 'var(--rojo)';
+        return `<tr>
+          <td style="font-family:var(--mono)">${_fechaDisplay(d.fISO)}</td>
+          <td class="num" style="font-family:var(--mono)">${fmt(d.venta)}</td>
+          <td class="num" style="font-family:var(--mono);color:var(--tx-3)">${fmt(d.costo)}</td>
+          <td class="num" style="font-family:var(--mono);font-weight:700;color:${colM}">${fmt(ganancia)}</td>
+          <td class="num" style="font-family:var(--mono);color:${colM}">${fmtP(margen)}</td>
+          <td class="num" style="color:var(--tx-4);font-size:11px" title="% de las unidades vendidas ese día que tienen receta vinculada para calcular su costo">${cobertura}% costeado</td>
+        </tr>`;
+      }).join('') : '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--tx-3)">Sin ventas en el período</td></tr>');
+    } catch (err) {
+      console.error('Error ganancia diaria:', err);
+      showError(containerId, 'Error cargando ganancia diaria');
+    }
+  }
+
   // Arma la tabla de rentabilidad a partir de Recetas (clase = "Productos
   // Vendibles") cruzadas con su precio real de venta en Catálogo POS -- ya
   // no depende de la hoja "Costo de Producto" (que había que vincular a mano).
@@ -8145,6 +8294,7 @@ async function guardarVentaDirecta() {
     { id: 'articulos', label: 'Artículos estrella' },
     { id: 'canales', label: 'Canales de venta' },
     { id: 'rentabilidad', label: 'Rentabilidad' },
+    { id: 'ganancia-diaria', label: 'Ganancia diaria' },
     { id: 'gastos', label: 'Gastos' },
     { id: 'balance', label: 'Balance' },
     { id: 'inventario', label: 'Inventario' },
@@ -9609,6 +9759,7 @@ async function guardarVentaDirecta() {
       case 'articulos':    await renderArticulos();    break;
       case 'canales':      await renderCanales();      break;
       case 'rentabilidad': await renderRentabilidad(); break;
+      case 'ganancia-diaria': await renderGananciaDiaria(); break;
       case 'gastos':       await renderGastos();       break;
       case 'balance':      await renderBalance();      break;
       case 'inventario':   await renderInventario();   break;
