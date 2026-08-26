@@ -1856,7 +1856,11 @@
       <select id="catpos-categoria-sel" onchange="LS_UI.filtrarCategoriaCatalogoPOS(this.value||null)" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none"></select>
       <select id="catpos-sub-sel" onchange="LS_UI.filtrarSubCategoriaCatalogoPOS(this.value||null)" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;outline:none"></select>
     </div>
-    <div style="padding:12px 18px 12px">
+    <div style="padding:14px 18px 0">
+      <div style="font-size:11px;color:var(--tx-3);font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px">Rentabilidad por plataforma -- margen neto promedio de esta sucursal</div>
+      <div id="catpos-resumen-plataformas"></div>
+    </div>
+    <div style="padding:0 18px 12px">
       <div style="position:relative;max-width:460px">
         <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--tx-4);font-size:16px"></i>
         <input type="text" id="catpos-buscar" placeholder="Buscar por nombre o ID..." oninput="LS_UI.buscarCatalogoPOS(this.value)"
@@ -7039,6 +7043,7 @@ async function guardarVentaDirecta() {
       _actualizarHeaderRecetaFiltro();
       _catposPintarChipsCategoria();
       _catposAplicarFiltros();
+      _pintarResumenPlataformas();
     } catch(e) {
       console.error('Error cargando catálogo POS:', e);
       showError('tabla-catalogopos', 'Error cargando el catálogo (revisa la conexión con Firebase)');
@@ -7450,7 +7455,7 @@ async function guardarVentaDirecta() {
       const margenTxt = partes.map(x => `${x.k}: ${x.margen != null ? fmtP(x.margen) : '—'}`).join(' / ');
       const validos = partes.map(x => x.margen).filter(m => m != null);
       const promedio = validos.length ? validos.reduce((a, b) => a + b, 0) / validos.length : null;
-      return { costoTxt, margenTxt, color: _catposMargenColor(promedio) };
+      return { costoTxt, margenTxt, numMargen: promedio, color: _catposMargenColor(promedio) };
     }
     const costo = _catposCostoUnit(p.idReceta);
     const precio = parseFloat(p.price) || 0;
@@ -7458,8 +7463,64 @@ async function guardarVentaDirecta() {
     return {
       costoTxt: costo != null ? fmtD(costo) : '—',
       margenTxt: margen != null ? fmtP(margen) : '—',
+      numMargen: margen,
       color: _catposMargenColor(margen),
     };
+  }
+
+  // Margen neto promedio de la sucursal activa, por plataforma (POS +
+  // Rappi/Uber Eats/DiDi/Tienda en Línea) -- usado por la tarjeta
+  // "Rentabilidad por plataforma" arriba de la tabla de Catálogo POS.
+  const CATPOS_RESUMEN_CANALES = [
+    { id: 'pos', label: 'POS Luna Smart', color: '#5ba972' },
+    { id: 'rappi', label: 'Rappi', color: '#ff4c1f' },
+    { id: 'ubereats', label: 'Uber Eats', color: '#06c167' },
+    { id: 'didi', label: 'DiDi Food', color: '#ff8100' },
+    { id: 'sitioweb', label: 'Tienda en Línea', color: '#3a86ff' },
+  ];
+  function _catposResumenPlataformas() {
+    const acc = {};
+    CATPOS_RESUMEN_CANALES.forEach(c => { acc[c.id] = { total: 0, margenes: [], sinComision: 0 }; });
+    (_catposProductos || []).forEach(p => {
+      const posOculto = p.canales && p.canales.pos && p.canales.pos.activo === false;
+      if (!posOculto) {
+        const cm = _catposCostoMargen(p);
+        acc.pos.total++;
+        if (cm.numMargen != null) acc.pos.margenes.push(cm.numMargen);
+      }
+      ['rappi', 'ubereats', 'didi', 'sitioweb'].forEach(cid => {
+        const cfg = p.canales && p.canales[cid];
+        if (!cfg || !cfg.activo) return;
+        acc[cid].total++;
+        const m = _catposMargenCanalNum(p, cid, cfg);
+        if (m != null) acc[cid].margenes.push(m);
+        else if (cid !== 'sitioweb' && !_comisionesDelivery[cid]) acc[cid].sinComision++;
+      });
+    });
+    return CATPOS_RESUMEN_CANALES.map(c => {
+      const a = acc[c.id];
+      const promedio = a.margenes.length ? a.margenes.reduce((x, y) => x + y, 0) / a.margenes.length : null;
+      return { id: c.id, label: c.label, color: c.color, total: a.total, promedio, sinComision: a.sinComision };
+    });
+  }
+  function _pintarResumenPlataformas() {
+    const cont = document.getElementById('catpos-resumen-plataformas');
+    if (!cont) return;
+    const datos = _catposResumenPlataformas();
+    cont.innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap;padding-bottom:14px">${datos.map(d => {
+      const val = d.total ? (d.promedio != null ? LS_API.formatPct(d.promedio) : '—') : '—';
+      const color = d.total ? _catposMargenColor(d.promedio) : 'var(--tx-4)';
+      const sub = d.total ? `margen neto promedio · ${d.total} producto${d.total === 1 ? '' : 's'}` : 'sin productos activos aquí';
+      const nota = d.sinComision > 0 ? `<div style="font-size:10px;color:var(--ambar);margin-top:2px">${d.sinComision} sin comisión configurada</div>` : '';
+      return `<div style="flex:1;min-width:132px;background:var(--cafe-card-hi);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx-3);font-weight:600">
+          <span style="width:8px;height:8px;border-radius:50%;background:${d.color};flex-shrink:0"></span>${_h(d.label)}
+        </div>
+        <div style="font-size:21px;font-weight:700;color:${color};margin-top:4px;font-family:var(--mono)">${val}</div>
+        <div style="font-size:10.5px;color:var(--tx-4);margin-top:2px">${sub}</div>
+        ${nota}
+      </div>`;
+    }).join('')}</div>`;
   }
 
   function _pintarCatalogoPOS(lista) {
