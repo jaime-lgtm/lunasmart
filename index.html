@@ -5666,9 +5666,21 @@ return Object.assign({}, i, { estado: _estInv(i), urgente: urgente });
 
 setTxt('inv-total-articulos', inventario.length);
 setTxt('inv-criticos', clasificados.filter(function(i) { return i.estado === 'critico'; }).length);
-const valorPorSurtir = inventario.reduce((s, i) => s + (i.costoResurtido || 0), 0);
+// costoUnit en la hoja es el costo de LA PRESENTACIÓN completa (ej. la
+// botella de 1000 mL), no de una unidad base suelta -- hay que dividir
+// entre la presentación antes de multiplicar por el stock, si no el valor
+// se infla por un factor igual al tamaño de la presentación (visto: stock
+// en millones de pesos para un solo artículo). No se puede corregir la
+// columna "costo por surtir" de la hoja (es una fórmula ahí, no código),
+// así que "Valor por surtir" se recalcula aquí usando "faltante" (esa
+// cantidad sí es confiable) por el costo unitario ya corregido.
+function _costoPorUnidadBase(i) {
+  const pres = LS_API.parseNum(i.presentacion);
+  return pres > 0 ? i.costoUnit / pres : i.costoUnit;
+}
+const valorPorSurtir = inventario.reduce((s, i) => s + ((i.faltante || 0) * _costoPorUnidadBase(i)), 0);
     setTxt('inv-porsurtir', fmt(valorPorSurtir));
-const valorTotal = inventario.reduce((s, i) => s + (i.stockFisico * i.costoUnit), 0);
+const valorTotal = inventario.reduce((s, i) => s + (i.stockFisico * _costoPorUnidadBase(i)), 0);
 setTxt('inv-valor', fmt(valorTotal));
 
 document.querySelectorAll('[data-inv-filtro]').forEach(function(b) {
