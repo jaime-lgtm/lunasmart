@@ -10300,13 +10300,31 @@ async function guardarVentaDirecta() {
           toast('Inventario registrado', (res.actualizados || items.length) + ' artículos actualizados', 'ok', 'ti-check');
                          const catalogo = window.__reginvArticulos || [];
           const fecha = new Date().toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
-          let texto = '*Registro de inventario*\nAlmacén: ' + sucursal + '\nFecha: ' + fecha + '\n\n';
-                  items.forEach(it => {
+          // Agrupar por proveedor (mismo cruce articulo->proveedor que usa
+          // "Generar orden de compra") para poder mandar cada seccion al
+          // proveedor correspondiente. Sin proveedor asignado siempre al final.
+          let proveedorPorArticulo = {};
+          try {
+            const catProveedores = await LS_API.getCatalogo();
+            catProveedores.forEach(c => { proveedorPorArticulo[(c.articulo || '').trim().toUpperCase()] = (c.proveedor || '').trim(); });
+          } catch(e) {}
+          const gruposProv = {};
+          items.forEach(it => {
             const art = catalogo.find(a => a.fila === it.fila);
             const nombre = art ? art.articulo : ('Artículo fila ' + it.fila);
             const unidad = art ? (art.unidad || '') : '';
-            texto += '• ' + nombre + ': ' + it.stockFisico + ' ' + unidad + '\n';
-  });
+            const prov = proveedorPorArticulo[(nombre || '').trim().toUpperCase()] || 'Sin proveedor asignado';
+            (gruposProv[prov] = gruposProv[prov] || []).push({ nombre, unidad, cantidad: it.stockFisico });
+          });
+          const SIN_PROV = 'Sin proveedor asignado';
+          const ordenProveedores = Object.keys(gruposProv).filter(p => p !== SIN_PROV).sort((a, b) => a.localeCompare(b));
+          if (gruposProv[SIN_PROV]) ordenProveedores.push(SIN_PROV);
+          let texto = '*Registro de inventario*\nAlmacén: ' + sucursal + '\nFecha: ' + fecha + '\n\n';
+          ordenProveedores.forEach(prov => {
+            texto += '*' + prov + '*\n';
+            gruposProv[prov].forEach(it => { texto += '• ' + it.nombre + ': ' + it.cantidad + ' ' + it.unidad + '\n'; });
+            texto += '\n';
+          });
           window.__reginvTextoWA = texto;
           window.__reginvAlmacen = sucursal;
           window.__reginvCantidad = items.length;
