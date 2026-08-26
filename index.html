@@ -7348,17 +7348,30 @@ async function guardarVentaDirecta() {
     const neto = precioCanal * (1 - comisionPct / 100);
     return ((neto - costo) / precioCanal) * 100;
   }
+  // Precio de un canal para el texto del badge -- "T1: $40 / T2: $55" si
+  // el producto tiene tamaños, o el precio único si no.
+  function _catposPrecioCanalTxt(p, cfg) {
+    if (p.sized && p.prices) {
+      return Object.keys(p.prices).map(k => cfg.precios && cfg.precios[k] != null ? LS_API.formatMXNDec(cfg.precios[k]) : '—').join(' / ');
+    }
+    return cfg.precio != null ? LS_API.formatMXNDec(cfg.precio) : '—';
+  }
+  // Fila compacta por plataforma activa (Rappi/Uber/DiDi/Tienda en Línea) con
+  // su precio y, si ya hay comisión configurada, el margen tras descontarla.
+  // Se pinta debajo del precio del POS en la columna "Precio" -- antes vivía
+  // junto al nombre del producto, separado del precio y confuso.
   function _catposCanalesBadges(p) {
     // POS Luna Smart es al revés que los demás: por defecto SI se vende ahí
     // (sin badge, es lo normal), solo se marca cuando se apagó a propósito.
     const posOculto = p.canales && p.canales.pos && p.canales.pos.activo === false;
-    const ocultoBadge = posOculto ? `<span title="Oculto en POS Luna Smart" style="display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;border-radius:50%;background:var(--tx-4);color:#fff;font-size:9px;font-weight:800;margin-left:2px">🚫</span>` : '';
-    if (!p.canales) return ocultoBadge ? ' ' + ocultoBadge : '';
+    const ocultoHTML = posOculto ? `<div style="font-size:9.5px;color:var(--tx-4);margin-top:3px;text-align:right">🚫 Oculto en POS</div>` : '';
+    if (!p.canales) return ocultoHTML;
     const activos = Object.keys(p.canales).filter(cid => cid !== 'pos' && p.canales[cid] && p.canales[cid].activo);
-    if (!activos.length && !ocultoBadge) return '';
-    return ' ' + activos.map(cid => {
+    if (!activos.length) return ocultoHTML;
+    const filas = activos.map(cid => {
       const info = CANAL_BADGE_INFO[cid] || { l: '?', color: 'var(--tx-4)', nombre: cid };
       const cfg = p.canales[cid];
+      const precioTxt = _catposPrecioCanalTxt(p, cfg);
       let margenHTML = '';
       let tip = info.nombre;
       if (cid !== 'sitioweb') {
@@ -7366,11 +7379,15 @@ async function guardarVentaDirecta() {
         if (m != null) {
           const comisionPct = _comisionesDelivery[cid] || 0;
           tip = `${info.nombre} · comisión ${comisionPct}% · margen tras comisión ${LS_API.formatPct(m)}`;
-          margenHTML = `<span title="${_h(tip)}" style="font-size:8.5px;font-weight:700;color:${_catposMargenColor(m)};margin-left:1px">${Math.round(m)}%</span>`;
+          margenHTML = ` <span title="${_h(tip)}" style="font-weight:700;color:${_catposMargenColor(m)}">${Math.round(m)}%</span>`;
         }
       }
-      return `<span title="${_h(tip)}" style="display:inline-flex;align-items:center;gap:1px;margin-left:3px"><span style="display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;border-radius:50%;background:${info.color};color:#fff;font-size:9px;font-weight:800">${info.l}</span>${margenHTML}</span>`;
-    }).join('') + ocultoBadge;
+      return `<div title="${_h(tip)}" style="display:flex;align-items:center;justify-content:flex-end;gap:4px;font-size:10.5px;margin-top:3px;white-space:nowrap">
+        <span style="display:inline-block;width:13px;height:13px;line-height:13px;text-align:center;border-radius:50%;background:${info.color};color:#fff;font-size:8px;font-weight:800;flex-shrink:0">${info.l}</span>
+        <span style="color:var(--tx-2)">${precioTxt}</span>${margenHTML}
+      </div>`;
+    }).join('');
+    return filas + ocultoHTML;
   }
   function _catposRecetaBadge(p) {
     if (p.sized) {
@@ -7461,10 +7478,10 @@ async function guardarVentaDirecta() {
       return `<tr>
         <td style="font-family:var(--mono);color:var(--tx-3)">${_h(p.id)}</td>
         <td>${imgCell}</td>
-        <td style="font-weight:500">${p.fav===true ? '⭐ ' : ''}${_h(p.name)}${_catposCanalesBadges(p)}</td>
+        <td style="font-weight:500">${p.fav===true ? '⭐ ' : ''}${_h(p.name)}</td>
         <td style="color:var(--tx-2)">${_h(p.menu||'')}${p.sub ? ' · '+_h(p.sub) : ''}</td>
         <td class="num" style="font-family:var(--mono);font-size:12px">${cm.costoTxt}</td>
-        <td class="num" style="font-family:var(--mono)">${precio}</td>
+        <td class="num" style="font-family:var(--mono)"><div>${precio}</div>${_catposCanalesBadges(p)}</td>
         <td class="num" style="font-family:var(--mono);font-weight:700;color:${cm.color}">${cm.margenTxt}</td>
         <td>${_catposRecetaBadge(p)}</td>
         <td style="white-space:nowrap">
