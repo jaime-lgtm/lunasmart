@@ -2408,7 +2408,7 @@ function exportarMenu(btn) {
     <div onclick="exportarActual('csv');var e=document.getElementById('export-menu');if(e)e.remove()" style="padding:11px 15px;font-size:13px;color:var(--tx);cursor:pointer;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--line)" onmouseover="this.style.background='rgba(177,70,24,0.10)'" onmouseout="this.style.background='transparent'"><i class="ti ti-file-spreadsheet" style="color:var(--verde);font-size:16px"></i>Descargar CSV (Excel)</div>` : '';
   m.innerHTML = optCSV + `
     <div onclick="exportarActual('pdf');var e=document.getElementById('export-menu');if(e)e.remove()" style="padding:11px 15px;font-size:13px;color:var(--tx);cursor:pointer;display:flex;align-items:center;gap:9px" onmouseover="this.style.background='rgba(177,70,24,0.10)'" onmouseout="this.style.background='transparent'"><i class="ti ti-printer" style="color:var(--terra-claro);font-size:16px"></i>Imprimir / Guardar PDF</div>`;
-  document.body.appendChild(m);
+  (document.getElementById('app') || document.body).appendChild(m);
   const r = btn.getBoundingClientRect();
   m.style.top = (r.bottom + 5) + 'px';
   m.style.left = Math.max(8, r.right - 184) + 'px';
@@ -2567,8 +2567,15 @@ window.addEventListener('load', () => {
   buildBranchMenu();
   initSort();
   updateSubtitle();
-  let savedTheme = 'noche';
-  try { savedTheme = localStorage.getItem('ls_theme') || 'dia'; } catch (e) {}
+  let savedTheme = 'ocular';
+  try {
+    savedTheme = localStorage.getItem('ls_theme') || 'ocular';
+    if (savedTheme === 'noche' && !localStorage.getItem('ls_theme_beige_migrado')) {
+      savedTheme = 'ocular';
+      localStorage.setItem('ls_theme', 'ocular');
+      localStorage.setItem('ls_theme_beige_migrado', '1');
+    }
+  } catch (e) {}
   applyTheme(savedTheme, false);
   const s = sessionStorage.getItem('ls_user');
   if (s) {
@@ -7515,8 +7522,11 @@ async function guardarVentaDirecta() {
   // El efecto de inventario (agrega/sustituye) vive en el PRODUCTO
   // (producto.modInv[modId][indiceOpcion][tamano]), no en el modificador,
   // porque depende de la receta de este producto especifico.
+  // Bloque de un modificador YA ASIGNADO -- el checkbox se queda oculto pero
+  // SIEMPRE marcado (guardarProductoPOS sigue leyendo .pp-libmod-chk tal
+  // cual); "asignar" ahora es agregarlo por búsqueda, "desasignar" es el
+  // botón Quitar que borra el bloque completo del DOM.
   function _libModCheckboxHTML(m, producto, sized, sizeKeys) {
-    const asignado = !!(producto && producto.modAsignados && producto.modAsignados.indexOf(m.id) > -1);
     const tipoCorto = { unico: 'única', multiple: 'varias', cantidad: 'cantidad' }[m.tipo] || '';
     const opcionesHTML = (m.opciones || []).map((o, oi) => {
       const keys = sized ? sizeKeys : ['__default__'];
@@ -7533,28 +7543,22 @@ async function guardarVentaDirecta() {
     }).join('');
     return `
       <div class="pp-libmod-block" draggable="true" id="pp-libmod-block-${m.id}" data-modid="${m.id}" style="margin-bottom:10px;padding:10px;border:1px solid var(--line-2);border-radius:10px;background:var(--cafe-card)">
+        <input type="checkbox" class="pp-libmod-chk" data-modid="${m.id}" checked style="display:none">
         <div style="display:flex;align-items:center;gap:6px">
           <span class="drag-handle">&#9776;</span>
-          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1">
-            <input type="checkbox" class="pp-libmod-chk" data-modid="${m.id}" ${asignado?'checked':''} onchange="LS_UI._toggleLibModOpciones('${m.id}')" style="width:18px;height:18px;accent-color:var(--terra-claro)">
+          <div style="display:flex;align-items:center;gap:10px;flex:1">
             <span style="font-weight:600;font-size:13px">${_h(m.nombre)}</span>
             <span style="font-size:11px;color:var(--tx-4)">(${tipoCorto}${m.obligatorio?' · obligatorio':''})</span>
-          </label>
-          <button type="button" id="pp-libmod-${m.id}-arrow" onclick="LS_UI._toggleLibModColapso('${m.id}')" title="Mostrar/ocultar opciones" style="background:none;border:none;cursor:pointer;color:var(--tx-3);padding:4px;transform:rotate(${asignado?'0':'-90'}deg);transition:transform .15s">
-            <i class="ti ti-chevron-down"></i>
+          </div>
+          <button type="button" onclick="LS_UI._toggleLibModColapso('${m.id}')" title="Mostrar/ocultar opciones" style="background:none;border:none;cursor:pointer;color:var(--tx-3);padding:4px">
+            <i class="ti ti-chevron-down" id="pp-libmod-${m.id}-arrow" style="transition:transform .15s"></i>
+          </button>
+          <button type="button" onclick="LS_UI._quitarLibMod('${m.id}')" title="Quitar de este producto" style="background:none;border:none;cursor:pointer;color:var(--rojo, #d4685e);padding:4px">
+            <i class="ti ti-x"></i>
           </button>
         </div>
-        <div id="pp-libmod-${m.id}-opts" style="display:${asignado?'block':'none'};margin-top:8px">${opcionesHTML}</div>
+        <div id="pp-libmod-${m.id}-opts" style="display:none;margin-top:8px">${opcionesHTML}</div>
       </div>`;
-  }
-
-  function _toggleLibModOpciones(modId) {
-    const chk = document.querySelector(`.pp-libmod-chk[data-modid="${modId}"]`);
-    const wrap = document.getElementById(`pp-libmod-${modId}-opts`);
-    const arrow = document.getElementById(`pp-libmod-${modId}-arrow`);
-    const abierto = !!(chk && chk.checked);
-    if (wrap) wrap.style.display = abierto ? 'block' : 'none';
-    if (arrow) arrow.style.transform = `rotate(${abierto ? 0 : -90}deg)`;
   }
 
   function _toggleLibModColapso(modId) {
@@ -7563,7 +7567,111 @@ async function guardarVentaDirecta() {
     if (!wrap) return;
     const abierto = wrap.style.display !== 'none';
     wrap.style.display = abierto ? 'none' : 'block';
-    if (arrow) arrow.style.transform = `rotate(${abierto ? -90 : 0}deg)`;
+    if (arrow) arrow.style.transform = `rotate(${abierto ? 0 : 180}deg)`;
+  }
+
+  function _quitarLibMod(modId) {
+    const block = document.getElementById(`pp-libmod-block-${modId}`);
+    if (block) block.remove();
+  }
+
+  // Buscador para agregar un modificador de la biblioteca (mismo patrón que
+  // el buscador de recetas) -- evita mostrar los 15-20 modificadores como
+  // una lista larga cuando el producto solo usa 2 o 3.
+  function _libModBuscarHTML() {
+    return `
+      <div style="position:relative;margin-top:4px">
+        <input type="text" id="pp-libmod-buscar" autocomplete="off" placeholder="Buscar y agregar modificador..."
+          oninput="LS_UI.filtrarLibModPOS(this)"
+          onfocus="LS_UI.filtrarLibModPOS(this)"
+          onkeydown="LS_UI.libModDDNav(this,event)"
+          onblur="setTimeout(()=>LS_UI.cerrarLibModDD(),200)">
+        <div id="pp-libmod-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:60;background:var(--cafe-750);border:1px solid var(--line-2);border-radius:0 0 var(--r) var(--r);max-height:220px;overflow-y:auto;box-shadow:var(--sh-pop)"></div>
+      </div>`;
+  }
+
+  function _libModAsignadosIds() {
+    return Array.from(document.querySelectorAll('#pp-libmods-lista .pp-libmod-block')).map(el => el.dataset.modid);
+  }
+
+  function filtrarLibModPOS(input) {
+    const dd = document.getElementById('pp-libmod-dd');
+    if (!dd) return;
+    const q = _norm(input.value);
+    const asignados = _libModAsignadosIds();
+    const disponibles = (_formLibModsList || []).filter(m => asignados.indexOf(m.id) === -1);
+    const hits = (q ? disponibles.filter(m => _norm(m.nombre).includes(q)) : disponibles).slice(0, 50);
+
+    dd.innerHTML = '';
+    if (!hits.length) {
+      const vacio = document.createElement('div');
+      vacio.style.cssText = 'padding:10px 12px;font-size:12.5px;color:var(--tx-4)';
+      vacio.textContent = disponibles.length ? 'Sin coincidencias' : 'Ya agregaste todos los modificadores disponibles';
+      dd.appendChild(vacio);
+    } else {
+      hits.forEach(m => {
+        const row = document.createElement('div');
+        row.className = 'libmod-opt';
+        row.dataset.id = m.id;
+        row.style.cssText = 'padding:8px 12px;cursor:pointer;font-size:13px;color:var(--tx)';
+        const tipoCorto = { unico: 'única', multiple: 'varias', cantidad: 'cantidad' }[m.tipo] || '';
+        row.innerHTML = _h(m.nombre) + ` <span style="color:var(--tx-4);font-size:11px">(${tipoCorto})</span>`;
+        dd.appendChild(row);
+      });
+    }
+    dd.querySelectorAll('.libmod-opt').forEach(el => {
+      el.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        LS_UI._agregarLibMod(el.dataset.id);
+      });
+    });
+    dd.style.display = 'block';
+  }
+
+  function libModDDNav(input, e) {
+    const dd = document.getElementById('pp-libmod-dd');
+    if (!dd || dd.style.display === 'none') return;
+    const opts = Array.from(dd.querySelectorAll('.libmod-opt'));
+    if (!opts.length) return;
+    let idx = opts.findIndex(o => o.classList.contains('kb-active'));
+    if (e.key === 'ArrowDown')      { e.preventDefault(); idx = idx < 0 ? 0 : Math.min(opts.length - 1, idx + 1); }
+    else if (e.key === 'ArrowUp')   { e.preventDefault(); idx = idx <= 0 ? 0 : idx - 1; }
+    else if (e.key === 'Enter')     {
+      if (idx >= 0) { e.preventDefault(); opts[idx].dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); }
+      return;
+    }
+    else if (e.key === 'Escape')    { dd.style.display = 'none'; return; }
+    else return;
+    opts.forEach(o => o.classList.remove('kb-active'));
+    opts[idx].classList.add('kb-active');
+    opts[idx].scrollIntoView({ block: 'nearest' });
+  }
+
+  function cerrarLibModDD() {
+    const dd = document.getElementById('pp-libmod-dd');
+    if (dd) dd.style.display = 'none';
+  }
+
+  function _agregarLibMod(modId) {
+    const m = (_formLibModsList || []).find(x => x.id === modId);
+    if (!m) return;
+    const cont = document.getElementById('pp-libmods-lista');
+    if (!cont) return;
+    const sized = document.getElementById('pp-sized') ? document.getElementById('pp-sized').value === 'si' : false;
+    const sizeKeys = sized
+      ? [(document.getElementById('pp-t1-nombre')?.value.trim() || 'El Chico'), (document.getElementById('pp-t2-nombre')?.value.trim() || 'El Mayor')]
+      : [];
+    const div = document.createElement('div');
+    div.innerHTML = _libModCheckboxHTML(m, null, sized, sizeKeys);
+    const nuevoEl = div.firstElementChild;
+    cont.appendChild(nuevoEl);
+    nuevoEl.addEventListener('dragstart', _dragStart);
+    nuevoEl.addEventListener('dragover', _dragOver);
+    nuevoEl.addEventListener('dragend', _dragEnd);
+    _toggleLibModColapso(modId);
+    const buscar = document.getElementById('pp-libmod-buscar');
+    if (buscar) { buscar.value = ''; buscar.focus(); }
+    cerrarLibModDD();
   }
 
   async function _formProductoPOS(producto) {
@@ -7588,20 +7696,19 @@ async function guardarVentaDirecta() {
       _formLibModsList = Object.keys(valMods).map(id => Object.assign({ id }, valMods[id])).sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
     } catch(e) {}
     const libModsList = _formLibModsList;
-    // Los ya asignados se muestran primero, en el orden en que se guardaron
-    // (ese es el orden en que apareceran al tomar el pedido en el POS); el
-    // resto, sin asignar, van despues para elegir mas si hace falta.
+    // Solo se muestran los YA ASIGNADOS (en el orden en que se guardaron --
+    // ese es el orden en que apareceran al tomar el pedido en el POS). Los
+    // demás se agregan con el buscador de abajo, no se listan todos de una
+    // vez -- con 15-20 modificadores en la biblioteca era demasiado.
     const asignadosOrden = (producto && producto.modAsignados) || [];
-    const libModsOrdenados = [
-      ...asignadosOrden.map(id => libModsList.find(m => m.id === id)).filter(Boolean),
-      ...libModsList.filter(m => asignadosOrden.indexOf(m.id) === -1),
-    ];
+    const libModsAsignados = asignadosOrden.map(id => libModsList.find(m => m.id === id)).filter(Boolean);
 
     const libModsHTML = libModsList.length ? `
       <div class="ff" style="margin-top:6px">
         <label>Modificadores de la biblioteca</label>
-        <div style="font-size:11px;color:var(--tx-4);margin:-4px 0 10px">Elige cuáles usa este producto. Arrastra desde &#9776; para ordenar los que ya estan asignados -- ese es el orden en que apareceran al tomar el pedido. Para el efecto en inventario, marca "Agrega" o "Sustituye" en la opción correspondiente.</div>
-        <div id="pp-libmods-lista">${libModsOrdenados.map(m => _libModCheckboxHTML(m, producto, sizedInicial, sizeKeys)).join('')}</div>
+        <div style="font-size:11px;color:var(--tx-4);margin:-4px 0 10px">Busca y agrega los que usa este producto. Arrastra desde &#9776; para ordenar los ya asignados -- ese es el orden en que apareceran al tomar el pedido. Para el efecto en inventario, marca "Agrega" o "Sustituye" en la opción correspondiente.</div>
+        <div id="pp-libmods-lista">${libModsAsignados.map(m => _libModCheckboxHTML(m, producto, sizedInicial, sizeKeys)).join('')}</div>
+        ${_libModBuscarHTML()}
       </div>` : '';
 
     const CANALES_DELIVERY = [
@@ -10441,7 +10548,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     buscarRecetas, editarReceta,
     renderCatalogoPOS, buscarCatalogoPOS, cambiarSucursalCatalogoPOS, abrirNuevoProductoPOS, editarProductoPOS,
     filtrarCategoriaCatalogoPOS, filtrarSubCategoriaCatalogoPOS, abrirOrdenCategorias, _cambiarCategoriaOrdenSub, _renderOrdenSubcategorias, guardarOrdenCategorias,
-    guardarProductoPOS, _toggleSizedProductoPOS, _toggleModInventario, _toggleLibModOpciones, _toggleLibModColapso, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS, _catposSubirFoto,
+    guardarProductoPOS, _toggleSizedProductoPOS, _toggleModInventario, _toggleLibModColapso, _quitarLibMod, filtrarLibModPOS, libModDDNav, cerrarLibModDD, _agregarLibMod, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS, _catposSubirFoto,
     filtrarRecetaPOS, seleccionarRecetaPOS, cerrarRecetaDD, recetaDDNav, toggleCatposSinReceta,
     abrirNuevoProveedorDesdeBusqueda, guardarNuevoProveedorDesdeBusqueda, toggleFavoritoProductoPOS,
     renderModificadores, cambiarSucursalModificadores, buscarModificadores, abrirNuevoModificador, editarModificador,
@@ -10650,7 +10757,7 @@ function _modal(innerHtml) {
   ov.id = 'ls-modal';
   ov.innerHTML = innerHtml;
   ov.addEventListener('click', e => { if (e.target === ov) _cerrarModal(); });
-  document.body.appendChild(ov);
+  (document.getElementById('app') || document.body).appendChild(ov);
   document.body.style.overflow = 'hidden';
   return ov;
 }
@@ -10670,7 +10777,7 @@ function _modal2(innerHtml) {
   ov.style.zIndex = '1200';
   ov.innerHTML = innerHtml;
   ov.addEventListener('click', e => { if (e.target === ov) _cerrarModal2(); });
-  document.body.appendChild(ov);
+  (document.getElementById('app') || document.body).appendChild(ov);
   document.body.style.overflow = 'hidden';
   return ov;
 }
