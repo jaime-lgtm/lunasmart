@@ -1169,6 +1169,7 @@
         <div class="nav-item" data-page="pantallacliente" onclick="go('pantallacliente',this)"><i class="ti ti-device-tv"></i><span class="nav-lbl">Pantalla de cliente</span></div>
         <div class="nav-item" data-page="horariotienda" onclick="go('horariotienda',this)"><i class="ti ti-clock"></i><span class="nav-lbl">Horario de tienda</span></div>
         <div class="nav-item" data-page="terminalmp" onclick="go('terminalmp',this)"><i class="ti ti-credit-card"></i><span class="nav-lbl">Terminal Mercado Pago</span></div>
+        <div class="nav-item" data-page="comisiones" onclick="go('comisiones',this)"><i class="ti ti-percentage"></i><span class="nav-lbl">Comisiones delivery</span></div>
         <div class="nav-item" data-page="usuariospos" onclick="go('usuariospos',this)"><i class="ti ti-users"></i><span class="nav-lbl">Usuarios POS</span></div>
       </nav>
 
@@ -1976,6 +1977,22 @@
   </div>
 </div>
 
+<!-- PÁGINA: COMISIONES DELIVERY -->
+<div id="p-comisiones" class="page" data-screen-label="Comisiones delivery">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title"><i class="ti ti-percentage"></i>Comisiones de delivery</div>
+        <div class="card-sub">El % que cobra cada plataforma por pedido. Se usa para mostrar el margen real (ya descontada la comisión) en Catálogo POS.</div>
+      </div>
+    </div>
+    <div style="padding:18px" id="comisiones-body">
+      <div id="comisiones-filas"></div>
+      <button class="btn btn-primary btn-sm" style="margin-top:16px" onclick="LS_UI.guardarComisiones()"><i class="ti ti-device-floppy"></i>Guardar comisiones</button>
+    </div>
+  </div>
+</div>
+
 <!-- PÁGINA: USUARIOS POS -->
 <div id="p-usuariospos" class="page" data-screen-label="Usuarios POS">
   <div class="card">
@@ -2078,10 +2095,10 @@
     </div>
 
   </div>
-</div>
 
-<!-- TOAST -->
-<div class="toast-stack" id="toast-stack"></div>
+  <!-- TOAST (dentro de #app para heredar el tema activo) -->
+  <div class="toast-stack" id="toast-stack"></div>
+</div>
 
 <!-- Firebase (mismo proyecto que usan el POS y el sitio de pedidos) -->
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
@@ -2138,6 +2155,7 @@ const PAGES = {
   pantallacliente: { title: 'Pantalla de cliente', sub: 'Logo y promociones de la segunda pantalla del POS' },
   horariotienda: { title: 'Horario de tienda', sub: 'Define cuándo pedidos.suenodeluna.com.mx acepta pedidos' },
   terminalmp: { title: 'Terminal Mercado Pago', sub: 'Cobro automático con la terminal física por sucursal' },
+  comisiones: { title: 'Comisiones delivery', sub: 'Define el % que cobra cada plataforma para calcular el margen real' },
   usuariospos: { title: 'Usuarios POS', sub: 'Altas, roles y PIN de acceso al punto de venta' },
 };
 
@@ -6949,6 +6967,7 @@ async function guardarVentaDirecta() {
   let _catposUltimaBranchSincronizada; // evita que renderCatalogoPOS() pise una eleccion manual de chip de sucursal cada vez que se re-renderiza la pagina
   let _catposProductos = [];
   let _catposRecetas = [];
+  let _comisionesDelivery = { rappi: 0, ubereats: 0, didi: 0 };
   let _catposSoloSinReceta = false;
   let _catposFiltroCategoria = null;
   let _catposFiltroSub = null;
@@ -7008,13 +7027,15 @@ async function guardarVentaDirecta() {
     try {
       if (!fbDb) throw new Error('Firebase no disponible');
       await fbAuthReady;
-      const [snap, recetas] = await Promise.all([
+      const [snap, recetas, comisiones] = await Promise.all([
         fbDb.ref('catalogo/' + _catposSucursal).once('value'),
         LS_API.getRecetas().catch(() => []),
+        fbDb.ref('comisionesDelivery').once('value').then(s => s.val()).catch(() => null),
       ]);
       const val = snap.val() || {};
       _catposProductos = Object.keys(val).map(id => val[id]).sort((a,b) => (a.name||'').localeCompare(b.name||''));
       _catposRecetas = recetas;
+      if (comisiones) _comisionesDelivery = comisiones;
       _actualizarHeaderRecetaFiltro();
       _catposPintarChipsCategoria();
       _catposAplicarFiltros();
@@ -7306,6 +7327,27 @@ async function guardarVentaDirecta() {
   }
 
   const CANAL_BADGE_INFO = { rappi: { l: 'R', color: '#ff4c1f', nombre: 'Rappi' }, ubereats: { l: 'U', color: '#06c167', nombre: 'Uber Eats' }, didi: { l: 'D', color: '#ff8100', nombre: 'DiDi Food' }, sitioweb: { l: 'T', color: '#3a86ff', nombre: 'Tienda en Línea' }, pos: { l: 'P', color: '#5ba972', nombre: 'POS Luna Smart' } };
+  // Comisión de la plataforma (Rappi/Uber Eats/DiDi) ya restada -- margen
+  // real sobre el precio que el cliente paga ahí. Promedia entre tamaños
+  // si el producto tiene (cada tamaño con su propia receta/costo).
+  function _catposMargenCanalNum(p, canalId, cfg) {
+    const comisionPct = _comisionesDelivery[canalId] || 0;
+    if (p.sized && p.prices) {
+      const vals = Object.keys(p.prices).map(k => {
+        const costo = _catposCostoUnit(p.recetas && p.recetas[k]);
+        const precioCanal = cfg.precios && cfg.precios[k] != null ? parseFloat(cfg.precios[k]) : null;
+        if (costo == null || !precioCanal) return null;
+        const neto = precioCanal * (1 - comisionPct / 100);
+        return ((neto - costo) / precioCanal) * 100;
+      }).filter(v => v != null);
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    }
+    const costo = _catposCostoUnit(p.idReceta);
+    const precioCanal = cfg.precio != null ? parseFloat(cfg.precio) : null;
+    if (costo == null || !precioCanal) return null;
+    const neto = precioCanal * (1 - comisionPct / 100);
+    return ((neto - costo) / precioCanal) * 100;
+  }
   function _catposCanalesBadges(p) {
     // POS Luna Smart es al revés que los demás: por defecto SI se vende ahí
     // (sin badge, es lo normal), solo se marca cuando se apagó a propósito.
@@ -7316,7 +7358,18 @@ async function guardarVentaDirecta() {
     if (!activos.length && !ocultoBadge) return '';
     return ' ' + activos.map(cid => {
       const info = CANAL_BADGE_INFO[cid] || { l: '?', color: 'var(--tx-4)', nombre: cid };
-      return `<span title="${_h(info.nombre)}" style="display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;border-radius:50%;background:${info.color};color:#fff;font-size:9px;font-weight:800;margin-left:2px">${info.l}</span>`;
+      const cfg = p.canales[cid];
+      let margenHTML = '';
+      let tip = info.nombre;
+      if (cid !== 'sitioweb') {
+        const m = _catposMargenCanalNum(p, cid, cfg);
+        if (m != null) {
+          const comisionPct = _comisionesDelivery[cid] || 0;
+          tip = `${info.nombre} · comisión ${comisionPct}% · margen tras comisión ${LS_API.formatPct(m)}`;
+          margenHTML = `<span title="${_h(tip)}" style="font-size:8.5px;font-weight:700;color:${_catposMargenColor(m)};margin-left:1px">${Math.round(m)}%</span>`;
+        }
+      }
+      return `<span title="${_h(tip)}" style="display:inline-flex;align-items:center;gap:1px;margin-left:3px"><span style="display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;border-radius:50%;background:${info.color};color:#fff;font-size:9px;font-weight:800">${info.l}</span>${margenHTML}</span>`;
     }).join('') + ocultoBadge;
   }
   function _catposRecetaBadge(p) {
@@ -8328,6 +8381,53 @@ async function guardarVentaDirecta() {
     }
   }
 
+  /* ============ COMISIONES DELIVERY (Rappi/Uber Eats/DiDi) ============
+     comisionesDelivery/{rappi,ubereats,didi} = % que cobra la plataforma
+     por pedido -- Catálogo POS lo usa para calcular el margen real junto
+     a los badges de canal (_catposMargenCanalNum). */
+  const COMISIONES_PLATAFORMAS = [
+    { id: 'rappi', label: 'Rappi', color: '#ff4c1f' },
+    { id: 'ubereats', label: 'Uber Eats', color: '#06c167' },
+    { id: 'didi', label: 'DiDi Food', color: '#ff8100' },
+  ];
+  async function renderComisiones() {
+    let cfg = {};
+    try {
+      if (!fbDb) throw new Error('Firebase no disponible');
+      await fbAuthReady;
+      const snap = await fbDb.ref('comisionesDelivery').once('value');
+      cfg = snap.val() || {};
+    } catch(e) {
+      console.error('Error cargando comisiones:', e);
+      toast('Error', 'No se pudieron cargar las comisiones (revisa Firebase)', 'err', 'ti-alert-triangle');
+    }
+    const cont = document.getElementById('comisiones-filas');
+    if (!cont) return;
+    cont.innerHTML = COMISIONES_PLATAFORMAS.map(pl => `
+      <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var(--line-2)">
+        <div style="width:16px;height:16px;border-radius:50%;background:${pl.color}"></div>
+        <div style="width:120px;font-weight:600;font-size:13px">${pl.label}</div>
+        <input type="number" id="com-${pl.id}" min="0" max="100" step="0.1" value="${cfg[pl.id] != null ? cfg[pl.id] : ''}" placeholder="0" style="width:100px;padding:7px 9px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px;font-family:inherit;text-align:right">
+        <span style="color:var(--tx-3);font-size:13px">%</span>
+      </div>`).join('');
+  }
+  async function guardarComisiones() {
+    const cfg = {};
+    COMISIONES_PLATAFORMAS.forEach(pl => {
+      const v = parseFloat(document.getElementById(`com-${pl.id}`).value);
+      cfg[pl.id] = isNaN(v) ? 0 : v;
+    });
+    try {
+      await fbAuthReady;
+      await fbDb.ref('comisionesDelivery').set(cfg);
+      _comisionesDelivery = cfg;
+      toast('Comisiones guardadas', 'Catálogo POS ya muestra el margen actualizado', 'ok', 'ti-check');
+    } catch(e) {
+      console.error(e);
+      toast('Error al guardar', e.message || '', 'err', 'ti-alert-triangle');
+    }
+  }
+
   /* ============ TERMINAL FÍSICA MERCADO PAGO (cobro con tarjeta en POS) ====
      terminalesMP/{sucursalId} = terminal_id en RTDB -- el POS lo lee para
      saber a qué terminal enviar el cobro cuando el cajero selecciona
@@ -8428,6 +8528,7 @@ async function guardarVentaDirecta() {
     { id: 'pantallacliente', label: 'Pantalla de cliente' },
     { id: 'horariotienda', label: 'Horario de tienda' },
     { id: 'terminalmp', label: 'Terminal Mercado Pago' },
+    { id: 'comisiones', label: 'Comisiones delivery' },
     { id: 'usuariospos', label: 'Usuarios POS' },
   ];
   let _uposLista = [];
@@ -9890,6 +9991,7 @@ async function guardarVentaDirecta() {
       case 'pantallacliente': await renderPantallaCliente(); break;
       case 'horariotienda': await renderHorarioTienda(); break;
       case 'terminalmp': await renderTerminalMP(); break;
+      case 'comisiones': await renderComisiones(); break;
       case 'usuariospos': await renderUsuariosPOS(); break;
       case 'catalogo-inventario': await abrirCatalogoInventarioPagina(); break;
     }
@@ -10557,6 +10659,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderHorarioTienda, _horarioToggleDia, guardarHorarioTienda,
     renderTiemposProductivos, _tpPintarReporte, guardarMetasTiempo,
     renderTerminalMP, guardarTerminalesMP, mpListarTerminalesUI,
+    renderComisiones, guardarComisiones,
     renderUsuariosPOS, abrirNuevoUsuarioPOS, editarUsuarioPOS, guardarUsuarioPOS, confirmarBorrarUsuarioPOS, ejecutarBorrarUsuarioPOS,
     _toggleUposDropdown, _uposDropdownTodasChange, _uposDropdownResumen,
     closeModal,
