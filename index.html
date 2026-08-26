@@ -7779,20 +7779,23 @@ async function guardarVentaDirecta() {
           <input type="checkbox" id="pp-canal-${canal.id}-activo" ${cfg.activo ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--terra-claro)">
           ${canal.label}
         </label>
-        <input type="number" id="pp-canal-${canal.id}-precio" placeholder="Precio en ${canal.label}" value="${p}" inputmode="decimal" style="width:150px;padding:6px 8px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:12px;font-family:inherit">
+        <input type="number" id="pp-canal-${canal.id}-precio" placeholder="Precio en ${canal.label}" value="${p}" inputmode="decimal" oninput="LS_UI._actualizarPreciosSugeridosCanales()" style="width:120px;padding:6px 8px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:12px;font-family:inherit">
+        <span id="pp-canal-${canal.id}-sug" style="font-size:11px;color:var(--tx-4)"></span>
       </div>`;
     }
     function _canalBloqueSizedHTML(canal) {
       const cfg = canalesGuardados[canal.id] || {};
       const p1 = cfg.precios && cfg.precios[sizeKeys[0]] != null ? cfg.precios[sizeKeys[0]] : '';
       const p2 = cfg.precios && cfg.precios[sizeKeys[1]] != null ? cfg.precios[sizeKeys[1]] : '';
-      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-2)">
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-2);flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:6px;width:130px;font-size:13px;cursor:pointer">
           <input type="checkbox" id="pp-canal-${canal.id}-activo-sz" ${cfg.activo ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--terra-claro)">
           ${canal.label}
         </label>
-        <input type="number" id="pp-canal-${canal.id}-p1" placeholder="Precio T1" value="${p1}" inputmode="decimal" style="width:100px;padding:6px 8px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:12px;font-family:inherit">
-        <input type="number" id="pp-canal-${canal.id}-p2" placeholder="Precio T2" value="${p2}" inputmode="decimal" style="width:100px;padding:6px 8px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:12px;font-family:inherit">
+        <input type="number" id="pp-canal-${canal.id}-p1" placeholder="Precio T1" value="${p1}" inputmode="decimal" oninput="LS_UI._actualizarPreciosSugeridosCanales()" style="width:90px;padding:6px 8px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:12px;font-family:inherit">
+        <span id="pp-canal-${canal.id}-sug-t1" style="font-size:11px;color:var(--tx-4)"></span>
+        <input type="number" id="pp-canal-${canal.id}-p2" placeholder="Precio T2" value="${p2}" inputmode="decimal" oninput="LS_UI._actualizarPreciosSugeridosCanales()" style="width:90px;padding:6px 8px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:12px;font-family:inherit">
+        <span id="pp-canal-${canal.id}-sug-t2" style="font-size:11px;color:var(--tx-4)"></span>
       </div>`;
     }
     const posCfg = canalesGuardados.pos || {};
@@ -7809,7 +7812,7 @@ async function guardarVentaDirecta() {
     const canalesHTML = `
       <div class="ff" style="margin-top:6px">
         <label>Precios para delivery y tienda en línea (Rappi / Uber Eats / DiDi / Tienda en Línea)</label>
-        <div style="font-size:11px;color:var(--tx-4);margin:-4px 0 10px">Marca en qué plataformas se vende y captura el precio final que quieres cobrar ahí (ya con margen para su comisión). Sin marcar, no se ofrece en esa plataforma.</div>
+        <div style="font-size:11px;color:var(--tx-4);margin:-4px 0 10px">Marca en qué plataformas se vende y captura el precio final que quieres cobrar ahí. El "sugerido" es el precio que deja la misma ganancia que en el POS, ya descontada la comisión de esa plataforma (configúrala en Configuración → Comisiones delivery).</div>
         <div id="pp-canales-simple" style="display:${sizedInicial ? 'none' : 'block'}">${CANALES_DELIVERY.map(_canalBloqueSimpleHTML).join('')}</div>
         <div id="pp-canales-sized" style="display:${sizedInicial ? 'block' : 'none'}">${CANALES_DELIVERY.map(_canalBloqueSizedHTML).join('')}</div>
       </div>`;
@@ -7875,16 +7878,18 @@ async function guardarVentaDirecta() {
             </div>
           </div>
           <div id="pp-precio-simple" style="display:${sizedInicial ? 'none':'block'}">
-            <div class="ff"><label>Precio</label><input type="number" id="pp-precio" value="${precioSimple}" inputmode="decimal"></div>
+            <div class="ff"><label>Precio (POS Luna Smart)</label><input type="number" id="pp-precio" value="${precioSimple}" inputmode="decimal" oninput="LS_UI._actualizarPreciosSugeridosCanales()"></div>
           </div>
           <div id="pp-precio-sized" style="display:${sizedInicial ? 'block':'none'}">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
               <div class="ff"><label>Nombre tamaño 1</label><input type="text" id="pp-t1-nombre" value="${sizeKeys[0] ? _h(sizeKeys[0]) : 'El Chico'}"></div>
-              <div class="ff"><label>Precio</label><input type="number" id="pp-t1-precio" value="${sizeKeys[0] ? preciosSized[sizeKeys[0]] : ''}" inputmode="decimal"></div>
+              <div class="ff"><label>Precio (POS Luna Smart)</label><input type="number" id="pp-t1-precio" value="${sizeKeys[0] ? preciosSized[sizeKeys[0]] : ''}" inputmode="decimal" oninput="LS_UI._actualizarPreciosSugeridosCanales()"></div>
               <div class="ff"><label>Nombre tamaño 2</label><input type="text" id="pp-t2-nombre" value="${sizeKeys[1] ? _h(sizeKeys[1]) : 'El Mayor'}"></div>
-              <div class="ff"><label>Precio</label><input type="number" id="pp-t2-precio" value="${sizeKeys[1] ? preciosSized[sizeKeys[1]] : ''}" inputmode="decimal"></div>
+              <div class="ff"><label>Precio (POS Luna Smart)</label><input type="number" id="pp-t2-precio" value="${sizeKeys[1] ? preciosSized[sizeKeys[1]] : ''}" inputmode="decimal" oninput="LS_UI._actualizarPreciosSugeridosCanales()"></div>
             </div>
           </div>
+          ${posHTML}
+          ${canalesHTML}
           <div id="pp-receta-simple" style="display:${sizedInicial ? 'none':'block'}">
             <div class="ff">
               <label>Receta vinculada (opcional)</label>
@@ -7905,8 +7910,6 @@ async function guardarVentaDirecta() {
             </div>
           </div>
           ${esEdicion ? `<div class="ff" style="margin-top:2px"><label style="text-transform:none;font-size:11px;color:var(--tx-4);font-weight:400">ID: <span style="font-family:var(--mono)">${producto.id}</span></label></div>` : ''}
-          ${posHTML}
-          ${canalesHTML}
           ${libModsHTML}
           ${modsHTML}
           ${datalistHTML}
@@ -7918,6 +7921,7 @@ async function guardarVentaDirecta() {
       </div>
     </div>`);
     _habilitarArrastre('pp-libmods-lista');
+    _actualizarPreciosSugeridosCanales();
   }
 
   function _toggleSizedProductoPOS(sized) {
@@ -7927,6 +7931,52 @@ async function guardarVentaDirecta() {
     document.getElementById('pp-receta-sized').style.display = sized ? 'block' : 'none';
     document.getElementById('pp-canales-simple').style.display = sized ? 'none' : 'block';
     document.getElementById('pp-canales-sized').style.display = sized ? 'block' : 'none';
+    _actualizarPreciosSugeridosCanales();
+  }
+
+  // Precio que, en esa plataforma, deja la misma ganancia neta que vender
+  // en el POS -- es decir, el precio POS ya "inflado" para absorber la
+  // comisión: sugerido = precioPOS / (1 - comisión%). Tienda en Línea no
+  // paga comisión, así que el sugerido ahí es simplemente el precio POS.
+  function _precioSugeridoCanal(canalId, precioPOS) {
+    if (!precioPOS || precioPOS <= 0) return null;
+    if (canalId === 'sitioweb') return { valor: precioPOS, comisionPct: 0 };
+    const comisionPct = _comisionesDelivery[canalId] || 0;
+    if (!comisionPct) return null;
+    return { valor: precioPOS / (1 - comisionPct / 100), comisionPct };
+  }
+  function _pintarSugerido(spanId, precioPOS, canalId) {
+    const span = document.getElementById(spanId);
+    if (!span) return;
+    const sug = _precioSugeridoCanal(canalId, precioPOS);
+    if (!sug) {
+      span.innerHTML = (canalId !== 'sitioweb' && precioPOS > 0)
+        ? `<a onclick="_cerrarModal();go('comisiones')" style="color:var(--tx-4);text-decoration:underline;cursor:pointer" title="Ir a Configuración → Comisiones delivery">configura la comisión</a>`
+        : '';
+      return;
+    }
+    const txt = LS_API.formatMXNDec(sug.valor);
+    span.innerHTML = `Sugerido: <b style="color:var(--tx-2)">${txt}</b> <a onclick="LS_UI._usarPrecioSugerido('${spanId}', ${sug.valor})" style="color:var(--terra-claro);text-decoration:underline;cursor:pointer">usar</a>`;
+  }
+  function _actualizarPreciosSugeridosCanales() {
+    const sized = document.getElementById('pp-sized') ? document.getElementById('pp-sized').value === 'si' : false;
+    const canales = ['rappi', 'ubereats', 'didi', 'sitioweb'];
+    if (!sized) {
+      const precioPOS = parseFloat(document.getElementById('pp-precio') ? document.getElementById('pp-precio').value : 0) || 0;
+      canales.forEach(cid => _pintarSugerido(`pp-canal-${cid}-sug`, precioPOS, cid));
+    } else {
+      const p1 = parseFloat(document.getElementById('pp-t1-precio') ? document.getElementById('pp-t1-precio').value : 0) || 0;
+      const p2 = parseFloat(document.getElementById('pp-t2-precio') ? document.getElementById('pp-t2-precio').value : 0) || 0;
+      canales.forEach(cid => {
+        _pintarSugerido(`pp-canal-${cid}-sug-t1`, p1, cid);
+        _pintarSugerido(`pp-canal-${cid}-sug-t2`, p2, cid);
+      });
+    }
+  }
+  function _usarPrecioSugerido(spanId, valor) {
+    const inputId = spanId.replace('-sug-t1', '-p1').replace('-sug-t2', '-p2').replace('-sug', '-precio');
+    const inp = document.getElementById(inputId);
+    if (inp) inp.value = Math.round(valor * 100) / 100;
   }
 
   // Foto del articulo -- mismo patron de subida que el logo de Pantalla de
@@ -10651,6 +10701,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderCatalogoPOS, buscarCatalogoPOS, cambiarSucursalCatalogoPOS, abrirNuevoProductoPOS, editarProductoPOS,
     filtrarCategoriaCatalogoPOS, filtrarSubCategoriaCatalogoPOS, abrirOrdenCategorias, _cambiarCategoriaOrdenSub, _renderOrdenSubcategorias, guardarOrdenCategorias,
     guardarProductoPOS, _toggleSizedProductoPOS, _toggleModInventario, _toggleLibModColapso, _quitarLibMod, filtrarLibModPOS, libModDDNav, cerrarLibModDD, _agregarLibMod, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS, _catposSubirFoto,
+    _actualizarPreciosSugeridosCanales, _usarPrecioSugerido,
     filtrarRecetaPOS, seleccionarRecetaPOS, cerrarRecetaDD, recetaDDNav, toggleCatposSinReceta,
     abrirNuevoProveedorDesdeBusqueda, guardarNuevoProveedorDesdeBusqueda, toggleFavoritoProductoPOS,
     renderModificadores, cambiarSucursalModificadores, buscarModificadores, abrirNuevoModificador, editarModificador,
