@@ -4712,7 +4712,7 @@ const LS_UI = (() => {
       <td style="padding:7px 12px;text-align:right;font-family:var(--mono);font-weight:600">${LS_API.formatMXNDec(d.total)}</td></tr>`).join('')
       : '<tr><td colspan="4" style="padding:16px;text-align:center;color:var(--tx-3)">Este corte no tiene detalle de venta registrado</td></tr>';
     const pagos = [['Efectivo',r.efectivo],['Tarjeta / MP',r.tarjeta],['Transferencia',r.transferencia],['Rappi / Uber',r.rappi]]
-      .filter(p=>p[1]>0).map(p=>`<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0"><span style="color:var(--tx-3)">${p[0]}</span><span style="font-family:var(--mono)">${LS_API.formatMXNDec(p[1])}</span></div>`).join('');
+      .filter(p=>p[1]>0).map(p=>`<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0"><span style="color:var(--tx-2)">${p[0]}</span><span style="font-family:var(--mono);color:var(--tx);font-weight:600">${LS_API.formatMXNDec(p[1])}</span></div>`).join('');
     _modal(`
       <div class="modal" style="max-width:620px">
         <div class="modal-header">
@@ -4723,18 +4723,18 @@ const LS_UI = (() => {
         <div class="modal-body">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
             <div style="border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 14px">
-              <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Desglose de pagos</div>
-              ${pagos || '<span style="color:var(--tx-3);font-size:12px">Sin desglose</span>'}
-              <div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:6px;padding-top:6px;font-weight:600"><span>Declarado</span><span style="font-family:var(--mono)">${LS_API.formatMXNDec(r.totalDeclarado)}</span></div>
+              <div style="font-size:10px;color:var(--tx-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;font-weight:600">Desglose de pagos</div>
+              ${pagos || '<span style="color:var(--tx-2);font-size:12px">Sin desglose</span>'}
+              <div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:6px;padding-top:6px;font-weight:700;color:var(--tx)"><span>Declarado</span><span style="font-family:var(--mono)">${LS_API.formatMXNDec(r.totalDeclarado)}</span></div>
             </div>
             <div style="border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 14px">
-              <div style="font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Resumen</div>
-              <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0"><span style="color:var(--tx-3)">Venta Parrot/total</span><span style="font-family:var(--mono)">${LS_API.formatMXNDec(r.ventaTotal)}</span></div>
-              <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0"><span style="color:var(--tx-3)">Diferencia</span><span style="font-family:var(--mono);color:${deltaColor(r.diferencia)}">${LS_API.formatMXNDec(r.diferencia)}</span></div>
-              <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0"><span style="color:var(--tx-3)">Inicio caja</span><span style="font-family:var(--mono)">${LS_API.formatMXNDec(r.inicioCaja)}</span></div>
+              <div style="font-size:10px;color:var(--tx-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;font-weight:600">Resumen</div>
+              <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0"><span style="color:var(--tx-2)">Venta Parrot/total</span><span style="font-family:var(--mono);color:var(--tx);font-weight:600">${LS_API.formatMXNDec(r.ventaTotal)}</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0"><span style="color:var(--tx-2)">Diferencia</span><span style="font-family:var(--mono);font-weight:600;color:${deltaColor(r.diferencia)}">${LS_API.formatMXNDec(r.diferencia)}</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0"><span style="color:var(--tx-2)">Inicio caja</span><span style="font-family:var(--mono);color:var(--tx);font-weight:600">${LS_API.formatMXNDec(r.inicioCaja)}</span></div>
             </div>
           </div>
-          <div style="font-size:11px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Detalle de venta</div>
+          <div style="font-size:11px;color:var(--tx-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;font-weight:600">Detalle de venta</div>
           <div style="border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden">
             <div style="display:grid;grid-template-columns:2.4fr 0.7fr 1fr 1fr;background:var(--cafe-card-hi);padding:8px 12px;font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.05em;font-weight:600">
               <div>Producto</div><div style="text-align:right">Cant.</div><div style="text-align:right">P. unit.</div><div style="text-align:right">Importe</div>
