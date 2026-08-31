@@ -49,6 +49,7 @@ const HOJAS = {
   RECETAS:        'BD_RECETAS',
   RECETAS_DET:    'BD_RECETAS_DETALLES',
   TIEMPOS:        'BD_TIEMPOS',
+  ASISTENCIA:     'BD_ASISTENCIA',
 };
 
 // ── JSON OUTPUT ─────────────────────────────────────────────────────────────
@@ -169,6 +170,7 @@ function doGet(e) {
     getBD_RECETAS:                 HOJAS.RECETAS,
     getBD_RECETAS_DETALLES:        HOJAS.RECETAS_DET,
     getBD_TIEMPOS:                 HOJAS.TIEMPOS,
+    getBD_ASISTENCIA:              HOJAS.ASISTENCIA,
   };
 
   if (accion === 'getUSUARIOS') return _getUsuarios();
@@ -239,6 +241,9 @@ function doPost(e) {
     case 'actualizarReceta':           return _actualizarReceta(datos);
     case 'borrarReceta':               return _borrarReceta(datos);
     case 'registrarTiempos':           return _registrarTiempos(datos);
+    case 'registrarAsistenciaEntrada': return _registrarAsistenciaEntrada(datos);
+    case 'registrarAsistenciaSalida':  return _registrarAsistenciaSalida(datos);
+    case 'editarAsistencia':           return _editarAsistencia(datos);
     case 'crearPreferenciaMP':         return _crearPreferenciaMP(datos);
     case 'mpListarTerminales':         return _mpListarTerminales();
     case 'mpCrearCobroTerminal':       return _mpCrearCobroTerminal(datos);
@@ -1035,6 +1040,100 @@ function _registrarTiempos(b) {
     sh.getRange(fi, 1, filas.length, 9).setValues(filas);
     return _json({ status: 'ok', insertados: filas.length });
   } catch (e) { return _err(e.message); }
+}
+
+// ── ASISTENCIA (entrada/salida de empleados desde el POS) ──────────────────
+// Columnas de BD_ASISTENCIA (1-based): 1 ID, 2 SUCURSAL, 3 USUARIO_ID,
+// 4 USUARIO_NOMBRE, 5 FECHA, 6 HORA_ENTRADA, 7 HORA_SALIDA,
+// 8 MINUTOS_TRABAJADOS, 9 TIPO_SALIDA ('normal'|'automatica'|'corregida'),
+// 10 ACTUALIZADO. USUARIO_ID es la llave de usuariosPOS en Firebase (el POS
+// no usa la hoja USUARIOS_APP para login, ver _registrarAsistenciaEntrada).
+function _getOrCrearSheetAsistencia() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sh = ss.getSheetByName(HOJAS.ASISTENCIA);
+  if (!sh) {
+    sh = ss.insertSheet(HOJAS.ASISTENCIA);
+    sh.appendRow(['ID', 'SUCURSAL', 'USUARIO_ID', 'USUARIO_NOMBRE', 'FECHA', 'HORA_ENTRADA', 'HORA_SALIDA', 'MINUTOS_TRABAJADOS', 'TIPO_SALIDA', 'ACTUALIZADO']);
+  }
+  return sh;
+}
+
+function _minutosEntreHoras(horaEntrada, horaSalida) {
+  var e = String(horaEntrada || '').split(':'), s = String(horaSalida || '').split(':');
+  if (e.length < 2 || s.length < 2) return '';
+  var mins = (parseInt(s[0], 10) * 60 + parseInt(s[1], 10)) - (parseInt(e[0], 10) * 60 + parseInt(e[1], 10));
+  return mins > 0 ? mins : 0;
+}
+
+// Abre un turno de asistencia -- entrada/salida son independientes del login
+// de cajero: cualquier empleado con PIN activo en usuariosPOS puede marcar la
+// suya desde el icono del topbar del POS, sin interrumpir al que esta
+// cobrando. Devuelve la fila exacta para que el POS pueda cerrarla despues
+// (via _registrarAsistenciaSalida) sin tener que volver a buscarla.
+function _registrarAsistenciaEntrada(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var sh = _getOrCrearSheetAsistencia();
+    var id = _nextId(HOJAS.ASISTENCIA, 'ASIS');
+    var fecha = _normalizarFecha(b.fecha) || _fechaHoy();
+    var fila = _siguienteFilaLibre(sh, 3);
+    sh.getRange(fila, 1, 1, 10).setValues([[
+      id, b.sucursal || '', b.usuarioId || '', b.usuarioNombre || '',
+      fecha, b.hora || '', '', '', '', new Date(),
+    ]]);
+    // HORA_ENTRADA/HORA_SALIDA como texto -- si no se fuerza el formato,
+    // Sheets las auto-convierte a un serial de fecha/hora (mismo caso que
+    // BD_TIEMPOS, ver _registrarTiempos arriba).
+    sh.getRange(fila, 6, 1, 2).setNumberFormat('@');
+    return _json({ status: 'ok', id: id, fila: fila });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+// Cierra un turno ya abierto (fila exacta, guardada por el POS al momento de
+// la entrada). tipoSalida:'automatica' marca los que se cerraron solos
+// porque el empleado olvido marcar su salida (ver _asistenciaResolverAbiertos
+// en el POS) -- el admin los distingue para que un supervisor los revise.
+function _registrarAsistenciaSalida(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var fila = parseInt(b.fila, 10);
+    if (!fila || fila < 2) return _err('Fila inválida');
+    var horaSalida = String(b.horaSalida || '').trim();
+    if (!horaSalida) return _err('Falta la hora de salida');
+    var minutos = _minutosEntreHoras(b.horaEntrada, horaSalida);
+    var sh = _getOrCrearSheetAsistencia();
+    sh.getRange(fila, 7).setValue(horaSalida);
+    sh.getRange(fila, 8).setValue(minutos);
+    sh.getRange(fila, 9).setValue(b.tipoSalida || 'normal');
+    sh.getRange(fila, 10).setValue(new Date());
+    return _json({ status: 'ok', minutos: minutos });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+// Correccion manual desde el admin -- ej. alguien olvido marcar su entrada y
+// un supervisor la captura despues, o se corrige una salida automatica.
+function _editarAsistencia(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var fila = parseInt(b.fila, 10);
+    if (!fila || fila < 2) return _err('Fila inválida');
+    var sh = _getOrCrearSheetAsistencia();
+    if (b.horaEntrada) sh.getRange(fila, 6).setValue(String(b.horaEntrada).trim());
+    if (b.horaSalida !== undefined) sh.getRange(fila, 7).setValue(String(b.horaSalida || '').trim());
+    var horaEntradaVal = b.horaEntrada || sh.getRange(fila, 6).getValue();
+    var horaSalidaVal = (b.horaSalida !== undefined) ? b.horaSalida : sh.getRange(fila, 7).getValue();
+    var minutos = horaSalidaVal ? _minutosEntreHoras(horaEntradaVal, horaSalidaVal) : '';
+    sh.getRange(fila, 8).setValue(minutos);
+    sh.getRange(fila, 9).setValue('corregida');
+    sh.getRange(fila, 10).setValue(new Date());
+    return _json({ status: 'ok', minutos: minutos });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
 }
 
 // ── MERCADO PAGO (Checkout Pro para pedidos.suenodeluna.com.mx) ───────────

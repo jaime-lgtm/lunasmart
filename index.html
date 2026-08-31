@@ -1171,6 +1171,7 @@
         <div class="nav-item" data-page="terminalmp" onclick="go('terminalmp',this)"><i class="ti ti-credit-card"></i><span class="nav-lbl">Terminal Mercado Pago</span></div>
         <div class="nav-item" data-page="comisiones" onclick="go('comisiones',this)"><i class="ti ti-percentage"></i><span class="nav-lbl">Comisiones delivery</span></div>
         <div class="nav-item" data-page="usuariospos" onclick="go('usuariospos',this)"><i class="ti ti-users"></i><span class="nav-lbl">Usuarios POS</span></div>
+        <div class="nav-item" data-page="asistencia" onclick="go('asistencia',this)"><i class="ti ti-clock-hour-4"></i><span class="nav-lbl">Asistencia</span></div>
       </nav>
 
       <div class="sb-foot">
@@ -2016,6 +2017,44 @@
   </div>
 </div>
 
+<!-- PÁGINA: ASISTENCIA -->
+<div id="p-asistencia" class="page" data-screen-label="Asistencia">
+  <div class="kpis">
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label" id="asis-horas-label">Horas trabajadas · período</div><div class="kpi-ico"><i class="ti ti-clock-hour-4"></i></div></div><div class="kpi-val" id="asis-horas-total">—</div><div class="kpi-sub">Suma de todos los turnos</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Turnos registrados</div><div class="kpi-ico"><i class="ti ti-list-check"></i></div></div><div class="kpi-val" id="asis-turnos">—</div><div class="kpi-sub">Entradas marcadas en el período</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">En turno ahora mismo</div><div class="kpi-ico g"><i class="ti ti-user-check"></i></div></div><div class="kpi-val" id="asis-activos">—</div><div class="kpi-sub">Sin salida registrada todavía</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">Salidas automáticas</div><div class="kpi-ico r"><i class="ti ti-alert-triangle"></i></div></div><div class="kpi-val dn" id="asis-automaticas">—</div><div class="kpi-sub">Se les olvidó marcar salida -- revisar</div></div>
+  </div>
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title"><i class="ti ti-clock-hour-4"></i>Registros de asistencia <span id="asis-titulo-periodo"></span></div>
+        <div class="card-sub">Entrada y salida marcadas desde el POS de cada sucursal</div>
+      </div>
+      <div class="card-actions">
+        <select id="asis-sucursal" onchange="LS_UI.filtrarAsistencia()" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px"></select>
+        <select id="asis-empleado" onchange="LS_UI.filtrarAsistencia()" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px"></select>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl" data-sortable>
+        <thead><tr>
+          <th class="sortable" data-type="text">Empleado<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th>Sucursal</th>
+          <th class="sortable" data-type="text">Fecha<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th>Entrada</th><th>Salida</th>
+          <th class="num">Horas</th><th>Estado</th>
+          <th style="width:60px">Acciones</th>
+        </tr></thead>
+        <tbody id="tabla-asistencia">
+          <tr><td colspan="8" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="empty" id="empty-asistencia"><div class="e-ico"><i class="ti ti-clock-hour-4"></i></div><div class="e-title">Sin registros en este período</div><div class="e-sub">Los empleados marcan su entrada y salida desde el ícono de Asistencia en el topbar del POS.</div></div>
+  </div>
+</div>
+
 <!-- PÁGINA: MODIFICADORES -->
 <div id="p-modificadores" class="page" data-screen-label="Modificadores">
   <div class="card">
@@ -2093,6 +2132,7 @@
           <div class="d-item" data-page="horariotienda" onclick="mdrawerGo('horariotienda')"><i class="ti ti-clock"></i><span>Horario</span></div>
           <div class="d-item" data-page="terminalmp" onclick="mdrawerGo('terminalmp')"><i class="ti ti-credit-card"></i><span>Terminal MP</span></div>
           <div class="d-item" data-page="usuariospos" onclick="mdrawerGo('usuariospos')"><i class="ti ti-users"></i><span>Usuarios POS</span></div>
+          <div class="d-item" data-page="asistencia" onclick="mdrawerGo('asistencia')"><i class="ti ti-clock-hour-4"></i><span>Asistencia</span></div>
           <div class="d-item" onclick="toggleDrawer();doLogout()"><i class="ti ti-logout"></i><span>Salir</span></div>
         </div>
       </div>
@@ -2161,6 +2201,7 @@ const PAGES = {
   terminalmp: { title: 'Terminal Mercado Pago', sub: 'Cobro automático con la terminal física por sucursal' },
   comisiones: { title: 'Comisiones delivery', sub: 'Define el % que cobra cada plataforma para calcular el margen real' },
   usuariospos: { title: 'Usuarios POS', sub: 'Altas, roles y PIN de acceso al punto de venta' },
+  asistencia: { title: 'Asistencia', sub: 'Entradas, salidas y horas trabajadas por empleado' },
 };
 
 const BRANCHES = {
@@ -2670,6 +2711,7 @@ const LS_API = (() => {
     RECETAS:        'BD_RECETAS',
     RECETAS_DET:    'BD_RECETAS_DETALLES',
     TIEMPOS:        'BD_TIEMPOS',
+    ASISTENCIA:     'BD_ASISTENCIA',
   };
 
   // ── ÍNDICES DE COLUMNAS (base 0) ───────────────────────────
@@ -3183,6 +3225,38 @@ const LS_API = (() => {
           corteId:   r[8] || '',
         }));
     } catch(e) { console.error('Error cargando tiempos:', e); return []; }
+  }
+
+  // Obtener asistencia (BD_ASISTENCIA): ID, SUCURSAL, USUARIO_ID,
+  // USUARIO_NOMBRE, FECHA, HORA_ENTRADA, HORA_SALIDA, MINUTOS_TRABAJADOS,
+  // TIPO_SALIDA, ACTUALIZADO. `fila` es el renglón real del Sheet, para
+  // poder editar el registro despues (LS_API.editarAsistencia).
+  async function getAsistencia() {
+    try {
+      const rows = await leerHoja(SHEETS.ASISTENCIA);
+      if (!rows) return [];
+      return rows
+        .map((r, idx) => ({ r, fila: idx + 1 }))
+        .slice(1)
+        .filter(x => x.r.length > 0 && x.r[0])
+        .map(x => { const r = x.r; return ({
+          id:            r[0] || '',
+          fila:          x.fila,
+          sucursal:      r[1] || '',
+          usuarioId:     r[2] || '',
+          usuarioNombre: r[3] || '',
+          fecha:         r[4] || '',
+          horaEntrada:   r[5] || '',
+          horaSalida:    r[6] || '',
+          minutos:       (r[7] !== '' && r[7] != null) ? parseFloat(r[7]) : null,
+          tipoSalida:    r[8] || '',
+          actualizado:   r[9] || '',
+        }); });
+    } catch(e) { console.error('Error cargando asistencia:', e); return []; }
+  }
+
+  async function editarAsistencia(fila, horaEntrada, horaSalida) {
+    return escribirViaScript('editarAsistencia', { hoja: SHEETS.ASISTENCIA, datos: { fila, horaEntrada, horaSalida } });
   }
 
   // Obtener recetas
@@ -4074,7 +4148,7 @@ const LS_API = (() => {
   return {
     // Lectura
     getIngresos, getConciliacion, getFacturas,
-    getArticulosDetalle, getClientes, getProveedores, getRecetas, getBD_TIEMPOS,
+    getArticulosDetalle, getClientes, getProveedores, getRecetas, getBD_TIEMPOS, getAsistencia, editarAsistencia,
     getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos, getSucursalesInventario,
     getVentasPorSucursal, aliasSucursal, nombreSucursal, getProductosVenta,
     // Escritura
@@ -8666,6 +8740,7 @@ async function guardarVentaDirecta() {
     { id: 'terminalmp', label: 'Terminal Mercado Pago' },
     { id: 'comisiones', label: 'Comisiones delivery' },
     { id: 'usuariospos', label: 'Usuarios POS' },
+    { id: 'asistencia', label: 'Asistencia' },
   ];
   let _uposLista = [];
 
@@ -8857,6 +8932,117 @@ async function guardarVentaDirecta() {
     } catch(e) {
       console.error(e);
       toast('Error', 'No se pudo eliminar', 'err', 'ti-alert-triangle');
+    }
+  }
+
+  /* ============ ASISTENCIA ============
+     Lee BD_ASISTENCIA (un renglón por turno). El empleado marca su entrada y
+     salida desde el ícono de Asistencia en el topbar del POS -- si olvida
+     marcar salida, el propio POS la cierra sola al día siguiente
+     (tipoSalida:'automatica', ver _asistenciaResolverAbiertos en pos.html);
+     un supervisor puede corregir la hora real desde aquí. */
+  const ASIS_SUC_LABEL = { cafeteria: 'Casa de la Cultura', grano: 'Venta café en grano', helfy: 'Helfy Fü', eventos: 'Sueño de Luna Eventos', barbacoa: 'Barbacoa y Menudo' };
+  let _asisDatos = [];
+  let _asisVista = [];
+
+  async function renderAsistencia() {
+    const containerId = 'tabla-asistencia';
+    showLoading(containerId);
+    try {
+      const period = (typeof state !== 'undefined' && state.period) ? state.period : 'mes';
+      const rango = LS_API.getRangoPeriodo(period);
+      setTxt('asis-titulo-periodo', '— ' + rango.label);
+
+      const todos = await LS_API.getAsistencia();
+      _asisDatos = todos.filter(r => LS_API._enRango ? LS_API._enRango(r.fecha, rango.desde, rango.hasta) : true);
+
+      const sucSel = document.getElementById('asis-sucursal');
+      const empSel = document.getElementById('asis-empleado');
+      const sucPrev = sucSel ? sucSel.value : 'todas';
+      const empPrev = empSel ? empSel.value : 'todos';
+      const sucursales = Array.from(new Set(_asisDatos.map(r => r.sucursal).filter(Boolean))).sort();
+      const empleados = Array.from(new Set(_asisDatos.map(r => r.usuarioNombre).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es'));
+      if (sucSel) { sucSel.innerHTML = '<option value="todas">Todas las sucursales</option>' + sucursales.map(s => `<option value="${s}">${ASIS_SUC_LABEL[s] || s}</option>`).join(''); sucSel.value = sucursales.includes(sucPrev) ? sucPrev : 'todas'; }
+      if (empSel) { empSel.innerHTML = '<option value="todos">Todos los empleados</option>' + empleados.map(n => `<option value="${n}">${n}</option>`).join(''); empSel.value = empleados.includes(empPrev) ? empPrev : 'todos'; }
+
+      filtrarAsistencia();
+    } catch (e) {
+      console.error(e);
+      setEl(containerId, `<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--tx-3)">Error al cargar asistencia</td></tr>`);
+    }
+  }
+
+  function filtrarAsistencia() {
+    const suc = document.getElementById('asis-sucursal')?.value || 'todas';
+    const emp = document.getElementById('asis-empleado')?.value || 'todos';
+    let lista = _asisDatos.slice();
+    if (suc !== 'todas') lista = lista.filter(r => r.sucursal === suc);
+    if (emp !== 'todos') lista = lista.filter(r => r.usuarioNombre === emp);
+    lista.sort((a, b) => ((LS_API._fechaISO ? LS_API._fechaISO(b.fecha) : b.fecha) || '').localeCompare((LS_API._fechaISO ? LS_API._fechaISO(a.fecha) : a.fecha) || '') || (b.horaEntrada || '').localeCompare(a.horaEntrada || ''));
+    _asisVista = lista;
+    _pintarAsistencia(lista);
+
+    const horasTotal = lista.reduce((s, r) => s + (r.minutos || 0), 0) / 60;
+    setTxt('asis-horas-total', horasTotal.toFixed(1) + ' h');
+    setTxt('asis-turnos', lista.length);
+    setTxt('asis-activos', lista.filter(r => !r.horaSalida).length);
+    setTxt('asis-automaticas', lista.filter(r => r.tipoSalida === 'automatica').length);
+  }
+
+  function _pintarAsistencia(lista) {
+    const empty = document.getElementById('empty-asistencia');
+    const wrap = document.querySelector('#p-asistencia .tbl-wrap');
+    if (!lista.length) {
+      setEl('tabla-asistencia', '');
+      if (empty) empty.classList.add('show');
+      if (wrap) wrap.style.display = 'none';
+      return;
+    }
+    if (empty) empty.classList.remove('show');
+    if (wrap) wrap.style.display = '';
+    setEl('tabla-asistencia', lista.slice(0, 400).map(r => {
+      const horas = (r.minutos != null) ? (r.minutos / 60).toFixed(1) + ' h' : '—';
+      let estado = '<span class="badge">Completo</span>';
+      if (!r.horaSalida) estado = '<span class="badge warn">En turno</span>';
+      else if (r.tipoSalida === 'automatica') estado = '<span class="badge err" title="El empleado no marcó su salida -- se cerró sola">⚠ Automática</span>';
+      else if (r.tipoSalida === 'corregida') estado = '<span class="badge" title="Editado por un supervisor">Corregido</span>';
+      return `
+      <tr>
+        <td>${r.usuarioNombre}</td>
+        <td>${ASIS_SUC_LABEL[r.sucursal] || r.sucursal}</td>
+        <td>${r.fecha}</td>
+        <td style="font-family:var(--mono)">${r.horaEntrada || '—'}</td>
+        <td style="font-family:var(--mono)">${r.horaSalida || '—'}</td>
+        <td class="num" style="font-family:var(--mono)">${horas}</td>
+        <td>${estado}</td>
+        <td><button class="icon-btn" title="Editar" onclick="LS_UI.abrirEditarAsistencia(${r.fila})"><i class="ti ti-pencil"></i></button></td>
+      </tr>`;
+    }).join(''));
+  }
+
+  function abrirEditarAsistencia(fila) {
+    const r = _asisVista.find(x => x.fila === fila) || _asisDatos.find(x => x.fila === fila);
+    if (!r) return;
+    _modal2(`<div class="modal" style="max-width:420px"><div class="modal-header"><div class="modal-title"><i class="ti ti-pencil" style="margin-right:6px"></i>Editar asistencia</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body">
+      <div style="margin-bottom:12px;color:var(--tx-3);font-size:13px">${r.usuarioNombre} · ${r.fecha} · ${ASIS_SUC_LABEL[r.sucursal] || r.sucursal}</div>
+      <div style="display:flex;gap:10px">
+        <div class="ff" style="flex:1"><label>Hora de entrada</label><input type="time" id="easis-entrada" value="${r.horaEntrada || ''}"></div>
+        <div class="ff" style="flex:1"><label>Hora de salida</label><input type="time" id="easis-salida" value="${r.horaSalida || ''}"></div>
+      </div>
+    </div><div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarEditarAsistencia(${fila})">Guardar cambios</button></div></div>`);
+  }
+
+  async function guardarEditarAsistencia(fila) {
+    const entrada = document.getElementById('easis-entrada')?.value || '';
+    const salida = document.getElementById('easis-salida')?.value || '';
+    if (!entrada) { toast('Falta información', 'La hora de entrada es obligatoria', 'err'); return; }
+    try {
+      await LS_API.editarAsistencia(fila, entrada, salida);
+      toast('Guardado', 'Registro de asistencia corregido', 'ok');
+      _cerrarModal2();
+      await renderAsistencia();
+    } catch (e) {
+      toast('Error', 'No se pudo guardar', 'err');
     }
   }
 
@@ -10129,6 +10315,7 @@ async function guardarVentaDirecta() {
       case 'terminalmp': await renderTerminalMP(); break;
       case 'comisiones': await renderComisiones(); break;
       case 'usuariospos': await renderUsuariosPOS(); break;
+      case 'asistencia': await renderAsistencia(); break;
       case 'catalogo-inventario': await abrirCatalogoInventarioPagina(); break;
     }
   }
@@ -10847,6 +11034,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderTerminalMP, guardarTerminalesMP, mpListarTerminalesUI,
     renderComisiones, guardarComisiones,
     renderUsuariosPOS, abrirNuevoUsuarioPOS, editarUsuarioPOS, guardarUsuarioPOS, confirmarBorrarUsuarioPOS, ejecutarBorrarUsuarioPOS,
+    renderAsistencia, filtrarAsistencia, abrirEditarAsistencia, guardarEditarAsistencia,
     _toggleUposDropdown, _uposDropdownTodasChange, _uposDropdownResumen,
     closeModal,
     // Abrir modales
