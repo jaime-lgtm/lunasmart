@@ -24,6 +24,12 @@ const PARROT_API_KEY   = 'pk_AFHobF97QSAeAk2LdsmoWYbY0aJNPngk_f343f0db581f4b17b6
 const PARROT_STORE_UUID = 'd6c9c246-8ff7-44a9-a641-e38793050097';
 const PARROT_BASE_URL  = 'https://api.parrot.rest/external';
 
+// Misma base de datos que usa el POS y el sitio de pedidos -- se usa para
+// que el webhook de Mercado Pago (que lo llama el SERVIDOR de Mercado Pago,
+// sin navegador de por medio) pueda crear el pedido directo, sin depender
+// de que el cliente regrese al sitio después de pagar.
+const FIREBASE_DB_URL = 'https://luna-smart-pos-default-rtdb.firebaseio.com';
+
 // Nombres exactos de las hojas
 const HOJAS = {
   INGRESOS:       'INGRESOS',
@@ -140,6 +146,10 @@ function _normalizarFecha(f) {
 
 // ── doGet: lectura ─────────────────────────────────────────────────────────
 function doGet(e) {
+  // Mercado Pago a veces manda su notificación de pago como GET (formato
+  // viejo de IPN) en vez de POST -- se atiende igual en los dos casos.
+  if (e.parameter && e.parameter.mpwebhook === '1') return _procesarWebhookMP(e);
+
   const accion = (e.parameter && e.parameter.accion) ? e.parameter.accion : '';
 
   const map = {
@@ -172,6 +182,13 @@ function doGet(e) {
 
 // ── doPost: escritura ──────────────────────────────────────────────────────
 function doPost(e) {
+  // La notificación de pago de Mercado Pago llega a esta misma URL Web App
+  // (ver notification_url en _crearPreferenciaMP) -- no trae nuestro
+  // WRITE_TOKEN porque no la manda nuestro sitio, la manda el servidor de
+  // Mercado Pago directo, por eso se atiende ANTES de la verificación de
+  // token normal, con su propia verificación (ver _procesarWebhookMP).
+  if (e.parameter && e.parameter.mpwebhook === '1') return _procesarWebhookMP(e);
+
   let body = {};
   try {
     body = JSON.parse(e.postData.contents);
@@ -1040,6 +1057,20 @@ function _crearPreferenciaMP(b) {
     }).filter(function(it) { return it.unit_price > 0; });
     if (!items.length) return _err('Sin artículos válidos para cobrar');
     const baseUrl = b.baseUrl || 'https://pedidos.suenodeluna.com.mx';
+    const referencia = b.referencia || ('pedido_' + Date.now());
+
+    // Se guarda el detalle completo del pedido ANTES de mandar al cliente a
+    // pagar -- así, en cuanto Mercado Pago avise por su propio webhook que
+    // el pago se aprobó (sin depender de que el cliente regrese al sitio),
+    // hay de dónde reconstruir el pedido real. _procesarWebhookMP lo lee y
+    // lo borra al usarlo. Si esto falla (ej. falta configurar el secreto de
+    // Firebase) no se detiene el pago -- el webhook simplemente no podrá
+    // crear el pedido solo, y queda el respaldo del navegador como hoy.
+    if (b.pedido) {
+      try { _firebasePut('pedidosMPPendientes/' + referencia, b.pedido); }
+      catch (eFb) { Logger.log('No se pudo guardar el pedido pendiente para el webhook: ' + eFb.message); }
+    }
+
     const payload = {
       items: items,
       payer: { name: b.nombre || '', phone: { number: b.telefono || '' } },
@@ -1049,8 +1080,9 @@ function _crearPreferenciaMP(b) {
         pending: baseUrl + '?mp_status=pending',
       },
       auto_return: 'approved',
-      external_reference: b.referencia || ('pedido_' + Date.now()),
+      external_reference: referencia,
       statement_descriptor: 'SUENO DE LUNA',
+      notification_url: ScriptApp.getService().getUrl() + '?mpwebhook=1',
     };
     const resp = UrlFetchApp.fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'post',
@@ -1065,6 +1097,142 @@ function _crearPreferenciaMP(b) {
     }
     return _json({ status: 'ok', initPoint: data.init_point, preferenceId: data.id });
   } catch (e) { return _err(e.message); }
+}
+
+// ── FIREBASE REST (solo para el webhook de Mercado Pago) ──────────────────
+// El resto del sistema escribe a Firebase directo desde el navegador con el
+// SDK de cliente. Un webhook lo llama el servidor de Mercado Pago -- no hay
+// navegador ni sesión de por medio -- así que aquí se usa la API REST de
+// Realtime Database con el "secreto de base de datos" (legacy), que actúa
+// como acceso de administrador e ignora las reglas normales. Se guarda en
+// Propiedades del script, nunca en este archivo:
+//   Firebase Console → ⚙️ Configuración del proyecto → Cuentas de servicio
+//   → pestaña "Secretos de la base de datos" (Database secrets) → copiar
+//   Apps Script → Configuración del proyecto → Propiedades del script →
+//   agregar FIREBASE_DB_SECRET con ese valor.
+function _firebaseSecret() {
+  var s = PropertiesService.getScriptProperties().getProperty('FIREBASE_DB_SECRET');
+  if (!s) throw new Error('Falta configurar FIREBASE_DB_SECRET en Propiedades del script');
+  return s;
+}
+
+function _firebaseUrl(path) {
+  return FIREBASE_DB_URL + '/' + path + '.json?auth=' + encodeURIComponent(_firebaseSecret());
+}
+
+function _firebaseGet(path) {
+  var resp = UrlFetchApp.fetch(_firebaseUrl(path), { method: 'get', muteHttpExceptions: true });
+  if (resp.getResponseCode() >= 400) throw new Error('Firebase GET ' + path + ': ' + resp.getContentText());
+  var txt = resp.getContentText();
+  return txt === 'null' ? null : JSON.parse(txt);
+}
+
+function _firebasePut(path, data) {
+  var resp = UrlFetchApp.fetch(_firebaseUrl(path), { method: 'put', contentType: 'application/json', payload: JSON.stringify(data), muteHttpExceptions: true });
+  if (resp.getResponseCode() >= 400) throw new Error('Firebase PUT ' + path + ': ' + resp.getContentText());
+  return JSON.parse(resp.getContentText());
+}
+
+function _firebasePost(path, data) {
+  var resp = UrlFetchApp.fetch(_firebaseUrl(path), { method: 'post', contentType: 'application/json', payload: JSON.stringify(data), muteHttpExceptions: true });
+  if (resp.getResponseCode() >= 400) throw new Error('Firebase POST ' + path + ': ' + resp.getContentText());
+  return JSON.parse(resp.getContentText()); // { name: "-NuevaLlave" }, como .push() del SDK
+}
+
+function _firebaseDelete(path) {
+  UrlFetchApp.fetch(_firebaseUrl(path), { method: 'delete', muteHttpExceptions: true });
+}
+
+// Busca si ya existe un pedido con este referenciaMP -- evita crear un
+// duplicado si el navegador del cliente Y el webhook reaccionan casi al
+// mismo tiempo (el navegador hace la misma revisión de su lado, ver
+// _enviarPedidoWebAFirebase en el sitio).
+function _firebaseYaExistePedidoConReferencia(referencia) {
+  var url = FIREBASE_DB_URL + '/pedidos/cafeteria.json?auth=' + encodeURIComponent(_firebaseSecret()) +
+    '&orderBy=' + encodeURIComponent('"referenciaMP"') + '&equalTo=' + encodeURIComponent('"' + referencia + '"');
+  var resp = UrlFetchApp.fetch(url, { method: 'get', muteHttpExceptions: true });
+  if (resp.getResponseCode() >= 400) throw new Error('Firebase query pedidos: ' + resp.getContentText());
+  var txt = resp.getContentText();
+  if (txt === 'null') return false;
+  var data = JSON.parse(txt);
+  return !!(data && Object.keys(data).length);
+}
+
+// ── WEBHOOK DE MERCADO PAGO (Checkout Pro) ─────────────────────────────────
+// Mercado Pago llama esta misma URL directo desde SUS servidores en cuanto
+// se aprueba (o cambia de estado) un pago -- sin depender de que el
+// navegador del cliente regrese al sitio. Así, aunque el cliente cierre la
+// pestaña justo después de pagar (el caso que se nos escapó antes), el
+// pedido de todos modos se crea.
+//
+// Mercado Pago puede reintentar el mismo aviso varias veces -- por eso
+// _firebaseYaExistePedidoConReferencia() y el borrado del pendiente al
+// final hacen que un segundo aviso para el mismo pago no cree un segundo
+// pedido.
+function _procesarWebhookMP(e) {
+  try {
+    var paymentId = null;
+    var params = (e && e.parameter) || {};
+    if (params['data.id']) paymentId = params['data.id'];
+    else if (params.id && (params.topic === 'payment' || params.type === 'payment')) paymentId = params.id;
+    if (!paymentId && e && e.postData && e.postData.contents) {
+      try {
+        var body = JSON.parse(e.postData.contents);
+        if (body && body.data && body.data.id) paymentId = body.data.id;
+      } catch (_) {}
+    }
+    if (!paymentId) return _json({ status: 'ok', ignorado: true });
+
+    var accessToken = PropertiesService.getScriptProperties().getProperty('MP_ACCESS_TOKEN');
+    if (!accessToken) return _json({ status: 'ok', error: 'sin MP_ACCESS_TOKEN' });
+    var resp = UrlFetchApp.fetch('https://api.mercadopago.com/v1/payments/' + paymentId, {
+      method: 'get', headers: { Authorization: 'Bearer ' + accessToken }, muteHttpExceptions: true,
+    });
+    if (resp.getResponseCode() >= 400) return _json({ status: 'ok', error: 'no se pudo consultar el pago' });
+    var pago = JSON.parse(resp.getContentText());
+    if (pago.status !== 'approved') return _json({ status: 'ok', estado: pago.status });
+
+    var referencia = pago.external_reference;
+    if (!referencia) return _json({ status: 'ok', error: 'sin external_reference' });
+
+    var lock = LockService.getScriptLock();
+    try { lock.waitLock(20000); } catch (le) { return _json({ status: 'ok', error: 'ocupado, Mercado Pago reintentará' }); }
+    try {
+      if (_firebaseYaExistePedidoConReferencia(referencia)) {
+        _firebaseDelete('pedidosMPPendientes/' + referencia);
+        return _json({ status: 'ok', yaExistiaPedido: true });
+      }
+      var p = _firebaseGet('pedidosMPPendientes/' + referencia);
+      if (!p) return _json({ status: 'ok', sinPendiente: true }); // no hay de dónde reconstruirlo (ej. pedidosMPPendientes se creó antes de configurar FIREBASE_DB_SECRET)
+
+      var cartUsado = p.cart || [];
+      var cargoDom = p.delivery === 'delivery' ? 60 : 0;
+      var totalUsado = cartUsado.reduce(function (a, i) { return a + (parseFloat(i.price) || 0); }, 0) + cargoDom;
+      var items = cartUsado.map(function (i) {
+        return { id: i.id || null, name: i.name, size: i.size || null, mods: (i.details || []).join(', '), note: '', price: i.price, qty: 1, area: i.area || 'barra', modDeltas: [] };
+      });
+      var tz = Session.getScriptTimeZone();
+      var pedidoObj = {
+        tipo: p.delivery === 'delivery' ? 'domicilio' : 'llevar', mesa: null, estado: 'pendienteWeb',
+        metodo: 'mercadopago',
+        cliente: { nombre: p.name || '', telefono: (p.tel || '').replace(/\D/g, ''), direccion: p.delivery === 'delivery' ? (p.addr || '') : '', referencia: p.notes || '' },
+        items: items, cargoDomicilio: cargoDom, puntosUsados: 0, total: Math.max(0, totalUsado),
+        hora: Utilities.formatDate(new Date(), tz, 'hh:mm a'),
+        origenWeb: true, origenWebhook: true, mpPaymentId: String(paymentId), referenciaMP: referencia,
+        _ts: { '.sv': 'timestamp' },
+      };
+      var pushRes = _firebasePost('pedidos/cafeteria', pedidoObj);
+      var newKey = pushRes.name;
+      var nid = '#' + String(newKey).replace(/[^a-zA-Z0-9]/g, '').slice(-5).toUpperCase();
+      _firebasePut('pedidos/cafeteria/' + newKey + '/id', nid);
+      _firebaseDelete('pedidosMPPendientes/' + referencia);
+      return _json({ status: 'ok', pedidoCreado: nid });
+    } finally {
+      lock.releaseLock();
+    }
+  } catch (e2) {
+    return _json({ status: 'ok', error: e2.message });
+  }
 }
 
 // ── MERCADO PAGO POINT (terminal física, cobro con tarjeta desde el POS) ──
