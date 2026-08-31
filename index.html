@@ -3335,6 +3335,14 @@ const LS_API = (() => {
     return escribirViaScript('actualizarMinMaxInventario', { hoja: SHEETS.INVENTARIO, datos: { items } });
   }
 
+  async function cambiarSucursalInventario(fila, sucursal) {
+    return escribirViaScript('cambiarSucursalInventario', { hoja: SHEETS.INVENTARIO, datos: { fila, sucursal } });
+  }
+
+  async function eliminarArticuloInventario(filas) {
+    return escribirViaScript('eliminarArticuloInventario', { hoja: SHEETS.INVENTARIO, datos: { filas: Array.isArray(filas) ? filas : [filas] } });
+  }
+
           async function agregarArticuloInventario(datos) {
         return escribirViaScript('agregarArticuloInventario', { hoja: SHEETS.INVENTARIO, datos });
           }
@@ -4079,7 +4087,7 @@ const LS_API = (() => {
     // Agregaciones
     getKPIsDashboard, getTopArticulos, getTopProveedores,
     getTopComprados, getProductosVendidos,
-    getTendenciaVentas, getMetaMes, getVentaPorTurno, agregarArticuloInventario,
+    getTendenciaVentas, getMetaMes, getVentaPorTurno, agregarArticuloInventario, cambiarSucursalInventario, eliminarArticuloInventario,
     getGastoPorCategoria, getGastoPorSubcategoria, getResumenMensual, getAlertasInventario,
     // Utilidades
     parseNum, formatMXN, formatMXNDec, formatPct, hoy, mesFiltro, getRangoPeriodo,
@@ -10677,23 +10685,42 @@ function verArticuloInventario(idx) {
               var _tiposReg = ['Pesaje (kg/g)','Conteo por piezas/unidades','Volumen (ml/L)','Estimado por porcentaje (%)','Otro / Manual'];
               var _tipoActual = (g.filas.filter(function(r){ return r.tipoRegistro; })[0] || {}).tipoRegistro || '';
               var tipoRegHtml = '<div class="ff" style="margin-bottom:12px"><label>Tipo de registro</label><select id="einv-tiporegistro"><option value="">— Sin definir —</option>' + _tiposReg.map(function(o){ return '<option value="' + o + '"' + (o === _tipoActual ? ' selected' : '') + '>' + o + '</option>'; }).join('') + '</select></div>';
+              var sucursales = [];
+              try {
+                var base = window._invCatBase || window._invCatBasePag || [];
+                var setS = {};
+                base.forEach(function(gg){ gg.filas.forEach(function(rr){ if (rr.sucursal) setS[rr.sucursal] = true; }); });
+                sucursales = Object.keys(setS).sort();
+              } catch(e2) {}
+              if (!sucursales.length) sucursales = ['COFFEE & ROASTERS','CASA DE LA CULTURA','HELFY FÜ','BARBACOA Y MENUDO','EVENTOS'];
               var filas = g.filas.map(function(r) {
-                        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)"><div style="flex:1">' + r.sucursal + '<div style="color:var(--tx-4);font-size:12px">Stock actual: ' + r.stockFisico + ' ' + (r.unidad || '') + '</div></div><div class="ff" style="width:110px"><label>Mínimo</label><input type="number" step="any" class="einv-min" data-fila="' + r.fila + '" value="' + (r.stockMinimo || 0) + '"></div><div class="ff" style="width:110px"><label>Máximo</label><input type="number" step="any" class="einv-max" data-fila="' + r.fila + '" value="' + (r.stockSugerido || 0) + '"></div></div>';
+                        var sucOpts = sucursales.map(function(s){ return '<option value="' + s.replace(/"/g,'&quot;') + '"' + (s === r.sucursal ? ' selected' : '') + '>' + s + '</option>'; }).join('');
+                        return '<div style="display:flex;align-items:flex-end;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)"><div class="ff" style="flex:1;margin-bottom:0"><label>Sucursal</label><select class="einv-sucursal" data-fila="' + r.fila + '" data-original="' + r.sucursal.replace(/"/g,'&quot;') + '">' + sucOpts + '</select><div style="color:var(--tx-4);font-size:12px;margin-top:4px">Stock actual: ' + r.stockFisico + ' ' + (r.unidad || '') + '</div></div><div class="ff" style="width:100px;margin-bottom:0"><label>Mínimo</label><input type="number" step="any" class="einv-min" data-fila="' + r.fila + '" value="' + (r.stockMinimo || 0) + '"></div><div class="ff" style="width:100px;margin-bottom:0"><label>Máximo</label><input type="number" step="any" class="einv-max" data-fila="' + r.fila + '" value="' + (r.stockSugerido || 0) + '"></div><button type="button" title="Eliminar este renglón" onclick="LS_UI.eliminarFilaInventario(' + r.fila + ',\'' + String(g.articulo||'').replace(/'/g,"\\'") + '\',\'' + String(r.sucursal||'').replace(/'/g,"\\'") + '\')" style="background:none;border:none;color:#c0392b;cursor:pointer;padding:8px 4px;font-size:18px;line-height:1"><i class="ti ti-trash"></i></button></div>';
   }).join('');
-        _modal2('<div class="modal" style="max-width:640px"><div class="modal-header"><div class="modal-title"><i class="ti ti-pencil" style="margin-right:6px"></i>Editar ' + g.articulo + '</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body">' + tipoRegHtml + filas + '</div><div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarMinMaxInventario(' + idx + ')">Guardar cambios</button></div></div>');
+        _modal2('<div class="modal" style="max-width:680px"><div class="modal-header"><div class="modal-title"><i class="ti ti-pencil" style="margin-right:6px"></i>Editar ' + g.articulo + '</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body">' + tipoRegHtml + filas + '</div><div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarMinMaxInventario(' + idx + ')">Guardar cambios</button></div></div>');
   }
       async function guardarMinMaxInventario(idx) {
         var mins = document.querySelectorAll('.einv-min');
         var maxs = document.querySelectorAll('.einv-max');
+        var sucs = document.querySelectorAll('.einv-sucursal');
         var _elTipoReg = document.getElementById('einv-tiporegistro');
         var _tipoRegSel = _elTipoReg ? _elTipoReg.value : '';
         var items = [];
         mins.forEach(function(el, i) {
           items.push({ fila: el.getAttribute('data-fila'), minimo: el.value, maximo: maxs[i] ? maxs[i].value : '', tipoRegistro: _tipoRegSel });
           });
+        var cambiosSucursal = [];
+        sucs.forEach(function(sel) {
+          if (sel.value !== sel.getAttribute('data-original')) {
+            cambiosSucursal.push({ fila: sel.getAttribute('data-fila'), sucursal: sel.value });
+          }
+        });
         try {
           await LS_API.actualizarMinMaxInventario(items);
-          toast('Guardado', 'Mínimo y máximo actualizados', 'ok');
+          for (var i = 0; i < cambiosSucursal.length; i++) {
+            await LS_API.cambiarSucursalInventario(cambiosSucursal[i].fila, cambiosSucursal[i].sucursal);
+          }
+          toast('Guardado', 'Cambios actualizados', 'ok');
           _cerrarModal2();
           try { renderInventario(); } catch (e) {}
           await _refrescarCatalogoInventarioTrasGuardar();
@@ -10701,6 +10728,18 @@ function verArticuloInventario(idx) {
           toast('Error', 'No se pudo guardar', 'err');
   }
   }
+      async function eliminarFilaInventario(fila, articulo, sucursal) {
+        if (!confirm('¿Eliminar "' + articulo + '" de ' + sucursal + '? Esta acción no se puede deshacer.')) return;
+        try {
+          await LS_API.eliminarArticuloInventario([fila]);
+          toast('Eliminado', 'Renglón eliminado de inventario', 'ok');
+          _cerrarModal2();
+          try { renderInventario(); } catch (e) {}
+          await _refrescarCatalogoInventarioTrasGuardar();
+        } catch (e) {
+          toast('Error', 'No se pudo eliminar', 'err');
+        }
+      }
   async function abrirAgregarArticuloInventario() {
         _modal2(`<div class="modal" style="max-width:520px"><div class="modal-header"><div class="modal-title"><i class="ti ti-package"></i> Agregar artículo</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body" id="agr-art-body"><div style="text-align:center;padding:30px 0;color:var(--tx-3)">Cargando catálogo maestro…</div></div></div>`);
           try {
@@ -10780,7 +10819,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderFacturas, renderArticulos, renderRentabilidad,
     renderGastos, renderBalance, renderInventario, renderProveedores, renderCatalogo,
     abrirRegistrarInventario, filtrarArticulosInventarioModal, buscarArticulosInventarioModal, guardarRegistroInventario, enviarRegistroInventarioWhatsApp, abrirStockCritico, abrirGenerarOrden, imprimirOrdenCompra, enviarOrdenWhatsApp,
-    abrirCatalogoInventario, buscarCatalogoInventario, filtrarCatalogoInventario,  abrirCatalogoInventarioPagina, buscarCatalogoInventarioPagina, filtrarCatalogoInventarioPagina, filtrarSucursalCatalogoPagina, filtrarSucursalCatalogo, verArticuloInventario, editarArticuloInventario, guardarMinMaxInventario, abrirAgregarArticuloInventario, guardarNuevoArticuloInventario,
+    abrirCatalogoInventario, buscarCatalogoInventario, filtrarCatalogoInventario,  abrirCatalogoInventarioPagina, buscarCatalogoInventarioPagina, filtrarCatalogoInventarioPagina, filtrarSucursalCatalogoPagina, filtrarSucursalCatalogo, verArticuloInventario, editarArticuloInventario, guardarMinMaxInventario, abrirAgregarArticuloInventario, guardarNuevoArticuloInventario, eliminarFilaInventario,
     buscarProveedores, verProveedor, editarProveedor, nuevoProveedor, guardarProveedor, confirmarBorrarProveedor, ejecutarBorrarProveedor,
     buscarCatalogo, verArticulo, editarArticulo, nuevoArticulo, guardarArticulo, setModoArticulos, confirmarBorrarArticulo, ejecutarBorrarArticulo,
     onPageChange, reloadPage, invalidarCacheYRecargar, recargarPagina,

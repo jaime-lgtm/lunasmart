@@ -231,6 +231,8 @@ function doPost(e) {
     case 'sumarStockPorCompra':        return _sumarStockPorCompra(datos);
     case 'actualizarMinMaxInventario': return _actualizarMinMaxInventario(datos);
     case 'agregarArticuloInventario':  return _agregarArticuloInventario(datos);
+    case 'cambiarSucursalInventario':  return _cambiarSucursalInventario(datos);
+    case 'eliminarArticuloInventario': return _eliminarArticuloInventario(datos);
     case 'descontarInventarioVenta':   return _descontarInventarioVenta(datos);
     case 'registrarCatalogoArticulo':  return _registrarCatalogoArticulo(datos);
     case 'buscarClienteDom':           return _buscarClienteDom(datos);
@@ -1261,6 +1263,42 @@ function _agregarArticuloInventario(b) {
       parseFloat(b.minimo || 0) || 0, b.tipoRegistro || '',
     ]);
     return _json({ status: 'ok', id: id });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+// Cambia la sucursal de un renglón de inventario ya existente (fila exacta).
+function _cambiarSucursalInventario(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var fila = parseInt(b.fila, 10);
+    if (!fila || fila < 2) return _err('Fila inválida');
+    var nuevaSucursal = String(b.sucursal || '').trim();
+    if (!nuevaSucursal) return _err('Falta la sucursal destino');
+    var sh = _getSheet(HOJAS.INVENTARIO);
+    sh.getRange(fila, 2).setValue(nuevaSucursal);
+    return _json({ status: 'ok' });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+// Elimina uno o varios renglones de inventario (duplicados, mal asignados,
+// artículos que ya no se manejan en esa sucursal, etc). Borra de mayor a
+// menor número de fila para que al eliminar varias no se desfasen los
+// índices de las que faltan por borrar.
+function _eliminarArticuloInventario(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var filas = (b.filas || (b.fila ? [b.fila] : []))
+      .map(function(f){ return parseInt(f, 10); })
+      .filter(function(f){ return f && f >= 2; })
+      .sort(function(a, b2){ return b2 - a; });
+    if (!filas.length) return _err('No se especificó ninguna fila');
+    var sh = _getSheet(HOJAS.INVENTARIO);
+    filas.forEach(function(f){ sh.deleteRow(f); });
+    return _json({ status: 'ok', eliminados: filas.length });
   } catch (e) { return _err(e.message); }
   finally { lock.releaseLock(); }
 }
