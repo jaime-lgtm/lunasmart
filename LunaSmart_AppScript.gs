@@ -244,6 +244,7 @@ function doPost(e) {
     case 'registrarAsistenciaEntrada': return _registrarAsistenciaEntrada(datos);
     case 'registrarAsistenciaSalida':  return _registrarAsistenciaSalida(datos);
     case 'editarAsistencia':           return _editarAsistencia(datos);
+    case 'eliminarAsistencia':         return _eliminarAsistencia(datos);
     case 'crearPreferenciaMP':         return _crearPreferenciaMP(datos);
     case 'mpListarTerminales':         return _mpListarTerminales();
     case 'mpCrearCobroTerminal':       return _mpCrearCobroTerminal(datos);
@@ -1132,6 +1133,24 @@ function _editarAsistencia(b) {
     sh.getRange(fila, 9).setValue('corregida');
     sh.getRange(fila, 10).setValue(new Date());
     return _json({ status: 'ok', minutos: minutos });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+// Elimina uno o varios renglones de asistencia (ej. registros duplicados por
+// un doble toque en el POS mientras se procesaba el anterior).
+function _eliminarAsistencia(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var filas = (b.filas || (b.fila ? [b.fila] : []))
+      .map(function(f){ return parseInt(f, 10); })
+      .filter(function(f){ return f && f >= 2; })
+      .sort(function(a, b2){ return b2 - a; });
+    if (!filas.length) return _err('No se especificó ninguna fila');
+    var sh = _getOrCrearSheetAsistencia();
+    filas.forEach(function(f){ sh.deleteRow(f); });
+    return _json({ status: 'ok', eliminados: filas.length });
   } catch (e) { return _err(e.message); }
   finally { lock.releaseLock(); }
 }

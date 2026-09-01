@@ -3259,6 +3259,10 @@ const LS_API = (() => {
     return escribirViaScript('editarAsistencia', { hoja: SHEETS.ASISTENCIA, datos: { fila, horaEntrada, horaSalida } });
   }
 
+  async function eliminarAsistencia(filas) {
+    return escribirViaScript('eliminarAsistencia', { hoja: SHEETS.ASISTENCIA, datos: { filas: Array.isArray(filas) ? filas : [filas] } });
+  }
+
   // Obtener recetas
   async function getRecetas() {
     try {
@@ -4148,7 +4152,7 @@ const LS_API = (() => {
   return {
     // Lectura
     getIngresos, getConciliacion, getFacturas,
-    getArticulosDetalle, getClientes, getProveedores, getRecetas, getBD_TIEMPOS, getAsistencia, editarAsistencia,
+    getArticulosDetalle, getClientes, getProveedores, getRecetas, getBD_TIEMPOS, getAsistencia, editarAsistencia, eliminarAsistencia,
     getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos, getSucursalesInventario,
     getVentasPorSucursal, aliasSucursal, nombreSucursal, getProductosVenta,
     // Escritura
@@ -9015,7 +9019,10 @@ async function guardarVentaDirecta() {
         <td style="font-family:var(--mono)">${r.horaSalida || '—'}</td>
         <td class="num" style="font-family:var(--mono)">${horas}</td>
         <td>${estado}</td>
-        <td><button class="icon-btn" title="Editar" onclick="LS_UI.abrirEditarAsistencia(${r.fila})"><i class="ti ti-pencil"></i></button></td>
+        <td>
+          <button class="icon-btn" title="Editar" onclick="LS_UI.abrirEditarAsistencia(${r.fila})"><i class="ti ti-pencil"></i></button>
+          <button class="icon-btn" title="Eliminar" onclick="LS_UI.eliminarFilaAsistencia(${r.fila}, '${(r.usuarioNombre || '').replace(/'/g, "\\'")}', '${r.fecha}')"><i class="ti ti-trash"></i></button>
+        </td>
       </tr>`;
     }).join(''));
   }
@@ -9043,6 +9050,17 @@ async function guardarVentaDirecta() {
       await renderAsistencia();
     } catch (e) {
       toast('Error', 'No se pudo guardar', 'err');
+    }
+  }
+
+  async function eliminarFilaAsistencia(fila, nombre, fecha) {
+    if (!confirm('¿Eliminar el registro de asistencia de ' + nombre + ' (' + fecha + ')? Esta acción no se puede deshacer.')) return;
+    try {
+      await LS_API.eliminarAsistencia([fila]);
+      toast('Eliminado', 'Registro de asistencia eliminado', 'ok');
+      await renderAsistencia();
+    } catch (e) {
+      toast('Error', 'No se pudo eliminar', 'err');
     }
   }
 
@@ -11034,7 +11052,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderTerminalMP, guardarTerminalesMP, mpListarTerminalesUI,
     renderComisiones, guardarComisiones,
     renderUsuariosPOS, abrirNuevoUsuarioPOS, editarUsuarioPOS, guardarUsuarioPOS, confirmarBorrarUsuarioPOS, ejecutarBorrarUsuarioPOS,
-    renderAsistencia, filtrarAsistencia, abrirEditarAsistencia, guardarEditarAsistencia,
+    renderAsistencia, filtrarAsistencia, abrirEditarAsistencia, guardarEditarAsistencia, eliminarFilaAsistencia,
     _toggleUposDropdown, _uposDropdownTodasChange, _uposDropdownResumen,
     closeModal,
     // Abrir modales
