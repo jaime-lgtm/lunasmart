@@ -1172,6 +1172,7 @@
         <div class="nav-item" data-page="comisiones" onclick="go('comisiones',this)"><i class="ti ti-percentage"></i><span class="nav-lbl">Comisiones delivery</span></div>
         <div class="nav-item" data-page="usuariospos" onclick="go('usuariospos',this)"><i class="ti ti-users"></i><span class="nav-lbl">Usuarios POS</span></div>
         <div class="nav-item" data-page="asistencia" onclick="go('asistencia',this)"><i class="ti ti-clock-hour-4"></i><span class="nav-lbl">Asistencia</span></div>
+        <div class="nav-item" data-page="marketing" onclick="go('marketing',this)"><i class="ti ti-speakerphone"></i><span class="nav-lbl">Marketing Digital</span></div>
       </nav>
 
       <div class="sb-foot">
@@ -2055,6 +2056,56 @@
   </div>
 </div>
 
+<!-- PÁGINA: MARKETING DIGITAL -->
+<div id="p-marketing" class="page" data-screen-label="Marketing Digital">
+  <div class="seg" style="margin-bottom:18px">
+    <button class="on" data-mkt-vista="fechas" onclick="LS_UI.mktSwitchVista('fechas')">Fechas importantes</button>
+    <button data-mkt-vista="metricas" onclick="LS_UI.mktSwitchVista('metricas')">Métricas semanales</button>
+    <button data-mkt-vista="contenido" onclick="LS_UI.mktSwitchVista('contenido')">Contenido programado</button>
+    <button data-mkt-vista="tareas" onclick="LS_UI.mktSwitchVista('tareas')">Metas y tareas</button>
+  </div>
+
+  <!-- FECHAS IMPORTANTES -->
+  <div id="mkt-view-fechas">
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-head"><div><div class="card-title"><i class="ti ti-calendar-event"></i>Próximas fechas</div><div class="card-sub">Lo que se viene, para preparar contenido con tiempo</div></div></div>
+      <div id="mkt-proximas-lista" style="padding:0 18px 18px;display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title"><i class="ti ti-calendar-star"></i>Calendario de temporada</div><div class="card-sub">Fechas y sugerencias de contenido, editable</div></div>
+        <div class="card-actions"><button class="btn btn-primary btn-sm" onclick="LS_UI.abrirNuevaFechaMkt()"><i class="ti ti-plus"></i>Agregar fecha</button></div>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl" data-sortable>
+          <thead><tr>
+            <th class="sortable" data-type="text">Fecha<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+            <th>Título</th><th>Sugerencia de contenido</th><th>Categoría</th><th>Recurrente</th>
+            <th style="width:60px">Acciones</th>
+          </tr></thead>
+          <tbody id="tabla-mkt-fechas"><tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="empty" id="empty-mkt-fechas"><div class="e-ico"><i class="ti ti-calendar-star"></i></div><div class="e-title">Sin fechas registradas</div><div class="e-sub">Agrega fechas importantes para planear contenido con anticipación.</div></div>
+    </div>
+  </div>
+
+  <!-- MÉTRICAS SEMANALES -->
+  <div id="mkt-view-metricas" style="display:none">
+    <div class="empty show"><div class="e-ico"><i class="ti ti-chart-line"></i></div><div class="e-title">Próximamente</div><div class="e-sub">Estamos construyendo esta sección.</div></div>
+  </div>
+
+  <!-- CONTENIDO PROGRAMADO -->
+  <div id="mkt-view-contenido" style="display:none">
+    <div class="empty show"><div class="e-ico"><i class="ti ti-calendar-plus"></i></div><div class="e-title">Próximamente</div><div class="e-sub">Estamos construyendo esta sección.</div></div>
+  </div>
+
+  <!-- METAS Y TAREAS -->
+  <div id="mkt-view-tareas" style="display:none">
+    <div class="empty show"><div class="e-ico"><i class="ti ti-checklist"></i></div><div class="e-title">Próximamente</div><div class="e-sub">Estamos construyendo esta sección.</div></div>
+  </div>
+</div>
+
 <!-- PÁGINA: MODIFICADORES -->
 <div id="p-modificadores" class="page" data-screen-label="Modificadores">
   <div class="card">
@@ -2133,6 +2184,7 @@
           <div class="d-item" data-page="terminalmp" onclick="mdrawerGo('terminalmp')"><i class="ti ti-credit-card"></i><span>Terminal MP</span></div>
           <div class="d-item" data-page="usuariospos" onclick="mdrawerGo('usuariospos')"><i class="ti ti-users"></i><span>Usuarios POS</span></div>
           <div class="d-item" data-page="asistencia" onclick="mdrawerGo('asistencia')"><i class="ti ti-clock-hour-4"></i><span>Asistencia</span></div>
+          <div class="d-item" data-page="marketing" onclick="mdrawerGo('marketing')"><i class="ti ti-speakerphone"></i><span>Marketing</span></div>
           <div class="d-item" onclick="toggleDrawer();doLogout()"><i class="ti ti-logout"></i><span>Salir</span></div>
         </div>
       </div>
@@ -2202,6 +2254,7 @@ const PAGES = {
   comisiones: { title: 'Comisiones delivery', sub: 'Define el % que cobra cada plataforma para calcular el margen real' },
   usuariospos: { title: 'Usuarios POS', sub: 'Altas, roles y PIN de acceso al punto de venta' },
   asistencia: { title: 'Asistencia', sub: 'Entradas, salidas y horas trabajadas por empleado' },
+  marketing: { title: 'Marketing Digital', sub: 'Métricas, contenido, metas y fechas clave de redes sociales' },
 };
 
 const BRANCHES = {
@@ -2712,6 +2765,10 @@ const LS_API = (() => {
     RECETAS_DET:    'BD_RECETAS_DETALLES',
     TIEMPOS:        'BD_TIEMPOS',
     ASISTENCIA:     'BD_ASISTENCIA',
+    MKT_METRICAS:   'BD_MARKETING_METRICAS',
+    MKT_CONTENIDO:  'BD_MARKETING_CONTENIDO',
+    MKT_TAREAS:     'BD_MARKETING_TAREAS',
+    MKT_FECHAS:     'BD_MARKETING_FECHAS',
   };
 
   // ── ÍNDICES DE COLUMNAS (base 0) ───────────────────────────
@@ -3261,6 +3318,43 @@ const LS_API = (() => {
 
   async function eliminarAsistencia(filas) {
     return escribirViaScript('eliminarAsistencia', { hoja: SHEETS.ASISTENCIA, datos: { filas: Array.isArray(filas) ? filas : [filas] } });
+  }
+
+  // ── MARKETING DIGITAL: FECHAS IMPORTANTES ──────────────────
+  // BD_MARKETING_FECHAS: ID, FECHA, TITULO, SUGERENCIA, CATEGORIA,
+  // RECURRENTE_ANUAL, ACTUALIZADO. La hoja se autocrea (con fechas
+  // semilla) desde Apps Script la primera vez que se guarda un registro.
+  async function getFechasMkt() {
+    try {
+      const rows = await leerHoja(SHEETS.MKT_FECHAS);
+      if (!rows) return [];
+      return rows
+        .map((r, idx) => ({ r, fila: idx + 1 }))
+        .slice(1)
+        .filter(x => x.r.length > 0 && x.r[0])
+        .map(x => { const r = x.r; return ({
+          id:          r[0] || '',
+          fila:        x.fila,
+          fecha:       r[1] || '',
+          titulo:      r[2] || '',
+          sugerencia:  r[3] || '',
+          categoria:   r[4] || '',
+          recurrente:  String(r[5]).toUpperCase() === 'TRUE' || r[5] === true,
+          actualizado: r[6] || '',
+        }); });
+    } catch(e) { console.error('Error cargando fechas de marketing:', e); return []; }
+  }
+
+  async function registrarFechaMkt(datos) {
+    return escribirViaScript('registrarFechaMkt', { hoja: SHEETS.MKT_FECHAS, datos });
+  }
+
+  async function editarFechaMkt(fila, datos) {
+    return escribirViaScript('editarFechaMkt', { hoja: SHEETS.MKT_FECHAS, datos: Object.assign({ fila }, datos) });
+  }
+
+  async function eliminarFechaMkt(filas) {
+    return escribirViaScript('eliminarFechaMkt', { hoja: SHEETS.MKT_FECHAS, datos: { filas: Array.isArray(filas) ? filas : [filas] } });
   }
 
   // Obtener recetas
@@ -4153,6 +4247,7 @@ const LS_API = (() => {
     // Lectura
     getIngresos, getConciliacion, getFacturas,
     getArticulosDetalle, getClientes, getProveedores, getRecetas, getBD_TIEMPOS, getAsistencia, editarAsistencia, eliminarAsistencia,
+    getFechasMkt, registrarFechaMkt, editarFechaMkt, eliminarFechaMkt,
     getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos, getSucursalesInventario,
     getVentasPorSucursal, aliasSucursal, nombreSucursal, getProductosVenta,
     // Escritura
@@ -8745,6 +8840,7 @@ async function guardarVentaDirecta() {
     { id: 'comisiones', label: 'Comisiones delivery' },
     { id: 'usuariospos', label: 'Usuarios POS' },
     { id: 'asistencia', label: 'Asistencia' },
+    { id: 'marketing', label: 'Marketing Digital' },
   ];
   let _uposLista = [];
 
@@ -9059,6 +9155,177 @@ async function guardarVentaDirecta() {
       await LS_API.eliminarAsistencia([fila]);
       toast('Eliminado', 'Registro de asistencia eliminado', 'ok');
       await renderAsistencia();
+    } catch (e) {
+      toast('Error', 'No se pudo eliminar', 'err');
+    }
+  }
+
+  /* ============ MARKETING DIGITAL ============
+     Una sola página con 4 sub-vistas (fechas / métricas / contenido /
+     tareas) intercambiadas localmente con .seg + display:none -- son
+     sub-vistas de UNA página, no pasan por el router de páginas completo.
+     Por ahora solo "Fechas importantes" está construida; las otras 3
+     quedan con un aviso de "Próximamente" hasta el siguiente paso. */
+  const MKT_CATEGORIAS = ['Temporada de bebida', 'Día festivo MX', 'Fecha comercial', 'Otro'];
+  let _mktVista = 'fechas';
+  const _mktCargado = new Set();
+  let _mktFechasDatos = [];
+
+  function mktSwitchVista(vista) {
+    _mktVista = vista;
+    document.querySelectorAll('#p-marketing .seg button').forEach(b => b.classList.toggle('on', b.dataset.mktVista === vista));
+    ['fechas', 'metricas', 'contenido', 'tareas'].forEach(v => {
+      const el = document.getElementById('mkt-view-' + v);
+      if (el) el.style.display = (v === vista) ? '' : 'none';
+    });
+    if (vista === 'fechas' && !_mktCargado.has('fechas')) { _mktCargado.add('fechas'); renderMktFechas(); }
+  }
+
+  async function renderMarketing() {
+    mktSwitchVista(_mktVista);
+  }
+
+  async function renderMktFechas() {
+    try {
+      const datos = await LS_API.getFechasMkt();
+      _mktFechasDatos = datos;
+      _pintarProximasFechasMkt(datos);
+      _pintarTablaFechasMkt(datos);
+    } catch (e) {
+      console.error(e);
+      setEl('tabla-mkt-fechas', `<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-3)">Error al cargar fechas</td></tr>`);
+    }
+  }
+
+  // Para fechas recurrentes, calcula la próxima ocurrencia (mismo día/mes,
+  // del año que aún no haya pasado, incluyendo hoy); para no recurrentes usa
+  // la fecha tal cual quedó capturada.
+  function _mktProximaOcurrencia(fechaStr, recurrente) {
+    const m = String(fechaStr || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!m) return null;
+    const dia = parseInt(m[1], 10), mes = parseInt(m[2], 10), anioOriginal = parseInt(m[3], 10);
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    if (!recurrente) return new Date(anioOriginal, mes - 1, dia);
+    let d = new Date(hoy.getFullYear(), mes - 1, dia);
+    if (d < hoy) d = new Date(hoy.getFullYear() + 1, mes - 1, dia);
+    return d;
+  }
+
+  function _pintarProximasFechasMkt(datos) {
+    const cont = document.getElementById('mkt-proximas-lista');
+    if (!cont) return;
+    const conOcurrencia = datos
+      .map(f => ({ f, prox: _mktProximaOcurrencia(f.fecha, f.recurrente) }))
+      .filter(x => x.prox)
+      .sort((a, b) => a.prox - b.prox)
+      .slice(0, 5);
+    if (!conOcurrencia.length) {
+      cont.innerHTML = `<div style="color:var(--tx-4);font-size:13px">Sin fechas próximas -- agrega alguna abajo.</div>`;
+      return;
+    }
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const fmtFecha = d => d.toLocaleDateString('es-MX', { day: 'numeric', month: 'long' });
+    cont.innerHTML = conOcurrencia.map(({ f, prox }) => {
+      const dias = Math.round((prox - hoy) / 86400000);
+      const cuando = dias === 0 ? 'Hoy' : dias === 1 ? 'Mañana' : `En ${dias} días`;
+      return `<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--cafe-800);border-radius:var(--r)">
+        <div style="font-weight:700;color:var(--terra);min-width:110px">${fmtFecha(prox)}</div>
+        <div style="flex:1"><div style="font-weight:600">${f.titulo}</div><div style="font-size:12px;color:var(--tx-3)">${f.sugerencia}</div></div>
+        <div class="badge">${cuando}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function _pintarTablaFechasMkt(datos) {
+    const empty = document.getElementById('empty-mkt-fechas');
+    const wrap = document.querySelector('#mkt-view-fechas .tbl-wrap');
+    if (!datos.length) {
+      setEl('tabla-mkt-fechas', '');
+      if (empty) empty.classList.add('show');
+      if (wrap) wrap.style.display = 'none';
+      return;
+    }
+    if (empty) empty.classList.remove('show');
+    if (wrap) wrap.style.display = '';
+    const ordenado = datos.slice().sort((a, b) => (a.fecha ? a.fecha.split('/').reverse().join('') : '').localeCompare(b.fecha ? b.fecha.split('/').reverse().join('') : ''));
+    setEl('tabla-mkt-fechas', ordenado.map(f => `
+      <tr>
+        <td>${f.fecha}</td>
+        <td>${f.titulo}</td>
+        <td style="max-width:320px">${f.sugerencia}</td>
+        <td>${f.categoria}</td>
+        <td>${f.recurrente ? '<span class="badge">Sí</span>' : '—'}</td>
+        <td>
+          <button class="icon-btn" title="Editar" onclick="LS_UI.abrirEditarFechaMkt(${f.fila})"><i class="ti ti-pencil"></i></button>
+          <button class="icon-btn" title="Eliminar" onclick="LS_UI.eliminarFilaFechaMkt(${f.fila}, '${(f.titulo || '').replace(/'/g, "\\'")}')"><i class="ti ti-trash"></i></button>
+        </td>
+      </tr>`).join(''));
+  }
+
+  function _mktFormFechaHTML(f) {
+    f = f || {};
+    const esc = s => String(s || '').replace(/"/g, '&quot;');
+    return `
+      <div class="ff"><label>Fecha</label><input type="date" id="mkt-fecha-fecha" value="${LS_API._fechaISO(f.fecha) || ''}"></div>
+      <div class="ff"><label>Título</label><input type="text" id="mkt-fecha-titulo" value="${esc(f.titulo)}" placeholder="Ej. Día de las Madres"></div>
+      <div class="ff"><label>Sugerencia de contenido</label><textarea id="mkt-fecha-sugerencia" rows="3" placeholder="Ej. Promo de combos para regalo">${esc(f.sugerencia)}</textarea></div>
+      <div class="ff"><label>Categoría</label><select id="mkt-fecha-categoria">${MKT_CATEGORIAS.map(c => `<option value="${c}"${c === f.categoria ? ' selected' : ''}>${c}</option>`).join('')}</select></div>
+      <div class="ff" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="mkt-fecha-recurrente" style="width:16px;height:16px;accent-color:var(--terra-claro)" ${f.recurrente ? 'checked' : ''}><label style="margin:0">Se repite cada año</label></div>
+    `;
+  }
+
+  function abrirNuevaFechaMkt() {
+    _modal2(`<div class="modal" style="max-width:460px"><div class="modal-header"><div class="modal-title"><i class="ti ti-calendar-plus" style="margin-right:6px"></i>Nueva fecha importante</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body">${_mktFormFechaHTML()}</div><div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarNuevaFechaMkt()">Guardar</button></div></div>`);
+  }
+
+  function _leerFormFechaMkt() {
+    return {
+      fecha: document.getElementById('mkt-fecha-fecha')?.value || '',
+      titulo: (document.getElementById('mkt-fecha-titulo')?.value || '').trim(),
+      sugerencia: (document.getElementById('mkt-fecha-sugerencia')?.value || '').trim(),
+      categoria: document.getElementById('mkt-fecha-categoria')?.value || '',
+      recurrente: !!document.getElementById('mkt-fecha-recurrente')?.checked,
+    };
+  }
+
+  async function guardarNuevaFechaMkt() {
+    const datos = _leerFormFechaMkt();
+    if (!datos.fecha || !datos.titulo) { toast('Falta información', 'Fecha y título son obligatorios', 'err'); return; }
+    try {
+      await LS_API.registrarFechaMkt(datos);
+      toast('Guardado', 'Fecha agregada', 'ok');
+      _cerrarModal2();
+      await renderMktFechas();
+    } catch (e) {
+      toast('Error', 'No se pudo guardar', 'err');
+    }
+  }
+
+  function abrirEditarFechaMkt(fila) {
+    const f = _mktFechasDatos.find(x => x.fila === fila);
+    if (!f) return;
+    _modal2(`<div class="modal" style="max-width:460px"><div class="modal-header"><div class="modal-title"><i class="ti ti-pencil" style="margin-right:6px"></i>Editar fecha</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body">${_mktFormFechaHTML(f)}</div><div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarEditarFechaMkt(${fila})">Guardar cambios</button></div></div>`);
+  }
+
+  async function guardarEditarFechaMkt(fila) {
+    const datos = _leerFormFechaMkt();
+    if (!datos.fecha || !datos.titulo) { toast('Falta información', 'Fecha y título son obligatorios', 'err'); return; }
+    try {
+      await LS_API.editarFechaMkt(fila, datos);
+      toast('Guardado', 'Fecha actualizada', 'ok');
+      _cerrarModal2();
+      await renderMktFechas();
+    } catch (e) {
+      toast('Error', 'No se pudo guardar', 'err');
+    }
+  }
+
+  async function eliminarFilaFechaMkt(fila, titulo) {
+    if (!confirm('¿Eliminar "' + titulo + '"? Esta acción no se puede deshacer.')) return;
+    try {
+      await LS_API.eliminarFechaMkt([fila]);
+      toast('Eliminado', 'Fecha eliminada', 'ok');
+      await renderMktFechas();
     } catch (e) {
       toast('Error', 'No se pudo eliminar', 'err');
     }
@@ -10334,6 +10601,7 @@ async function guardarVentaDirecta() {
       case 'comisiones': await renderComisiones(); break;
       case 'usuariospos': await renderUsuariosPOS(); break;
       case 'asistencia': await renderAsistencia(); break;
+      case 'marketing': await renderMarketing(); break;
       case 'catalogo-inventario': await abrirCatalogoInventarioPagina(); break;
     }
   }
@@ -11053,6 +11321,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderComisiones, guardarComisiones,
     renderUsuariosPOS, abrirNuevoUsuarioPOS, editarUsuarioPOS, guardarUsuarioPOS, confirmarBorrarUsuarioPOS, ejecutarBorrarUsuarioPOS,
     renderAsistencia, filtrarAsistencia, abrirEditarAsistencia, guardarEditarAsistencia, eliminarFilaAsistencia,
+    renderMarketing, mktSwitchVista, abrirNuevaFechaMkt, guardarNuevaFechaMkt, abrirEditarFechaMkt, guardarEditarFechaMkt, eliminarFilaFechaMkt,
     _toggleUposDropdown, _uposDropdownTodasChange, _uposDropdownResumen,
     closeModal,
     // Abrir modales

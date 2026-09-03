@@ -50,6 +50,7 @@ const HOJAS = {
   RECETAS_DET:    'BD_RECETAS_DETALLES',
   TIEMPOS:        'BD_TIEMPOS',
   ASISTENCIA:     'BD_ASISTENCIA',
+  MKT_FECHAS:     'BD_MARKETING_FECHAS',
 };
 
 // ── JSON OUTPUT ─────────────────────────────────────────────────────────────
@@ -171,6 +172,7 @@ function doGet(e) {
     getBD_RECETAS_DETALLES:        HOJAS.RECETAS_DET,
     getBD_TIEMPOS:                 HOJAS.TIEMPOS,
     getBD_ASISTENCIA:              HOJAS.ASISTENCIA,
+    getBD_MARKETING_FECHAS:        HOJAS.MKT_FECHAS,
   };
 
   if (accion === 'getUSUARIOS') return _getUsuarios();
@@ -245,6 +247,9 @@ function doPost(e) {
     case 'registrarAsistenciaSalida':  return _registrarAsistenciaSalida(datos);
     case 'editarAsistencia':           return _editarAsistencia(datos);
     case 'eliminarAsistencia':         return _eliminarAsistencia(datos);
+    case 'registrarFechaMkt':          return _registrarFechaMkt(datos);
+    case 'editarFechaMkt':             return _editarFechaMkt(datos);
+    case 'eliminarFechaMkt':           return _eliminarFechaMkt(datos);
     case 'crearPreferenciaMP':         return _crearPreferenciaMP(datos);
     case 'mpListarTerminales':         return _mpListarTerminales();
     case 'mpCrearCobroTerminal':       return _mpCrearCobroTerminal(datos);
@@ -1149,6 +1154,95 @@ function _eliminarAsistencia(b) {
       .sort(function(a, b2){ return b2 - a; });
     if (!filas.length) return _err('No se especificó ninguna fila');
     var sh = _getOrCrearSheetAsistencia();
+    filas.forEach(function(f){ sh.deleteRow(f); });
+    return _json({ status: 'ok', eliminados: filas.length });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+// ── MARKETING DIGITAL: FECHAS IMPORTANTES ──────────────────────────────────
+// Columnas de BD_MARKETING_FECHAS (1-based): 1 ID, 2 FECHA, 3 TITULO,
+// 4 SUGERENCIA, 5 CATEGORIA, 6 RECURRENTE_ANUAL, 7 ACTUALIZADO.
+// La hoja se autocrea con ~13 fechas de temporada relevantes para una
+// cafetería en México (la primera vez que se usa el módulo) -- desde ahí
+// son datos normales, 100% editables/borrables como cualquier otro registro.
+function _getOrCrearSheetFechasMkt() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sh = ss.getSheetByName(HOJAS.MKT_FECHAS);
+  if (!sh) {
+    sh = ss.insertSheet(HOJAS.MKT_FECHAS);
+    sh.appendRow(['ID', 'FECHA', 'TITULO', 'SUGERENCIA', 'CATEGORIA', 'RECURRENTE_ANUAL', 'ACTUALIZADO']);
+    var ahora = new Date();
+    var semilla = [
+      ['06/01/2026', 'Día de Reyes', 'Promover rosca de reyes + café; "trae tu rosca, te invitamos el café"', 'Día festivo MX', true],
+      ['14/02/2026', 'Día del Amor y la Amistad', 'Promo para pareja / combo 2 bebidas + contenido romántico', 'Día festivo MX', true],
+      ['08/03/2026', 'Día Internacional de la Mujer', 'Destacar mujeres del equipo/clientas, promo especial', 'Día festivo MX', true],
+      ['21/03/2026', 'Arranca temporada de bebidas frías', 'Reintroducir frappés/bebidas heladas de temporada', 'Temporada de bebida', true],
+      ['30/04/2026', 'Día del Niño', 'Promo familiar / bebida chica gratis con acompañante', 'Día festivo MX', true],
+      ['10/05/2026', 'Día de las Madres', 'Combos para regalo, tarjetas de regalo', 'Día festivo MX', true],
+      ['24/08/2026', 'Regreso a clases', 'Combos para estudiantes/maestros, promos de estudio', 'Fecha comercial', true],
+      ['01/09/2026', 'Arranca temporada de bebidas calientes', 'Promover Chai / Horchata caliente', 'Temporada de bebida', true],
+      ['15/09/2026', 'Fiestas Patrias', 'Bebidas temáticas (café de olla, rompope), decoración tricolor', 'Día festivo MX', true],
+      ['31/10/2026', 'Halloween / Día de Muertos', 'Bebidas de temporada (canela, pan de muerto con café), contenido de ofrenda', 'Día festivo MX', true],
+      ['27/11/2026', 'Buen Fin', 'Promos/descuentos, campaña de ventas', 'Fecha comercial', true],
+      ['12/12/2026', 'Día de la Virgen de Guadalupe', 'Contenido relevante para tráfico peatonal/tradición local', 'Día festivo MX', true],
+      ['01/12/2026', 'Temporada navideña / Posadas', 'Bebidas navideñas (ponche, chocolate, latte de galleta)', 'Temporada de bebida', true],
+    ];
+    semilla.forEach(function(s) {
+      sh.appendRow([_nextId(HOJAS.MKT_FECHAS, 'MKTF'), s[0], s[1], s[2], s[3], s[4], ahora]);
+    });
+  }
+  return sh;
+}
+
+function _registrarFechaMkt(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var fecha = _normalizarFecha(b.fecha);
+    if (!fecha) return _err('Falta la fecha');
+    var titulo = String(b.titulo || '').trim();
+    if (!titulo) return _err('Falta el título');
+    var sh = _getOrCrearSheetFechasMkt();
+    var id = _nextId(HOJAS.MKT_FECHAS, 'MKTF');
+    var fila = _siguienteFilaLibre(sh, 3);
+    sh.getRange(fila, 1, 1, 7).setValues([[
+      id, fecha, titulo, b.sugerencia || '', b.categoria || '', !!b.recurrente, new Date(),
+    ]]);
+    return _json({ status: 'ok', id: id, fila: fila });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+function _editarFechaMkt(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var fila = parseInt(b.fila, 10);
+    if (!fila || fila < 2) return _err('Fila inválida');
+    var fecha = _normalizarFecha(b.fecha);
+    if (!fecha) return _err('Falta la fecha');
+    var titulo = String(b.titulo || '').trim();
+    if (!titulo) return _err('Falta el título');
+    var sh = _getOrCrearSheetFechasMkt();
+    sh.getRange(fila, 2, 1, 6).setValues([[
+      fecha, titulo, b.sugerencia || '', b.categoria || '', !!b.recurrente, new Date(),
+    ]]);
+    return _json({ status: 'ok' });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+function _eliminarFechaMkt(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var filas = (b.filas || (b.fila ? [b.fila] : []))
+      .map(function(f){ return parseInt(f, 10); })
+      .filter(function(f){ return f && f >= 2; })
+      .sort(function(a, b2){ return b2 - a; });
+    if (!filas.length) return _err('No se especificó ninguna fila');
+    var sh = _getOrCrearSheetFechasMkt();
     filas.forEach(function(f){ sh.deleteRow(f); });
     return _json({ status: 'ok', eliminados: filas.length });
   } catch (e) { return _err(e.message); }
