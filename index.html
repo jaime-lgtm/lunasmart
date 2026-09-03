@@ -9112,10 +9112,10 @@ async function guardarVentaDirecta() {
     }).join('');
   }
 
-  function abrirNuevoEvento() { _formEvento(null); }
-  function editarEvento(id) { const e = _eventosLista.find(x => x.id === id); if (e) _formEvento(e); }
+  function abrirNuevoEvento() { _formEvento(null, fbDb.ref('eventos').push().key); }
+  function editarEvento(id) { const e = _eventosLista.find(x => x.id === id); if (e) _formEvento(e, e.id); }
 
-  function _formEvento(e) {
+  function _formEvento(e, id) {
     const esEdicion = !!e;
     openModal(`
     <div class="modal-overlay" id="modal-evento" onclick="if(event.target===this)_cerrarModal()">
@@ -9134,6 +9134,16 @@ async function guardarVentaDirecta() {
           <div class="ff"><label>Etiqueta (opcional)</label><input type="text" id="ev-categoria" value="${_h(e ? e.categoria || '' : '')}" placeholder="Ej. ENTRADA LIBRE, PLÁTICA PRESENCIAL"></div>
           <div class="ff"><label>Descripción / copy</label><textarea id="ev-descripcion" rows="3" placeholder="Ej. Una historia mexicana sobre café, camino y segundas oportunidades.">${_h(e ? e.descripcion || '' : '')}</textarea></div>
           <div class="ff"><label>Cupo (0 = sin límite)</label><input type="number" id="ev-cupo" min="0" value="${_h(e ? (e.cupo != null ? e.cupo : 0) : 0)}"></div>
+          <div class="ff"><label>Imagen del evento (opcional)</label>
+            <div class="pcli-upload-row">
+              <div class="pcli-thumb" id="ev-foto-thumb">${e && e.imagen ? `<img src="${e.imagen}">` : '<i class="ti ti-photo"></i>'}</div>
+              <div style="flex:1">
+                <input type="file" accept="image/*" onchange="LS_UI._evSubirImagen('${id}', this.files[0])">
+                <div class="pcli-hint">Se muestra en la tarjeta del evento en pedidos.suenodeluna.com.mx. Puedes subirla ahora o después de guardar.</div>
+                <div class="pcli-status" id="ev-foto-status"></div>
+              </div>
+            </div>
+          </div>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:6px;cursor:pointer">
             <input type="checkbox" id="ev-activo" ${!e || e.activo !== false ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--terra-claro)">
             Activo (desmarca para ocultarlo del sitio sin borrarlo)
@@ -9141,10 +9151,30 @@ async function guardarVentaDirecta() {
         </div>
         <div class="modal-footer">
           <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
-          <button class="btn-save" onclick="LS_UI.guardarEvento(${esEdicion ? `'${e.id}'` : 'null'})">Guardar</button>
+          <button class="btn-save" onclick="LS_UI.guardarEvento('${id}')">Guardar</button>
         </div>
       </div>
     </div>`);
+  }
+
+  async function _evSubirImagen(id, file) {
+    if (!file) return;
+    const thumb = document.getElementById('ev-foto-thumb');
+    const status = document.getElementById('ev-foto-status');
+    await _pcliPreviewLocal(file, thumb);
+    _pcliEstado(status, 'Subiendo...', 'uploading');
+    try {
+      await fbAuthReady;
+      const ref = fbStorage.ref('eventosAssets/' + id);
+      await _pcliConTimeout(ref.put(file), 15000);
+      const url = await ref.getDownloadURL();
+      await fbDb.ref('eventos/' + id).update({ imagen: url });
+      _pcliEstado(status, '✓ Subida', 'ok');
+      await renderEventos();
+    } catch(e) {
+      console.error(e);
+      _pcliEstado(status, '⚠ No se pudo subir: ' + _pcliMsgError(e), 'err');
+    }
   }
 
   async function guardarEvento(id) {
@@ -9160,10 +9190,11 @@ async function guardarVentaDirecta() {
     if (!fecha) { toast('Falta la fecha', '', 'err', 'ti-alert-triangle'); return; }
     try {
       await fbAuthReady;
-      const ref = id ? fbDb.ref('eventos/' + id) : fbDb.ref('eventos').push();
-      await ref.set({ titulo, fecha, hora, sede, categoria, descripcion, cupo, activo });
+      // update() (no set()) para no borrar la imagen si ya se subió por
+      // separado con _evSubirImagen antes de guardar el resto del formulario.
+      await fbDb.ref('eventos/' + id).update({ titulo, fecha, hora, sede, categoria, descripcion, cupo, activo });
       _cerrarModal();
-      toast(id ? 'Evento actualizado' : 'Evento creado', '', 'ok', 'ti-check');
+      toast('Evento guardado', '', 'ok', 'ti-check');
       await renderEventos();
     } catch (e) {
       console.error(e);
@@ -11519,7 +11550,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderTerminalMP, guardarTerminalesMP, mpListarTerminalesUI,
     renderComisiones, guardarComisiones,
     renderUsuariosPOS, abrirNuevoUsuarioPOS, editarUsuarioPOS, guardarUsuarioPOS, confirmarBorrarUsuarioPOS, ejecutarBorrarUsuarioPOS,
-    renderEventos, abrirNuevoEvento, editarEvento, guardarEvento, confirmarBorrarEvento, ejecutarBorrarEvento, verInscritosEvento,
+    renderEventos, abrirNuevoEvento, editarEvento, guardarEvento, confirmarBorrarEvento, ejecutarBorrarEvento, verInscritosEvento, _evSubirImagen,
     renderAsistencia, filtrarAsistencia, abrirEditarAsistencia, guardarEditarAsistencia, eliminarFilaAsistencia,
     renderMarketing, mktSwitchVista, abrirNuevaFechaMkt, guardarNuevaFechaMkt, abrirEditarFechaMkt, guardarEditarFechaMkt, eliminarFilaFechaMkt,
     _toggleUposDropdown, _uposDropdownTodasChange, _uposDropdownResumen,
