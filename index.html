@@ -1173,6 +1173,7 @@
         <div class="nav-item" data-page="usuariospos" onclick="go('usuariospos',this)"><i class="ti ti-users"></i><span class="nav-lbl">Usuarios POS</span></div>
         <div class="nav-item" data-page="asistencia" onclick="go('asistencia',this)"><i class="ti ti-clock-hour-4"></i><span class="nav-lbl">Asistencia</span></div>
         <div class="nav-item" data-page="marketing" onclick="go('marketing',this)"><i class="ti ti-speakerphone"></i><span class="nav-lbl">Marketing Digital</span></div>
+        <div class="nav-item" data-page="eventos" onclick="go('eventos',this)"><i class="ti ti-calendar-event"></i><span class="nav-lbl">Eventos</span></div>
       </nav>
 
       <div class="sb-foot">
@@ -2106,6 +2107,25 @@
   </div>
 </div>
 
+<!-- PÁGINA: EVENTOS -->
+<div id="p-eventos" class="page" data-screen-label="Eventos">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title"><i class="ti ti-calendar-event"></i>Eventos</div>
+        <div class="card-sub">Se publican solos en pedidos.suenodeluna.com.mx mientras estén "Activo" y con fecha futura</div>
+      </div>
+      <div class="card-actions"><button class="btn btn-primary btn-sm" onclick="LS_UI.abrirNuevoEvento()"><i class="ti ti-plus"></i>Nuevo evento</button></div>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Evento</th><th>Fecha</th><th>Sede</th><th>Cupo</th><th>Estado</th><th style="width:110px">Acciones</th></tr></thead>
+        <tbody id="ev-filas"><tr><td colspan="6" style="text-align:center;padding:24px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <!-- PÁGINA: MODIFICADORES -->
 <div id="p-modificadores" class="page" data-screen-label="Modificadores">
   <div class="card">
@@ -2185,6 +2205,7 @@
           <div class="d-item" data-page="usuariospos" onclick="mdrawerGo('usuariospos')"><i class="ti ti-users"></i><span>Usuarios POS</span></div>
           <div class="d-item" data-page="asistencia" onclick="mdrawerGo('asistencia')"><i class="ti ti-clock-hour-4"></i><span>Asistencia</span></div>
           <div class="d-item" data-page="marketing" onclick="mdrawerGo('marketing')"><i class="ti ti-speakerphone"></i><span>Marketing</span></div>
+          <div class="d-item" data-page="eventos" onclick="mdrawerGo('eventos')"><i class="ti ti-calendar-event"></i><span>Eventos</span></div>
           <div class="d-item" onclick="toggleDrawer();doLogout()"><i class="ti ti-logout"></i><span>Salir</span></div>
         </div>
       </div>
@@ -2255,6 +2276,7 @@ const PAGES = {
   usuariospos: { title: 'Usuarios POS', sub: 'Altas, roles y PIN de acceso al punto de venta' },
   asistencia: { title: 'Asistencia', sub: 'Entradas, salidas y horas trabajadas por empleado' },
   marketing: { title: 'Marketing Digital', sub: 'Métricas, contenido, metas y fechas clave de redes sociales' },
+  eventos: { title: 'Eventos', sub: 'Eventos publicados en pedidos.suenodeluna.com.mx, con cupo e inscritos' },
 };
 
 const BRANCHES = {
@@ -8841,6 +8863,7 @@ async function guardarVentaDirecta() {
     { id: 'usuariospos', label: 'Usuarios POS' },
     { id: 'asistencia', label: 'Asistencia' },
     { id: 'marketing', label: 'Marketing Digital' },
+    { id: 'eventos', label: 'Eventos' },
   ];
   let _uposLista = [];
 
@@ -9032,6 +9055,181 @@ async function guardarVentaDirecta() {
     } catch(e) {
       console.error(e);
       toast('Error', 'No se pudo eliminar', 'err', 'ti-alert-triangle');
+    }
+  }
+
+  /* ============ EVENTOS (Firebase: eventos / eventosInscripciones) ============
+     Lo que se ve en pedidos.suenodeluna.com.mx: cualquier evento con
+     activo!==false y fecha futura aparece solo en "Próximos eventos", con
+     cupo en vivo. Los inscritos (eventosInscripciones/{eventoId}) los crea
+     el propio sitio cuando alguien se registra -- aquí solo se consulta el
+     conteo, para saber cuánto cupo queda, y se puede ver la lista completa. */
+  let _eventosLista = [];
+
+  async function renderEventos() {
+    try {
+      await fbAuthReady;
+      const snap = await fbDb.ref('eventos').once('value');
+      const val = snap.val() || {};
+      const eventos = Object.keys(val).map(id => Object.assign({ id }, val[id]));
+      const conteos = await Promise.all(eventos.map(e => fbDb.ref('eventosInscripciones/' + e.id).once('value').then(s => s.numChildren())));
+      eventos.forEach((e, i) => e.inscritos = conteos[i]);
+      eventos.sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+      _eventosLista = eventos;
+    } catch (e) {
+      console.error('Error cargando eventos:', e);
+      toast('Error', 'No se pudieron cargar los eventos', 'err', 'ti-alert-triangle');
+      _eventosLista = [];
+    }
+    const tbody = document.getElementById('ev-filas');
+    if (!tbody) return;
+    if (!_eventosLista.length) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--tx-4)">Aún no hay eventos -- crea el primero con "Nuevo evento".</td></tr>`;
+      return;
+    }
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    tbody.innerHTML = _eventosLista.map(e => {
+      const cupoNum = parseInt(e.cupo, 10) || 0;
+      const cupoTxt = cupoNum > 0 ? (e.inscritos + ' / ' + cupoNum) : (e.inscritos + ' inscritos');
+      const f = e.fecha ? new Date(e.fecha + 'T00:00:00') : null;
+      const pasado = f && f < hoy;
+      let estadoBadge;
+      if (e.activo === false) estadoBadge = '<span class="badge" style="background:var(--rojo-bg);color:var(--rojo)">Inactivo</span>';
+      else if (pasado) estadoBadge = '<span class="badge">Ya pasó</span>';
+      else estadoBadge = '<span class="badge" style="background:var(--verde-bg);color:var(--verde)">Activo</span>';
+      return `<tr>
+        <td>${_h(e.titulo || '')}</td>
+        <td>${_h(e.fecha || '')}${e.hora ? ' · ' + _h(e.hora) : ''}</td>
+        <td style="font-size:12px;color:var(--tx-3)">${_h(e.sede || '')}</td>
+        <td>${cupoTxt}</td>
+        <td>${estadoBadge}</td>
+        <td>
+          <button class="btn-icon" title="Ver inscritos" onclick="LS_UI.verInscritosEvento('${e.id}')" style="background:none;border:none;color:var(--tx-2);cursor:pointer"><i class="ti ti-users"></i></button>
+          <button class="btn-icon" title="Editar" onclick="LS_UI.editarEvento('${e.id}')" style="background:none;border:none;color:var(--azul);cursor:pointer"><i class="ti ti-pencil"></i></button>
+          <button class="btn-icon" title="Eliminar" onclick="LS_UI.confirmarBorrarEvento('${e.id}')" style="background:none;border:none;color:var(--rojo);cursor:pointer"><i class="ti ti-trash"></i></button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function abrirNuevoEvento() { _formEvento(null); }
+  function editarEvento(id) { const e = _eventosLista.find(x => x.id === id); if (e) _formEvento(e); }
+
+  function _formEvento(e) {
+    const esEdicion = !!e;
+    openModal(`
+    <div class="modal-overlay" id="modal-evento" onclick="if(event.target===this)_cerrarModal()">
+      <div class="modal" style="max-width:480px">
+        <div class="modal-header">
+          <div class="modal-title">${esEdicion ? 'Editar evento' : 'Nuevo evento'}</div>
+          <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="ff"><label>Título</label><input type="text" id="ev-titulo" value="${_h(e ? e.titulo || '' : '')}" placeholder="Ej. Proyección Café Chairel"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="ff"><label>Fecha</label><input type="date" id="ev-fecha" value="${_h(e ? e.fecha || '' : '')}"></div>
+            <div class="ff"><label>Hora</label><input type="time" id="ev-hora" value="${_h(e ? e.hora || '' : '')}"></div>
+          </div>
+          <div class="ff"><label>Sede</label><input type="text" id="ev-sede" value="${_h(e ? e.sede || '' : '')}" placeholder="Ej. Auditorio de la Casa de la Cultura"></div>
+          <div class="ff"><label>Etiqueta (opcional)</label><input type="text" id="ev-categoria" value="${_h(e ? e.categoria || '' : '')}" placeholder="Ej. ENTRADA LIBRE, PLÁTICA PRESENCIAL"></div>
+          <div class="ff"><label>Descripción / copy</label><textarea id="ev-descripcion" rows="3" placeholder="Ej. Una historia mexicana sobre café, camino y segundas oportunidades.">${_h(e ? e.descripcion || '' : '')}</textarea></div>
+          <div class="ff"><label>Cupo (0 = sin límite)</label><input type="number" id="ev-cupo" min="0" value="${_h(e ? (e.cupo != null ? e.cupo : 0) : 0)}"></div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:6px;cursor:pointer">
+            <input type="checkbox" id="ev-activo" ${!e || e.activo !== false ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--terra-claro)">
+            Activo (desmarca para ocultarlo del sitio sin borrarlo)
+          </label>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
+          <button class="btn-save" onclick="LS_UI.guardarEvento(${esEdicion ? `'${e.id}'` : 'null'})">Guardar</button>
+        </div>
+      </div>
+    </div>`);
+  }
+
+  async function guardarEvento(id) {
+    const titulo = document.getElementById('ev-titulo').value.trim();
+    const fecha = document.getElementById('ev-fecha').value;
+    const hora = document.getElementById('ev-hora').value;
+    const sede = document.getElementById('ev-sede').value.trim();
+    const categoria = document.getElementById('ev-categoria').value.trim();
+    const descripcion = document.getElementById('ev-descripcion').value.trim();
+    const cupo = parseInt(document.getElementById('ev-cupo').value, 10) || 0;
+    const activo = document.getElementById('ev-activo').checked;
+    if (!titulo) { toast('Falta el título', '', 'err', 'ti-alert-triangle'); return; }
+    if (!fecha) { toast('Falta la fecha', '', 'err', 'ti-alert-triangle'); return; }
+    try {
+      await fbAuthReady;
+      const ref = id ? fbDb.ref('eventos/' + id) : fbDb.ref('eventos').push();
+      await ref.set({ titulo, fecha, hora, sede, categoria, descripcion, cupo, activo });
+      _cerrarModal();
+      toast(id ? 'Evento actualizado' : 'Evento creado', '', 'ok', 'ti-check');
+      await renderEventos();
+    } catch (e) {
+      console.error(e);
+      toast('Error al guardar', e.message || '', 'err', 'ti-alert-triangle');
+    }
+  }
+
+  function confirmarBorrarEvento(id) {
+    const e = _eventosLista.find(x => x.id === id);
+    if (!e) return;
+    openModal(`
+    <div class="modal-overlay" id="modal-del-evento" onclick="if(event.target===this)_cerrarModal()">
+      <div class="modal" style="max-width:420px">
+        <div class="modal-header">
+          <div class="modal-title">¿Eliminar "${_h(e.titulo)}"?</div>
+          <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-body"><p style="color:var(--tx-2);font-size:13px">Desaparece del sitio de pedidos. Los inscritos que ya se registraron NO se borran -- si quieres conservar el historial, mejor desactívalo en vez de eliminarlo.</p></div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
+          <button class="btn-save" style="background:var(--rojo)" onclick="LS_UI.ejecutarBorrarEvento('${id}')">Eliminar</button>
+        </div>
+      </div>
+    </div>`);
+  }
+
+  async function ejecutarBorrarEvento(id) {
+    try {
+      await fbAuthReady;
+      await fbDb.ref('eventos/' + id).remove();
+      _cerrarModal();
+      toast('Evento eliminado', '', 'ok', 'ti-check');
+      await renderEventos();
+    } catch (e) {
+      console.error(e);
+      toast('Error', 'No se pudo eliminar', 'err', 'ti-alert-triangle');
+    }
+  }
+
+  async function verInscritosEvento(id) {
+    const e = _eventosLista.find(x => x.id === id);
+    if (!e) return;
+    try {
+      await fbAuthReady;
+      const snap = await fbDb.ref('eventosInscripciones/' + id).once('value');
+      const val = snap.val() || {};
+      const lista = Object.keys(val).map(k => val[k]).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+      const filas = lista.length
+        ? lista.map(i => `<tr><td>${_h(i.nombre || '')}</td><td style="font-family:monospace">${_h(i.telefono || '')}</td></tr>`).join('')
+        : `<tr><td colspan="2" style="text-align:center;padding:16px;color:var(--tx-4)">Nadie se ha registrado todavía</td></tr>`;
+      openModal(`
+      <div class="modal-overlay" id="modal-inscritos" onclick="if(event.target===this)_cerrarModal()">
+        <div class="modal" style="max-width:420px">
+          <div class="modal-header">
+            <div class="modal-title">Inscritos · ${_h(e.titulo)}</div>
+            <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="modal-body" style="max-height:50vh;overflow-y:auto">
+            <table class="tbl"><thead><tr><th>Nombre</th><th>Teléfono</th></tr></thead><tbody>${filas}</tbody></table>
+          </div>
+          <div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal()">Cerrar</button></div>
+        </div>
+      </div>`);
+    } catch (e2) {
+      console.error(e2);
+      toast('Error', 'No se pudieron cargar los inscritos', 'err', 'ti-alert-triangle');
     }
   }
 
@@ -10602,6 +10800,7 @@ async function guardarVentaDirecta() {
       case 'usuariospos': await renderUsuariosPOS(); break;
       case 'asistencia': await renderAsistencia(); break;
       case 'marketing': await renderMarketing(); break;
+      case 'eventos': await renderEventos(); break;
       case 'catalogo-inventario': await abrirCatalogoInventarioPagina(); break;
     }
   }
@@ -11320,6 +11519,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderTerminalMP, guardarTerminalesMP, mpListarTerminalesUI,
     renderComisiones, guardarComisiones,
     renderUsuariosPOS, abrirNuevoUsuarioPOS, editarUsuarioPOS, guardarUsuarioPOS, confirmarBorrarUsuarioPOS, ejecutarBorrarUsuarioPOS,
+    renderEventos, abrirNuevoEvento, editarEvento, guardarEvento, confirmarBorrarEvento, ejecutarBorrarEvento, verInscritosEvento,
     renderAsistencia, filtrarAsistencia, abrirEditarAsistencia, guardarEditarAsistencia, eliminarFilaAsistencia,
     renderMarketing, mktSwitchVista, abrirNuevaFechaMkt, guardarNuevaFechaMkt, abrirEditarFechaMkt, guardarEditarFechaMkt, eliminarFilaFechaMkt,
     _toggleUposDropdown, _uposDropdownTodasChange, _uposDropdownResumen,
