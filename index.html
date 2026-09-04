@@ -9134,6 +9134,12 @@ async function guardarVentaDirecta() {
           <div class="ff"><label>Etiqueta (opcional)</label><input type="text" id="ev-categoria" value="${_h(e ? e.categoria || '' : '')}" placeholder="Ej. ENTRADA LIBRE, PLÁTICA PRESENCIAL"></div>
           <div class="ff"><label>Descripción / copy</label><textarea id="ev-descripcion" rows="3" placeholder="Ej. Una historia mexicana sobre café, camino y segundas oportunidades.">${_h(e ? e.descripcion || '' : '')}</textarea></div>
           <div class="ff"><label>Cupo (0 = sin límite)</label><input type="number" id="ev-cupo" min="0" value="${_h(e ? (e.cupo != null ? e.cupo : 0) : 0)}"></div>
+          <div class="ff">
+            <label>Campos extra de registro (opcional)</label>
+            <div style="font-size:11px;color:var(--tx-4);margin:-2px 0 8px">Además de Nombre y Teléfono, que siempre se piden. Distintos por evento -- ej. "Perfil" y "Empresa" para una plática de networking, ninguno para una proyección de cine.</div>
+            <div id="ev-campos-extra-lista">${(e && e.camposExtra || []).map(_evCampoExtraRowHTML).join('')}</div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="LS_UI._evAgregarCampoExtra()" style="margin-top:2px"><i class="ti ti-plus"></i> Agregar campo</button>
+          </div>
           <div class="ff"><label>Imagen del evento (opcional)</label>
             <div class="pcli-upload-row">
               <div class="pcli-thumb" id="ev-foto-thumb">${e && e.imagen ? `<img src="${e.imagen}">` : '<i class="ti ti-photo"></i>'}</div>
@@ -9155,6 +9161,42 @@ async function guardarVentaDirecta() {
         </div>
       </div>
     </div>`);
+  }
+
+  function _evCampoExtraRowHTML(campo) {
+    campo = campo || {};
+    const tipo = campo.tipo || 'texto';
+    return `<div class="ev-campo-extra-row" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;padding:10px;background:var(--cafe-800);border-radius:var(--r)">
+      <div class="ff" style="flex:1;margin-bottom:0"><label style="font-size:11px">Etiqueta del campo</label><input type="text" class="ev-ce-label" value="${_h(campo.label || '')}" placeholder="Ej. Perfil"></div>
+      <div class="ff" style="width:150px;margin-bottom:0"><label style="font-size:11px">Tipo</label><select class="ev-ce-tipo" onchange="LS_UI._evToggleOpcionesCampo(this)">
+        <option value="texto"${tipo === 'texto' ? ' selected' : ''}>Texto</option>
+        <option value="select"${tipo === 'select' ? ' selected' : ''}>Lista desplegable</option>
+      </select></div>
+      <div class="ff ev-ce-opciones-wrap" style="flex:1.4;margin-bottom:0;display:${tipo === 'select' ? 'block' : 'none'}"><label style="font-size:11px">Opciones (separadas por coma)</label><input type="text" class="ev-ce-opciones" value="${_h((campo.opciones || []).join(', '))}" placeholder="Profesionista, Emprendedor, Dueño de negocio..."></div>
+      <button type="button" title="Eliminar" onclick="this.closest('.ev-campo-extra-row').remove()" style="background:none;border:none;color:var(--rojo);cursor:pointer;padding:8px 4px"><i class="ti ti-trash"></i></button>
+    </div>`;
+  }
+  function _evAgregarCampoExtra() {
+    const cont = document.getElementById('ev-campos-extra-lista');
+    if (cont) cont.insertAdjacentHTML('beforeend', _evCampoExtraRowHTML());
+  }
+  function _evToggleOpcionesCampo(sel) {
+    const row = sel.closest('.ev-campo-extra-row');
+    const wrap = row.querySelector('.ev-ce-opciones-wrap');
+    wrap.style.display = sel.value === 'select' ? 'block' : 'none';
+  }
+  function _evLeerCamposExtra() {
+    return Array.from(document.querySelectorAll('.ev-campo-extra-row')).map(row => {
+      const label = row.querySelector('.ev-ce-label').value.trim();
+      const tipo = row.querySelector('.ev-ce-tipo').value;
+      const opcionesRaw = row.querySelector('.ev-ce-opciones').value.trim();
+      const idBase = label.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      return {
+        id: idBase || ('campo_' + Math.random().toString(36).slice(2, 8)),
+        label, tipo,
+        opciones: tipo === 'select' ? opcionesRaw.split(',').map(s => s.trim()).filter(Boolean) : null,
+      };
+    }).filter(c => c.label);
   }
 
   async function _evSubirImagen(id, file) {
@@ -9186,13 +9228,14 @@ async function guardarVentaDirecta() {
     const descripcion = document.getElementById('ev-descripcion').value.trim();
     const cupo = parseInt(document.getElementById('ev-cupo').value, 10) || 0;
     const activo = document.getElementById('ev-activo').checked;
+    const camposExtra = _evLeerCamposExtra();
     if (!titulo) { toast('Falta el título', '', 'err', 'ti-alert-triangle'); return; }
     if (!fecha) { toast('Falta la fecha', '', 'err', 'ti-alert-triangle'); return; }
     try {
       await fbAuthReady;
       // update() (no set()) para no borrar la imagen si ya se subió por
       // separado con _evSubirImagen antes de guardar el resto del formulario.
-      await fbDb.ref('eventos/' + id).update({ titulo, fecha, hora, sede, categoria, descripcion, cupo, activo });
+      await fbDb.ref('eventos/' + id).update({ titulo, fecha, hora, sede, categoria, descripcion, cupo, activo, camposExtra });
       _cerrarModal();
       toast('Evento guardado', '', 'ok', 'ti-check');
       await renderEventos();
@@ -9242,18 +9285,21 @@ async function guardarVentaDirecta() {
       const snap = await fbDb.ref('eventosInscripciones/' + id).once('value');
       const val = snap.val() || {};
       const lista = Object.keys(val).map(k => val[k]).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+      const extra = e.camposExtra || [];
+      const encabezados = ['Nombre', 'Teléfono'].concat(extra.map(c => c.label)).map(h => `<th>${_h(h)}</th>`).join('');
+      const colspan = 2 + extra.length;
       const filas = lista.length
-        ? lista.map(i => `<tr><td>${_h(i.nombre || '')}</td><td style="font-family:monospace">${_h(i.telefono || '')}</td></tr>`).join('')
-        : `<tr><td colspan="2" style="text-align:center;padding:16px;color:var(--tx-4)">Nadie se ha registrado todavía</td></tr>`;
+        ? lista.map(i => `<tr><td>${_h(i.nombre || '')}</td><td style="font-family:monospace">${_h(i.telefono || '')}</td>${extra.map(c => `<td>${_h(i[c.id] || '')}</td>`).join('')}</tr>`).join('')
+        : `<tr><td colspan="${colspan}" style="text-align:center;padding:16px;color:var(--tx-4)">Nadie se ha registrado todavía</td></tr>`;
       openModal(`
       <div class="modal-overlay" id="modal-inscritos" onclick="if(event.target===this)_cerrarModal()">
-        <div class="modal" style="max-width:420px">
+        <div class="modal" style="max-width:${extra.length ? 620 : 420}px">
           <div class="modal-header">
             <div class="modal-title">Inscritos · ${_h(e.titulo)}</div>
             <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
           </div>
           <div class="modal-body" style="max-height:50vh;overflow-y:auto">
-            <table class="tbl"><thead><tr><th>Nombre</th><th>Teléfono</th></tr></thead><tbody>${filas}</tbody></table>
+            <table class="tbl"><thead><tr>${encabezados}</tr></thead><tbody>${filas}</tbody></table>
           </div>
           <div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal()">Cerrar</button></div>
         </div>
@@ -11550,7 +11596,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderTerminalMP, guardarTerminalesMP, mpListarTerminalesUI,
     renderComisiones, guardarComisiones,
     renderUsuariosPOS, abrirNuevoUsuarioPOS, editarUsuarioPOS, guardarUsuarioPOS, confirmarBorrarUsuarioPOS, ejecutarBorrarUsuarioPOS,
-    renderEventos, abrirNuevoEvento, editarEvento, guardarEvento, confirmarBorrarEvento, ejecutarBorrarEvento, verInscritosEvento, _evSubirImagen,
+    renderEventos, abrirNuevoEvento, editarEvento, guardarEvento, confirmarBorrarEvento, ejecutarBorrarEvento, verInscritosEvento, _evSubirImagen, _evAgregarCampoExtra, _evToggleOpcionesCampo,
     renderAsistencia, filtrarAsistencia, abrirEditarAsistencia, guardarEditarAsistencia, eliminarFilaAsistencia,
     renderMarketing, mktSwitchVista, abrirNuevaFechaMkt, guardarNuevaFechaMkt, abrirEditarFechaMkt, guardarEditarFechaMkt, eliminarFilaFechaMkt,
     _toggleUposDropdown, _uposDropdownTodasChange, _uposDropdownResumen,
