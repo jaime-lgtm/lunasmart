@@ -8124,6 +8124,7 @@ async function guardarVentaDirecta() {
         <div class="modal-body">
           <div class="ff"><label>Nombre *</label><input type="text" id="pp-nombre" value="${_h(producto ? producto.name : '')}"></div>
           <div class="ff"><label>Descripción (aparece en el POS y sirve para delivery)</label><textarea id="pp-desc" rows="2" placeholder="Espresso con leche vaporizada y espuma cremosa...">${_h(producto ? (producto.desc||'') : '')}</textarea></div>
+          <div class="ff"><label>Nota de preparación (aparece con el ícono "!" en Estación)</label><textarea id="pp-nota-prep" rows="2" placeholder="Ej. Llevar doble shot, servir en vaso de 16oz, no agitar la canela...">${_h(producto ? (producto.notaPreparacion||'') : '')}</textarea></div>
           <div class="ff"><label>Fotografía del artículo</label>
             <div class="pcli-upload-row">
               <div class="pcli-thumb" id="pp-foto-thumb">${producto && producto.img ? `<img src="${producto.img}">` : '<i class="ti ti-photo"></i>'}</div>
@@ -8290,6 +8291,7 @@ async function guardarVentaDirecta() {
     const menu = document.getElementById('pp-menu').value.trim();
     const sub = document.getElementById('pp-sub').value.trim();
     const desc = document.getElementById('pp-desc').value.trim();
+    const notaPreparacion = document.getElementById('pp-nota-prep').value.trim();
     const area = document.getElementById('pp-area').value;
     const sized = document.getElementById('pp-sized').value === 'si';
     const fav = document.getElementById('pp-fav').checked;
@@ -8300,7 +8302,7 @@ async function guardarVentaDirecta() {
     try {
       if (!fbDb) throw new Error('Firebase no disponible');
       const id = idExistente || _catposSiguienteId();
-      const payload = { id, name: nombre, menu, sub, desc, area, fav };
+      const payload = { id, name: nombre, menu, sub, desc, notaPreparacion, area, fav };
       if (sized) {
         const t1n = document.getElementById('pp-t1-nombre').value.trim() || 'El Chico';
         const t1p = parseFloat(document.getElementById('pp-t1-precio').value) || 0;
@@ -10621,8 +10623,8 @@ async function guardarVentaDirecta() {
           style="width:100%;background:transparent;border:none;outline:none;font-size:13px;color:var(--tx);font-family:'DM Mono',monospace;text-align:right">
       </div>
       <div style="padding:7px 6px;border-right:1px solid var(--line)">
-        <input type="text" class="fl-uni" placeholder="pzas"
-          style="width:100%;background:transparent;border:none;outline:none;font-size:12px;color:var(--tx-3);font-family:inherit;text-align:center">
+        <input type="text" class="fl-uni" placeholder="pzas" readonly title="Viene del Catálogo Maestro -- no se edita aquí para evitar errores de captura"
+          style="width:100%;background:transparent;border:none;outline:none;font-size:12px;color:var(--tx-3);font-family:inherit;text-align:center;cursor:not-allowed">
       </div>
       <div style="padding:7px 10px;border-right:1px solid var(--line)">
         <input type="number" class="fl-precio" placeholder="0.00"
