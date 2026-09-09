@@ -1602,6 +1602,7 @@ function _actualizarMinMaxInventario(b) {
       if (it.minimo !== undefined && it.minimo !== '') sh.getRange(fila, 16).setValue(parseFloat(it.minimo) || 0);
       if (it.maximo !== undefined && it.maximo !== '') sh.getRange(fila, 9).setValue(parseFloat(it.maximo) || 0);
       if (it.tipoRegistro) sh.getRange(fila, 17).setValue(it.tipoRegistro);
+      if (it.unidad) sh.getRange(fila, 10).setValue(it.unidad);
       actualizados++;
     });
     return _json({ status: 'ok', actualizados: actualizados });
