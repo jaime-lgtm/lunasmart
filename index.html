@@ -8139,6 +8139,10 @@ async function guardarVentaDirecta() {
             <input type="checkbox" id="pp-fav" ${producto && producto.fav===true ? 'checked':''} style="width:18px;height:18px;accent-color:var(--terra-claro)">
             <label for="pp-fav" style="margin:0;text-transform:none;font-size:13px;color:var(--tx-2);cursor:pointer">⭐ Marcar como favorito (aparece primero en el menú del POS)</label>
           </div>
+          <div class="ff" style="flex-direction:row;align-items:center;gap:10px;display:flex">
+            <input type="checkbox" id="pp-dinero-electronico" ${!producto || producto.aplicaDineroElectronico!==false ? 'checked':''} style="width:18px;height:18px;accent-color:var(--terra-claro)">
+            <label for="pp-dinero-electronico" style="margin:0;text-transform:none;font-size:13px;color:var(--tx-2);cursor:pointer">💰 Genera dinero electrónico (2%) -- desmarcar en combos y promociones</label>
+          </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
             <div class="ff"><label>Categoría (menú)</label><input type="text" id="pp-menu" list="pp-menu-list" value="${_h(producto ? producto.menu : '')}" placeholder="Bebidas, Alimentos..."></div>
             <div class="ff"><label>Subcategoría</label><input type="text" id="pp-sub" list="pp-sub-list" value="${_h(producto ? producto.sub : '')}" placeholder="Cafés Calientes..."></div>
@@ -8295,6 +8299,7 @@ async function guardarVentaDirecta() {
     const area = document.getElementById('pp-area').value;
     const sized = document.getElementById('pp-sized').value === 'si';
     const fav = document.getElementById('pp-fav').checked;
+    const aplicaDineroElectronico = document.getElementById('pp-dinero-electronico').checked;
 
     const btn = document.getElementById('pp-guardar');
     btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i> Guardando...';
@@ -8302,7 +8307,7 @@ async function guardarVentaDirecta() {
     try {
       if (!fbDb) throw new Error('Firebase no disponible');
       const id = idExistente || _catposSiguienteId();
-      const payload = { id, name: nombre, menu, sub, desc, notaPreparacion, area, fav };
+      const payload = { id, name: nombre, menu, sub, desc, notaPreparacion, area, fav, aplicaDineroElectronico };
       if (sized) {
         const t1n = document.getElementById('pp-t1-nombre').value.trim() || 'El Chico';
         const t1p = parseFloat(document.getElementById('pp-t1-precio').value) || 0;
