@@ -5389,28 +5389,93 @@ const LS_UI = (() => {
       </div>
       <div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal()">Cerrar</button><button class="btn-save" onclick="_cerrarModal();LS_UI.editarArticulo('${(a.articulo||'').replace(/'/g,"\\'")}')"><i class="ti ti-pencil"></i> Editar</button></div></div>`);
   }
+  // Unidades de medida del Catálogo Maestro -- antes eran texto libre y el
+  // mismo dato terminaba capturado como "Gramos"/"GRAMOS"/"gramos" o
+  // "Piezas"/"PZAS"/"pieza" según quién lo escribiera, lo que rompe
+  // cualquier reporte que agrupe por unidad. "Otro" queda como escape para
+  // no bloquear una unidad legítima que no esté en la lista.
+  const UNIDADES_CATALOGO = ['Gramos', 'Kilogramos', 'Mililitros', 'Litros', 'Piezas', 'Cajas', 'Paquetes', 'Metros', 'Porciones', 'Servicios'];
+  function _htmlUnidadSelect(id, valorActual) {
+    const val = (valorActual || '').trim();
+    const match = UNIDADES_CATALOGO.find(u => u.toLowerCase() === val.toLowerCase());
+    const esOtro = !!val && !match;
+    const opts = UNIDADES_CATALOGO.map(u => `<option value="${u}" ${u === match ? 'selected' : ''}>${u}</option>`).join('');
+    return `<select id="${id}" onchange="LS_UI._toggleUnidadOtro('${id}')">
+        <option value="">Seleccionar...</option>${opts}
+        <option value="__otro__" ${esOtro ? 'selected' : ''}>Otro (especificar)</option>
+      </select>
+      <input type="text" id="${id}-otro" placeholder="Especifica la unidad" value="${esOtro ? val.replace(/"/g, '&quot;') : ''}" style="margin-top:6px;width:100%;${esOtro ? '' : 'display:none'}">`;
+  }
+  function _toggleUnidadOtro(id) {
+    const sel = document.getElementById(id), inp = document.getElementById(id + '-otro');
+    if (!sel || !inp) return;
+    inp.style.display = sel.value === '__otro__' ? '' : 'none';
+    if (sel.value === '__otro__') inp.focus();
+  }
+  function _valorUnidad(id) {
+    const sel = document.getElementById(id);
+    if (!sel) return '';
+    if (sel.value === '__otro__') return (document.getElementById(id + '-otro')?.value || '').trim();
+    return sel.value;
+  }
+  // Mapa categoría → [subcategorías] compartido entre el formulario de
+  // Catálogo (Artículos) y el de Facturas/Egresos, para que ambos filtren
+  // subcategorías igual y no se desincronicen.
+  function _construirCatSubMap(categorias) {
+    const catSub = {};
+    (categorias || []).forEach(c => {
+      if (!c.categoria) return;
+      if (!catSub[c.categoria]) catSub[c.categoria] = [];
+      if (c.subcategoria) catSub[c.categoria].push(c.subcategoria);
+    });
+    return catSub;
+  }
+  function _llenarSubcategorias(categoria, subSelectId, valorActual) {
+    const subSel = document.getElementById(subSelectId);
+    if (!subSel) return;
+    const subs = (window._catSubMap || {})[categoria] || [];
+    const val = (valorActual || '').trim();
+    if (subs.length === 0) {
+      subSel.innerHTML = '<option value="">Sin subcategorías</option>';
+    } else {
+      subSel.innerHTML = '<option value="">Seleccionar subcategoría...</option>' +
+        subs.slice().sort().map(s => `<option value="${s}" ${s === val ? 'selected' : ''}>${s}</option>`).join('');
+    }
+  }
+  function _htmlProveedorSelect(id, valorActual) {
+    const val = (valorActual || '').trim();
+    const opts = (window._proveedoresCache || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre))
+      .map(p => `<option value="${p.nombre.replace(/"/g, '&quot;')}" ${p.nombre === val ? 'selected' : ''}>${p.nombre}</option>`).join('');
+    return `<select id="${id}"><option value="">Seleccionar proveedor...</option>${opts}</select>`;
+  }
   async function _formArticulo(a) {
     const esEd = !!a;
     window._editandoArtKey = esEd ? a.articulo : null;
     a = a || {};
-    const cats = await LS_API.getCategorias().catch(() => []);
-    const catSet = [...new Set((cats || []).map(c => c.categoria).filter(Boolean))].sort();
-    const catOpts = catSet.map(c => `<option value="${c}" ${c === a.categoria ? 'selected' : ''}>${c}</option>`).join('');
+    const [cats, proveedores] = await Promise.all([
+      LS_API.getCategorias().catch(() => []),
+      LS_API.getProveedores().catch(() => []),
+    ]);
+    window._catSubMap = _construirCatSubMap(cats);
+    window._proveedoresCache = proveedores || [];
+    const catOpts = Object.keys(window._catSubMap).sort().map(c => `<option value="${c}" ${c === a.categoria ? 'selected' : ''}>${c}</option>`).join('');
     const f = (lbl, id, val, type) => `<div class="ff"><label>${lbl}</label><input type="${type||'text'}" id="${id}" value="${String(val??'').replace(/"/g,'&quot;')}"></div>`;
     _modal(`<div class="modal" style="max-width:540px">
       <div class="modal-header"><div><div class="modal-title">${esEd ? 'Editar artículo' : 'Nuevo artículo'}</div></div><button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button></div>
       <div class="modal-body">
         ${f('Artículo', 'af-nombre', a.articulo)}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div class="ff"><label>Categoría</label><select id="af-categoria"><option value="">Seleccionar...</option>${catOpts}</select></div>
-          ${f('Subcategoría', 'af-subcategoria', a.subcategoria)}
+          <div class="ff"><label>Categoría</label><select id="af-categoria" onchange="LS_UI._onCategoriaChangeArt(this.value)"><option value="">Seleccionar...</option>${catOpts}</select></div>
+          <div class="ff"><label>Subcategoría</label><select id="af-subcategoria"><option value="">Primero elige categoría</option></select></div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">${f('Costo base ($)', 'af-costo', a.costoBase, 'number')}${f('Cantidad', 'af-cantidad', a.cantidad != null ? a.cantidad : 1, 'number')}${f('Unidad', 'af-unidad', a.unidad)}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${f('% Merma', 'af-merma', a.merma, 'number')}${f('Proveedor', 'af-proveedor', a.proveedor)}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">${f('Costo base ($)', 'af-costo', a.costoBase, 'number')}${f('Cantidad', 'af-cantidad', a.cantidad != null ? a.cantidad : 1, 'number')}<div class="ff"><label>Unidad</label>${_htmlUnidadSelect('af-unidad', a.unidad)}</div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${f('% Merma', 'af-merma', a.merma, 'number')}<div class="ff"><label>Proveedor</label>${_htmlProveedorSelect('af-proveedor', a.proveedor)}</div></div>
         ${esEd ? `<div style="font-size:11.5px;color:var(--tx-3);margin-top:6px">💡 El costo dinámico (${LS_API.formatMXNDec(a.costoDinamico)}) se actualiza solo con cada compra; aquí editas el costo base.</div>` : ''}
       </div>
       <div class="modal-footer">${esEd ? `<button class="btn-cancel" style="color:var(--rojo);margin-right:auto" onclick="LS_UI.confirmarBorrarArticulo('${(a.articulo||'').replace(/'/g,"\\'")}')"><i class="ti ti-trash"></i> Borrar</button>` : ''}<button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarArticulo()"><i class="ti ti-device-floppy"></i> ${esEd ? 'Guardar cambios' : 'Registrar'}</button></div></div>`);
+    if (a.categoria) _llenarSubcategorias(a.categoria, 'af-subcategoria', a.subcategoria);
   }
+  function _onCategoriaChangeArt(categoria) { _llenarSubcategorias(categoria, 'af-subcategoria'); }
   function confirmarBorrarArticulo(key) {
     const a = _findArt(key); if (!a) return;
     _modal(`<div class="modal" style="max-width:420px"><div class="modal-header"><div class="modal-title" style="color:var(--rojo)"><i class="ti ti-trash" style="margin-right:6px"></i>Borrar artículo</div></div>
@@ -5427,7 +5492,7 @@ const LS_UI = (() => {
   function editarArticulo(key) { _formArticulo(_findArt(key)); }
   async function guardarArticulo() {
     const v = id => document.getElementById(id)?.value?.trim() || '';
-    const datos = { articulo: v('af-nombre'), categoria: v('af-categoria'), subcategoria: v('af-subcategoria'), costoBase: parseFloat(v('af-costo')) || 0, cantidad: parseFloat(v('af-cantidad')) || 1, merma: parseFloat(v('af-merma')) || 0, unidad: v('af-unidad'), proveedor: v('af-proveedor') };
+    const datos = { articulo: v('af-nombre'), categoria: v('af-categoria'), subcategoria: v('af-subcategoria'), costoBase: parseFloat(v('af-costo')) || 0, cantidad: parseFloat(v('af-cantidad')) || 1, merma: parseFloat(v('af-merma')) || 0, unidad: _valorUnidad('af-unidad'), proveedor: v('af-proveedor') };
     if (!datos.articulo) { toast('Falta artículo', 'El nombre del artículo es obligatorio', 'err', 'ti-alert-circle'); return; }
     const editKey = window._editandoArtKey;
     const btn = document.querySelector('.modal .btn-save'); if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 spin"></i> Guardando...'; }
@@ -10450,7 +10515,7 @@ async function guardarVentaDirecta() {
             </div>
             <div class="ff">
               <label>Unidad de medida <span style="color:var(--terra)">*</span></label>
-              <input type="text" id="nart-unidad" placeholder="kg, lts, pzas, caja...">
+              ${_htmlUnidadSelect('nart-unidad', '')}
             </div>
             <div class="ff">
               <label>Categoría <span style="color:var(--terra)">*</span></label>
@@ -10501,24 +10566,14 @@ async function guardarVentaDirecta() {
   }
 
   // Al elegir categoría, llenar subcategorías dependientes
-  function onCategoriaChange(categoria) {
-    const subSel = document.getElementById('nart-subcategoria');
-    if (!subSel) return;
-    const subs = (window._catSubMap || {})[categoria] || [];
-    if (subs.length === 0) {
-      subSel.innerHTML = '<option value="">Sin subcategorías</option>';
-    } else {
-      subSel.innerHTML = '<option value="">Seleccionar subcategoría...</option>' +
-        subs.slice().sort().map(s => `<option value="${s}">${s}</option>`).join('');
-    }
-  }
+  function onCategoriaChange(categoria) { _llenarSubcategorias(categoria, 'nart-subcategoria'); }
 
   async function guardarNuevoArticulo() {
     const g = id => document.getElementById(id);
     const nombre = g('nart-nombre')?.value?.trim();
     const costo  = parseFloat(g('nart-costo')?.value || 0);
     const cantidad = parseFloat(g('nart-cantidad')?.value || 0);
-    const unidad = g('nart-unidad')?.value?.trim();
+    const unidad = _valorUnidad('nart-unidad');
     const categoria = g('nart-categoria')?.value?.trim();
 
     if (!nombre || !costo || !unidad) {
@@ -11624,6 +11679,8 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     seleccionarArticulo,
     abrirNuevoArticulo,
     onCategoriaChange,
+    _onCategoriaChangeArt,
+    _toggleUnidadOtro,
     guardarNuevoArticulo,
     calcTotalFactura,
     guardarFactura,
