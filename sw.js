@@ -6,13 +6,13 @@
      - Datos de Google Sheets / Apps Script: SIEMPRE de red (nunca cacheados)
    ══════════════════════════════════════════════════════════════ */
 
-const CACHE = 'lunasmart-v3';
+const CACHE = 'lunasmart-v4';
 const SHELL = [
   '/index.html',
   '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png',
-  '/apple-touch-icon.png',
+  '/icons/favicon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon-180.png',
 ];
 
 // Instalar: precachear el app shell
