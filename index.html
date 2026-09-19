@@ -22,7 +22,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;700;800;900&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.11.0/dist/tabler-icons.min.css">
   <style>
     /* ═══════════════════════════════════════════════════════
@@ -1073,6 +1073,7 @@
     }
 
   </style>
+  <link rel="stylesheet" href="/theme-lunasmart-admin.css">
 </head>
 <body>
 <!-- LOGIN -->
@@ -5177,7 +5178,7 @@ const LS_UI = (() => {
             </div>
             <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--cafe-card-hi);border-top:1px solid var(--line-2)">
               <span style="font-weight:700;color:var(--tx)">TOTAL</span>
-              <span style="font-size:22px;font-weight:700;color:var(--terra-claro);font-family:'DM Mono',monospace">${LS_API.formatMXNDec(f.total)}</span>
+              <span style="font-size:22px;font-weight:700;color:var(--terra-claro);font-family:'Figtree',monospace">${LS_API.formatMXNDec(f.total)}</span>
             </div>
           </div>
         </div>
@@ -6193,13 +6194,13 @@ return `<tr>
               <div style="padding:12px 16px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)">
                 <div style="font-size:11px;color:var(--tx-3);margin-bottom:6px">💵 Efectivo</div>
                 <input type="number" id="ing-efectivo" placeholder="0.00" step="0.01" min="0" oninput="LS_UI.calcIngreso()"
-                  style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'DM Mono',monospace">
+                  style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'Figtree',monospace">
               </div>
               <!-- Mercado Pago -->
               <div style="padding:12px 16px;border-bottom:1px solid var(--line)">
                 <div style="font-size:11px;color:var(--tx-3);margin-bottom:6px">📱 Mercado Pago</div>
                 <input type="number" id="ing-tarjeta" placeholder="0.00" step="0.01" min="0" oninput="LS_UI.calcIngreso()"
-                  style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'DM Mono',monospace">
+                  style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'Figtree',monospace">
               </div>
               <!-- Terminal Pay (Parrot) -->
               <div style="padding:12px 16px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)">
@@ -6208,19 +6209,19 @@ return `<tr>
                   Terminal Pay (Parrot)
                 </div>
                 <input type="number" id="ing-terminal-pay" placeholder="0.00" step="0.01" min="0" oninput="LS_UI.calcIngreso()"
-                  style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'DM Mono',monospace">
+                  style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'Figtree',monospace">
               </div>
               <!-- Transferencia -->
               <div style="padding:12px 16px;border-bottom:1px solid var(--line)">
                 <div style="font-size:11px;color:var(--tx-3);margin-bottom:6px">🏦 Transferencia</div>
                 <input type="number" id="ing-transferencia" placeholder="0.00" step="0.01" min="0" oninput="LS_UI.calcIngreso()"
-                  style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'DM Mono',monospace">
+                  style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'Figtree',monospace">
               </div>
               <!-- Rappi / Uber Eats — ancho completo -->
               <div style="padding:12px 16px;grid-column:1/-1">
                 <div style="font-size:11px;color:var(--tx-3);margin-bottom:6px">🛵 Rappi / Uber Eats</div>
                 <input type="number" id="ing-rappi" placeholder="0.00" step="0.01" min="0" oninput="LS_UI.calcIngreso()"
-                  style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'DM Mono',monospace">
+                  style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'Figtree',monospace">
               </div>
             </div>
           </div>
@@ -6231,7 +6232,7 @@ return `<tr>
               <div style="font-size:11px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Total declarado</div>
               <div style="font-size:11px;color:var(--tx-4);margin-top:2px">Suma automática de todos los métodos</div>
             </div>
-            <div id="ing-total-calc" style="font-size:28px;font-weight:700;color:var(--terra-claro);font-family:'DM Mono',monospace">$0.00</div>
+            <div id="ing-total-calc" style="font-size:28px;font-weight:700;color:var(--terra-claro);font-family:'Figtree',monospace">$0.00</div>
           </div>
 
           <!-- Detalle de venta (opcional) -->
@@ -10150,11 +10151,11 @@ async function guardarVentaDirecta() {
             <div style="border-top:1px solid var(--line-2);padding:10px 14px;display:flex;flex-direction:column;gap:6px;background:var(--cafe-card-hi);border-radius:0 0 var(--r-lg) var(--r-lg)">
               <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--tx-3)">
                 <span>Subtotal</span>
-                <span id="fact-subtotal" style="font-family:'DM Mono',monospace">$0.00</span>
+                <span id="fact-subtotal" style="font-family:'Figtree',monospace">$0.00</span>
               </div>
               <div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px solid var(--line)">
                 <span style="font-size:13px;font-weight:700;color:var(--tx)">TOTAL</span>
-                <span id="fact-total-calc" style="font-size:24px;font-weight:700;color:var(--terra-claro);font-family:'DM Mono',monospace">$0.00</span>
+                <span id="fact-total-calc" style="font-size:24px;font-weight:700;color:var(--terra-claro);font-family:'Figtree',monospace">$0.00</span>
               </div>
             </div>
           </div>
@@ -10675,7 +10676,7 @@ async function guardarVentaDirecta() {
       <div style="padding:7px 10px;border-right:1px solid var(--line)">
         <input type="number" class="fl-qty" value="1" placeholder="1"
           step="0.001" min="0" oninput="LS_UI.calcTotalFactura()"
-          style="width:100%;background:transparent;border:none;outline:none;font-size:13px;color:var(--tx);font-family:'DM Mono',monospace;text-align:right">
+          style="width:100%;background:transparent;border:none;outline:none;font-size:13px;color:var(--tx);font-family:'Figtree',monospace;text-align:right">
       </div>
       <div style="padding:7px 6px;border-right:1px solid var(--line)">
         <input type="text" class="fl-uni" placeholder="pzas" readonly title="Viene del Catálogo Maestro -- no se edita aquí para evitar errores de captura"
@@ -10684,10 +10685,10 @@ async function guardarVentaDirecta() {
       <div style="padding:7px 10px;border-right:1px solid var(--line)">
         <input type="number" class="fl-precio" placeholder="0.00"
           step="0.01" min="0" oninput="LS_UI.calcTotalFactura()"
-          style="width:100%;background:transparent;border:none;outline:none;font-size:13px;color:var(--tx);font-family:'DM Mono',monospace;text-align:right">
+          style="width:100%;background:transparent;border:none;outline:none;font-size:13px;color:var(--tx);font-family:'Figtree',monospace;text-align:right">
       </div>
       <div style="padding:7px 10px;border-right:1px solid var(--line);text-align:right">
-        <span class="fl-importe" style="font-size:13px;font-weight:600;color:var(--tx);font-family:'DM Mono',monospace">$0.00</span>
+        <span class="fl-importe" style="font-size:13px;font-weight:600;color:var(--tx);font-family:'Figtree',monospace">$0.00</span>
       </div>
       <div style="display:flex;align-items:center;justify-content:center">
         <button onclick="this.closest('.fact-linea').remove();LS_UI.calcTotalFactura()"

@@ -1,0 +1,280 @@
+/* ============================================================
+   lunasmart ADMIN · capa de tema
+   ------------------------------------------------------------
+   Cárgalo DESPUÉS del <style> existente de index.html.
+
+   No renombra clases, no toca ids, no toca JS.
+   Redefine los valores de los tokens del :root (los nombres se
+   conservan porque hay cientos de referencias) y reescribe las
+   pocas reglas que los tokens solos no alcanzan.
+   ============================================================ */
+
+/* ---------- 1 · Tokens del shell oscuro ---------- */
+/* El marrón #140B05 con texto crema teñía cada cifra de sepia.
+   Gris pizarra neutro: el número vuelve a ser lo más fuerte. */
+:root{
+  --cafe-950:#16181a;
+  --cafe-900:#1d202498;
+  --cafe-900s:#1d2024;
+  --cafe-850:#1a1c1f;
+  --cafe-800:#22252a;
+  --cafe-750:#1d2024;
+  --cafe-700:#2a2d31;
+  --cafe-sidebar:#101113;
+  --cafe-card:#1d2024;
+  --cafe-card-hi:#22252a;
+
+  --terra:#b14618;
+  --terra-claro:#e8763a;
+  --terra-osc:#8f3812;
+  --terra-glow:rgba(232,118,58,.4);
+
+  /* El dorado se retira: ámbar, dorado y terracota eran tres
+     cálidos peleando por el mismo trabajo. Se alía al ámbar. */
+  --dorado:#f0c674;
+  --verde:#7fd39b;   --verde-bg:rgba(127,211,155,.14);
+  --rojo:#ff8a7a;    --rojo-bg:rgba(255,138,122,.14);
+  --ambar:#f0c674;   --ambar-bg:rgba(240,198,116,.14);
+
+  --tx:#f7f8f9;
+  --tx-2:#c8ccd0;
+  --tx-3:rgba(228,230,232,.6);
+  --tx-4:rgba(228,230,232,.38);
+
+  --line:rgba(255,255,255,.07);
+  --line-2:rgba(255,255,255,.12);
+  --line-soft:rgba(255,255,255,.05);
+  --hair:rgba(255,255,255,.05);
+
+  --r-xs:5px; --r-sm:7px; --r:8px; --r-lg:12px; --r-xl:14px;
+
+  --sh-1:0 1px 2px rgba(0,0,0,.35);
+  --sh-2:0 4px 16px rgba(0,0,0,.3);
+  --sh-card:none;
+  --sh-pop:0 12px 40px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.08);
+  --sh-glow:0 2px 12px rgba(177,70,24,.35);
+
+  --sidebar-w:240px;
+  --topbar-h:60px;
+
+  --track:rgba(255,255,255,.07);
+  --th-bg:rgba(22,24,26,.5);
+  --topbar-bg:rgba(22,24,26,.9);
+}
+
+/* ---------- 2 · Tokens del tema claro ---------- */
+#app[data-theme="dia"]{
+  --cafe-950:#f4f5f6;
+  --cafe-900:#eef0f2;
+  --cafe-850:#e9eaec;
+  --cafe-800:#ffffff;
+  --cafe-750:#f8f9fa;
+  --cafe-700:#f1f3f5;
+  --cafe-sidebar:#ffffff;
+  --cafe-card:#ffffff;
+  --cafe-card-hi:#f8f9fa;
+
+  --terra:#b14618;
+  --terra-claro:#a2571f;
+  --terra-osc:#8f3812;
+
+  --dorado:#a37a14;
+  --verde:#1e5c39;   --verde-bg:rgba(30,92,57,.1);
+  --rojo:#b3261e;    --rojo-bg:rgba(179,38,30,.1);
+  --ambar:#a2571f;   --ambar-bg:rgba(162,87,31,.12);
+
+  --tx:#16181a;
+  --tx-2:#3b3f43;
+  --tx-3:#6b7076;
+  --tx-4:#9aa0a6;
+
+  --line:rgba(22,24,26,.1);
+  --line-2:rgba(22,24,26,.14);
+  --line-soft:rgba(22,24,26,.07);
+  --hair:rgba(22,24,26,.07);
+
+  --sh-card:0 1px 3px rgba(22,24,26,.05);
+  --sh-2:0 2px 10px rgba(22,24,26,.08);
+  --sh-pop:0 12px 40px rgba(22,24,26,.18), 0 0 0 1px rgba(22,24,26,.08);
+
+  --track:rgba(22,24,26,.08);
+  --th-bg:#f8f9fa;
+  --topbar-bg:rgba(255,255,255,.92);
+}
+
+/* ---------- 3 · Tipografía: una sola familia ---------- */
+/* Salen DM Sans, DM Mono y Playfair Display. Figtree con
+   tabular-nums alinea las cifras sin necesitar monoespaciada. */
+body,
+button, input, select, textarea,
+.branch-btn, .period-seg button, .btn, .seg button{
+  font-family:'Figtree', system-ui, -apple-system, sans-serif;
+}
+
+.mono, .num, .t-mono, .t-rank,
+td.num, th.num,
+.kpi-val, .delta, .s-val, .dc-val, .trend-val,
+.leg-val, .leg-pct, .b-card-val, .mstat .ms-v,
+.turno-box .tb-val, .bal-row-t td, .nav-badge{
+  font-family:'Figtree', system-ui, sans-serif;
+  font-variant-numeric:tabular-nums;
+  font-feature-settings:"tnum" 1;
+  letter-spacing:-.01em;
+}
+
+/* Playfair desaparece: los títulos son Figtree con peso, no
+   con florituras. Un panel financiero no lleva serif display. */
+.serif, .tb-title, .m-tb-title{
+  font-family:'Figtree', system-ui, sans-serif;
+  font-weight:800; letter-spacing:-.01em;
+}
+.tb-title{ font-size:17px; }
+
+/* ---------- 4 · Sidebar ---------- */
+.sidebar{ border-right:1px solid var(--line); }
+.sb-logo{ height:60px; border-bottom:1px solid var(--line); }
+.sb-logo .mk{ width:34px; height:34px; border-radius:8px; }
+.sb-logo .ls-word{ font-size:18px; }
+.sb-logo .ls-suffix{ font-size:9px; letter-spacing:.24em; }
+
+/* Activo: pastilla sólida, no tinte + barrita de 3px. */
+.nav-item{
+  height:36px; padding:0 10px; margin:1px 8px;
+  border-radius:var(--r-sm); font-size:12.5px; font-weight:500;
+  color:var(--tx-3);
+}
+.nav-item:hover{ background:var(--line-soft); color:var(--tx); }
+.nav-item.active{ background:var(--terra); color:#fff; font-weight:700; }
+.nav-item.active > i{ color:#fff; }
+.nav-item.active::before{ display:none; }
+.nav-item.active .nav-badge{ background:rgba(255,255,255,.25); }
+.nav-badge{ border-radius:999px; font-weight:800; padding:1px 7px; }
+.nav-sec{ font-size:8.5px; letter-spacing:.18em; color:var(--tx-4); padding:12px 18px 5px; font-weight:800; }
+
+.branch-btn{ height:42px; border-radius:9px; }
+
+/* ---------- 5 · Topbar ---------- */
+.topbar{ height:60px; border-bottom:1px solid var(--line); }
+.tb-sub{ font-size:10.5px; font-weight:600; color:var(--tx-3); }
+.period-seg{ border-radius:8px; padding:3px; }
+.period-seg button{ font-size:11.5px; font-weight:500; padding:5px 12px; border-radius:5px; }
+.period-seg button.on,
+.period-seg button.active{ background:var(--tx); color:var(--cafe-950); font-weight:700; }
+
+/* ---------- 6 · KPIs ---------- */
+/* Una cifra manda. Antes los cinco competían con el mismo peso;
+   ahora el primero de .kpis toma el terracota y los demás
+   acompañan. Si el orden cambia en JS, mueve el :first-child. */
+.kpi{ border-radius:var(--r-lg); padding:16px 18px; box-shadow:none; }
+.kpi:hover{ transform:none; border-color:var(--line-2); }
+.kpi:hover::after{ transform:none; }
+.kpi-label{ font-size:9.5px; letter-spacing:.14em; font-weight:800; color:var(--tx-3); white-space:nowrap; }
+.kpi-val{ font-size:26px; font-weight:900; letter-spacing:-.03em; margin-top:10px; }
+.kpi-sub{ font-size:11px; font-weight:600; color:var(--tx-3); margin-top:6px; }
+
+.kpis .kpi:first-child{
+  background:var(--terra); border-color:var(--terra); flex:1.5;
+}
+.kpis .kpi:first-child .kpi-label{ color:rgba(255,255,255,.85); letter-spacing:.16em; }
+.kpis .kpi:first-child .kpi-val{ color:#fff; font-size:38px; letter-spacing:-.04em; }
+.kpis .kpi:first-child .kpi-sub{ color:rgba(255,255,255,.82); }
+.kpis .kpi:first-child .kpi-ico{
+  background:rgba(255,255,255,.2); border-color:transparent; color:#fff;
+}
+.kpis .kpi:first-child .delta{ background:rgba(255,255,255,.2); color:#fff; }
+
+/* El ícono de los demás KPI pierde el cuadro: ruido a esa escala. */
+.kpis .kpi:not(:first-child) .kpi-ico{
+  background:none; border:none; width:auto; height:auto;
+  color:var(--tx-4); font-size:16px;
+}
+
+.delta{ border-radius:6px; font-weight:800; padding:2px 7px; }
+
+/* ---------- 7 · Tarjetas y tablas ---------- */
+.card{ border-radius:var(--r-lg); box-shadow:var(--sh-card); }
+.card-title{ font-size:14.5px; font-weight:800; letter-spacing:-.01em; }
+.card-sub{ font-size:11px; font-weight:600; color:var(--tx-3); }
+
+table.tbl thead th{
+  font-size:9.5px; letter-spacing:.14em; font-weight:800;
+  color:var(--tx-4); text-transform:uppercase;
+}
+table.tbl tbody td{ font-size:12.5px; font-weight:500; }
+table.tbl tbody tr:hover td{ background:var(--line-soft); }
+
+/* Las filas señaladas se marcan en el borde, no con relleno:
+   con quince filas marcadas, el relleno vuelve la tabla ilegible. */
+table.tbl tbody tr.hl-row td{ background:none; box-shadow:inset 2px 0 0 var(--terra-claro); }
+.t-rank.top{ color:var(--terra-claro); }
+
+.pill, .badge{ border-radius:999px; font-weight:800; font-size:10px; letter-spacing:.02em; }
+
+/* ---------- 8 · Botones ---------- */
+.btn{ border-radius:8px; font-weight:600; font-size:12px; padding:7px 12px; }
+.btn:hover{ background:var(--line-soft); border-color:var(--line-2); }
+.seg{ border-radius:8px; }
+.seg button{ font-weight:600; border-radius:5px; }
+.seg button.on{ background:var(--terra); color:#fff; font-weight:700; }
+
+/* ---------- 9 · Gráficas ---------- */
+.trend-bar{ background:var(--cafe-700); border-radius:4px 4px 2px 2px; }
+.trend-bar.cur{ background:var(--terra); }
+.donut-rel svg circle:first-of-type{ stroke:var(--track); }
+
+/* ---------- 10 · Foco visible ---------- */
+/* El panel se opera con teclado y no tenía foco visible. */
+button:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible,
+.nav-item:focus-visible, .branch-btn:focus-visible{
+  outline:2px solid var(--terra-claro); outline-offset:2px;
+}
+
+/* ---------- 11 · Navegación móvil ---------- */
+.m-nav-item.active{ color:var(--terra-claro); }
+.m-nav-badge{ background:var(--terra); border-radius:999px; font-weight:800; }
+.m-ico-btn{ border-radius:8px; background:var(--line-soft); border-color:var(--line); }
+
+/* ---------- 12 · Selectores no listados en §5, verificados contra
+   el archivo real ----------
+   Estas reglas tienen más especificidad que el `input`/`button`/`.btn`
+   genérico de la sección 3 (ej. `.ff input` vs `input`), así que sin
+   este refuerzo seguirían pidiendo 'DM Sans'/'DM Mono' — y al quitarse
+   esas fuentes de Google Fonts, caerían al genérico del sistema en vez
+   de Figtree. No son parte del <style> original: se agregan aquí para
+   no editarlo. */
+.field input, .login-btn, .theme-btn,
+.ff input, .ff select, .ff textarea{
+  font-family:'Figtree', sans-serif;
+}
+.total-calc .total-val{
+  font-family:'Figtree', monospace;
+  font-variant-numeric:tabular-nums;
+  font-feature-settings:"tnum" 1;
+}
+
+/* ---------- 13 · Excepción al KPI destacado (§6) ----------
+   Verificado módulo por módulo: en "Canales de venta" (#p-canales)
+   los cuatro KPI son categorías paralelas del mismo total (efectivo /
+   tarjeta / transferencia / Rappi-Uber), no un número que manda sobre
+   los demás. Resaltar "Efectivo" en terracota solo porque es el primero
+   en el HTML sería arbitrario y daría a entender que importa más que
+   los otros tres canales, que no es el caso. Se usa el id de página
+   que ya existe — no se agregó ningún id nuevo ni se reordenó nada. */
+#p-canales .kpis .kpi:first-child{
+  background:var(--cafe-card); border-color:var(--line); flex:1;
+}
+#p-canales .kpis .kpi:first-child .kpi-label{
+  color:var(--tx-3); letter-spacing:.14em;
+}
+#p-canales .kpis .kpi:first-child .kpi-val{
+  color:var(--tx); font-size:26px; letter-spacing:-.03em;
+}
+#p-canales .kpis .kpi:first-child .kpi-sub{ color:var(--tx-3); }
+#p-canales .kpis .kpi:first-child .kpi-ico{
+  background:none; border:none; width:auto; height:auto;
+  color:var(--tx-4); font-size:16px;
+}
+#p-canales .kpis .kpi:first-child .delta{
+  background:var(--verde-bg); color:var(--verde);
+}
