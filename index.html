@@ -3493,6 +3493,7 @@ const LS_API = (() => {
         fila:           x.fila,
         sucursal:       r[COLS.INVENTARIO.SUCURSAL]        || '',
         categoria:      r[COLS.INVENTARIO.CATEGORIA]       || '',
+        ubicacion:      r[COLS.INVENTARIO.UBICACION]       || '',
         articulo:       r[COLS.INVENTARIO.ARTICULO]        || '',
         presentacion:   r[COLS.INVENTARIO.PRESENTACION]      || '',
         stockFisico:    parseNum(r[COLS.INVENTARIO.STOCK_FISICO]),
@@ -4301,6 +4302,24 @@ const LS_UI = (() => {
 
   // ── ESTADO DE CARGA ────────────────────────────────────────
   let _loading = false;
+
+  // ── UBICACIONES FÍSICAS DE INVENTARIO ─────────────────────
+  // Lista fija de lugares donde se guarda el inventario, usada tanto al
+  // agregar un artículo como al capturar el conteo físico (para que el
+  // conteo siguiente pueda agruparse/ordenarse por ubicación).
+  const UBICACIONES_INVENTARIO = [
+    'Refrigerador Vertical', 'Congelador', 'Alacena #1', 'Alacena #2',
+    'Arriba Congelador', 'Barra Atención', 'Barra #1', 'Barra #2',
+    'Barra #3', 'Barra #4', 'Barra #5', 'Refrigerador Pequeño',
+    'Estante Cocina', 'Repisa Cocina',
+  ];
+  function _opcionesUbicacion(actual) {
+    const extra = actual && UBICACIONES_INVENTARIO.indexOf(actual) === -1 ? actual : null;
+    let opts = '<option value="">— Sin asignar —</option>';
+    if (extra) opts += '<option value="' + extra.replace(/"/g, '&quot;') + '" selected>' + extra + ' (actual)</option>';
+    opts += UBICACIONES_INVENTARIO.map(u => '<option value="' + u + '"' + (u === actual ? ' selected' : '') + '>' + u + '</option>').join('');
+    return opts;
+  }
 
   // ── HELPERS ────────────────────────────────────────────────
   const fmt  = LS_API.formatMXN;
@@ -10988,10 +11007,10 @@ async function guardarVentaDirecta() {
           <div class="tbl-wrap" style="max-height:400px;overflow:auto">
             <table class="tbl">
               <thead><tr>
-                <th>Artículo</th><th>Presentación</th><th>Unidad de medida <span onclick="LS_UI.mostrarTipConteo()" style="cursor:pointer;color:var(--terra-claro)" title="¿Cómo contar?"><i class="ti ti-help-circle"></i></span></th><th style="text-align:right">Mínimo</th><th style="text-align:right">Stock sugerido</th><th style="text-align:right">Stock físico</th>
+                <th>Artículo</th><th>Presentación</th><th>Unidad de medida <span onclick="LS_UI.mostrarTipConteo()" style="cursor:pointer;color:var(--terra-claro)" title="¿Cómo contar?"><i class="ti ti-help-circle"></i></span></th><th style="text-align:right">Mínimo</th><th style="text-align:right">Stock sugerido</th><th style="text-align:right">Stock físico</th><th>Ubicación</th>
               </tr></thead>
               <tbody id="reginv-tbody">
-                <tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)">Selecciona una sucursal para ver sus artículos</td></tr>
+                <tr><td colspan="7" style="text-align:center;padding:28px;color:var(--tx-4)">Selecciona una sucursal para ver sus artículos</td></tr>
               </tbody>
             </table>
           </div>
@@ -11030,31 +11049,36 @@ async function guardarVentaDirecta() {
     const btnGuardar = document.getElementById('reginv-btn-guardar');
     if (!tbody) return;
     if (!sucursal) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)">Selecciona una sucursal para ver sus artículos</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--tx-4)">Selecciona una sucursal para ver sus artículos</td></tr>';
       if (btnGuardar) btnGuardar.disabled = true;
       return;
     }
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-3)"><i class="ti ti-loader-2 spin"></i> Cargando artículos...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--tx-3)"><i class="ti ti-loader-2 spin"></i> Cargando artículos...</td></tr>';
     const inv = await LS_API.getInventario();
     const articulos = inv.filter(a => a.sucursal === sucursal);
     window.__reginvArticulos = articulos;
     if (articulos.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)">No hay artículos para esta sucursal</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--tx-4)">No hay artículos para esta sucursal</td></tr>';
       if (btnGuardar) btnGuardar.disabled = true;
       return;
     }
+    const SIN_UBI = 'Sin ubicación asignada';
     const ordenados = articulos.slice().sort((a, b) => {
-      const ca = (a.categoria || 'SIN CATEGORÍA').localeCompare(b.categoria || 'SIN CATEGORÍA');
-      if (ca !== 0) return ca;
+      const ua = a.ubicacion || SIN_UBI;
+      const ub = b.ubicacion || SIN_UBI;
+      if (ua === SIN_UBI && ub !== SIN_UBI) return 1;
+      if (ub === SIN_UBI && ua !== SIN_UBI) return -1;
+      const cu = ua.localeCompare(ub);
+      if (cu !== 0) return cu;
       return (a.articulo || '').localeCompare(b.articulo || '');
     });
-    let catActual = null;
+    let ubiActual = null;
     let html = '';
     ordenados.forEach(a => {
-      const cat = a.categoria || 'SIN CATEGORÍA';
-      if (cat !== catActual) {
-        catActual = cat;
-        html += `<tr class="reginv-cat-header"><td colspan="6" style="background:var(--cafe-card-hi);font-weight:600;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--tx-2);padding:8px 10px;border-top:1px solid var(--line)">${cat}</td></tr>`;
+      const ubi = a.ubicacion || SIN_UBI;
+      if (ubi !== ubiActual) {
+        ubiActual = ubi;
+        html += `<tr class="reginv-cat-header"><td colspan="7" style="background:var(--cafe-card-hi);font-weight:600;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--tx-2);padding:8px 10px;border-top:1px solid var(--line)">${ubi}</td></tr>`;
       }
       html += `
       <tr data-id="${a.id}">
@@ -11063,6 +11087,9 @@ async function guardarVentaDirecta() {
         <td style="text-align:right;color:var(--tx-3)">${a.stockMinimo || 0}</td><td style="text-align:right;color:var(--tx-3)">${a.stockSugerido || 0}</td>
         <td style="text-align:right">
           <input type="number" step="any" min="0" class="reginv-input" data-fila="${a.fila}" value="${a.stockFisico || 0}" style="width:110px;text-align:right">
+        </td>
+        <td>
+          <select class="reginv-ubicacion" data-fila="${a.fila}" style="width:170px">${_opcionesUbicacion(a.ubicacion)}</select>
         </td>
       </tr>`;
     });
@@ -11099,10 +11126,15 @@ async function guardarVentaDirecta() {
       const sucursal = sel ? sel.value : '';
       if (!sucursal) { toast('Falta sucursal', 'Selecciona una sucursal', 'err', 'ti-alert-circle'); return; }
 
+      const ubicacionPorFila = {};
+      document.querySelectorAll('.reginv-ubicacion').forEach(sel => {
+        ubicacionPorFila[sel.getAttribute('data-fila')] = sel.value || '';
+      });
       const inputs = document.querySelectorAll('.reginv-input');
       const items = Array.from(inputs).map(inp => ({
         fila: parseInt(inp.getAttribute('data-fila'), 10),
         stockFisico: parseFloat(inp.value || 0),
+        ubicacion: ubicacionPorFila[inp.getAttribute('data-fila')] || '',
   }));
       if (items.length === 0) { toast('Sin artículos', 'No hay artículos para registrar', 'err', 'ti-alert-circle'); return; }
 
@@ -11574,7 +11606,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
             sucursales.map(function(s){ return '<option value="'+ s.replace(/"/g,'&quot;') +'">'+ s +'</option>'; }).join('') +
             '</select></div>' +
   
-            '<div class="ff"><label>Ubicación (opcional)</label><input id="agr-ubicacion" type="text" placeholder="Almacén, barra, bodega…"></div>' +
+            '<div class="ff"><label>Ubicación (opcional)</label><select id="agr-ubicacion">' + _opcionesUbicacion('') + '</select></div>' +
             '<div style="display:flex;gap:10px"><div class="ff" style="flex:1"><label>Stock inicial</label><input id="agr-stock" type="number" step="any" value="0"></div>' +
             '<div class="ff" style="flex:1"><label>Mínimo</label><input id="agr-minimo" type="number" step="any" value="0"></div>' +
             '<div class="ff" style="flex:1"><label>Máximo (sugerido)</label><input id="agr-maximo" type="number" step="any" value="0"></div></div>' +

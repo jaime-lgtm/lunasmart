@@ -1549,6 +1549,7 @@ function _guardarInventarioFisico(b) {
       var fila = parseInt(it.fila, 10);
       if (!fila || fila < 2) return;
       sh.getRange(fila, 7).setValue(parseFloat(it.stockFisico || 0) || 0);
+      if (it.ubicacion !== undefined) sh.getRange(fila, 5).setValue(it.ubicacion || '');
       sh.getRange(fila, 15).setValue(new Date());
       actualizados++;
     });
