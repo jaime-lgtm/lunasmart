@@ -1308,14 +1308,19 @@ function _getOrCrearSheetMetricasMkt() {
 // Devuelve el número de fila de HOY en BD_MARKETING_METRICAS, creándola (con
 // solo ID y FECHA) si todavía no existe -- así los jalones de Instagram y
 // Facebook pueden correr en cualquier orden, el mismo día, sin duplicar fila.
+// La columna FECHA puede traer texto ('dd/MM/yyyy') o, si alguna fila se
+// editó a mano desde Sheets, un valor de fecha real -- se normalizan ambos
+// antes de comparar para no crear una fila nueva por un desajuste de tipo.
 function _mktMetricasFilaHoy(sh) {
   var hoy = _fechaHoy();
   var vals = sh.getDataRange().getValues();
   for (var i = 1; i < vals.length; i++) {
-    if (String(vals[i][1]) === hoy) return i + 1;
+    var f = vals[i][1];
+    var fStr = (Object.prototype.toString.call(f) === '[object Date]') ? Utilities.formatDate(f, Session.getScriptTimeZone(), 'dd/MM/yyyy') : String(f).trim();
+    if (fStr === hoy) return i + 1;
   }
   var id = _nextId(HOJAS.MKT_METRICAS, 'MKTM');
-  var fila = _siguienteFilaLibre(sh, 3);
+  var fila = sh.getLastRow() + 1;
   sh.getRange(fila, 1, 1, 2).setValues([[id, hoy]]);
   return fila;
 }
@@ -1370,7 +1375,8 @@ function _igPullMetricasYGuardar() {
 
   var sh = _getOrCrearSheetMetricasMkt();
   var fila = _mktMetricasFilaHoy(sh);
-  sh.getRange(fila, 3, 1, 4).setValues([[perfil.followers_count || 0, alcance, visitas, 'Automático']]);
+  sh.getRange(fila, 3, 1, 3).setValues([[perfil.followers_count || 0, alcance, visitas]]);
+  sh.getRange(fila, 8).setValue('Automático');
   sh.getRange(fila, 9).setValue(new Date());
 
   return { seguidores: perfil.followers_count || 0, alcance: alcance, visitas: visitas };
