@@ -2202,7 +2202,7 @@
         <div class="card-actions">
           <select id="mkt-cont-filtro-plataforma" onchange="LS_UI.filtrarContenidoMkt()" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px">
             <option value="">Todas las plataformas</option>
-            <option>Instagram</option><option>Facebook</option><option>TikTok</option><option>WhatsApp Business</option><option>Google Business Profile</option>
+            <option>Instagram</option><option>Facebook</option><option>WhatsApp Business</option><option>Google Business Profile</option>
           </select>
           <select id="mkt-cont-filtro-estado" onchange="LS_UI.filtrarContenidoMkt()" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px">
             <option value="">Todos los estados</option>
@@ -9819,7 +9819,7 @@ async function guardarVentaDirecta() {
   let _mktMetricasDatos = [];
   let _mktContenidoDatos = [];
   let _mktContenidoVista = [];
-  const MKT_CONT_PLATAFORMAS = ['Instagram', 'Facebook', 'TikTok', 'WhatsApp Business', 'Google Business Profile'];
+  const MKT_CONT_PLATAFORMAS = ['Instagram', 'Facebook', 'WhatsApp Business', 'Google Business Profile'];
   const MKT_CONT_TIPOS = ['Post', 'Reel', 'Story', 'Otro'];
   const MKT_CONT_ESTADOS = ['Planeado', 'Publicado', 'Pospuesto', 'Cancelado'];
   let _mktTareasDatos = [];
@@ -10255,10 +10255,12 @@ async function guardarVentaDirecta() {
 
   // Iconos + colores de marca para la ventanilla de contenido -- lo mismo
   // se usa para los chips de plataforma y para la tarjeta de vista previa.
+  // Google Business Profile queda con publicable:false hasta que Google
+  // apruebe el acceso a su API de Perfil de Negocio que ya solicitamos --
+  // ese día se activa igual que Instagram/Facebook (misma API de "Posts").
   const MKT_CONT_PLATAFORMA_ICO = {
     'Instagram':              { ico: 'ti-brand-instagram', bg: 'linear-gradient(135deg,#f9ce34,#ee2a7b,#6228d7)', publicable: true },
     'Facebook':               { ico: 'ti-brand-facebook',  bg: '#1877f2', publicable: true },
-    'TikTok':                 { ico: 'ti-brand-tiktok',    bg: '#000000', publicable: false },
     'WhatsApp Business':      { ico: 'ti-brand-whatsapp',  bg: '#25d366', publicable: false },
     'Google Business Profile':{ ico: 'ti-brand-google',    bg: '#4285f4', publicable: false },
   };
