@@ -163,6 +163,12 @@ function doGet(e) {
   // empresas) -- facebook-callback.html manda el "code" aquí por GET.
   if (e.parameter && e.parameter.facebookcallback === '1') return _procesarCallbackFacebook(e);
 
+  // Sirve una imagen subida desde "Contenido programado" con este mismo
+  // dominio de Apps Script -- Meta necesita una URL pública para publicar
+  // en Instagram/Facebook, y los enlaces normales de Drive (uc?export=view)
+  // a veces fallan al ser descargados por crawlers externos.
+  if (e.parameter && e.parameter.imgmkt) return _servirImagenMkt(e.parameter.imgmkt);
+
   const accion = (e.parameter && e.parameter.accion) ? e.parameter.accion : '';
 
   const map = {
@@ -270,6 +276,8 @@ function doPost(e) {
     case 'registrarContenidoMkt':      return _registrarContenidoMkt(datos);
     case 'editarContenidoMkt':         return _editarContenidoMkt(datos);
     case 'eliminarContenidoMkt':       return _eliminarContenidoMkt(datos);
+    case 'subirImagenMkt':             return _subirImagenMkt(datos);
+    case 'publicarContenidoMkt':       return _publicarContenidoMkt(datos);
     case 'registrarTareaMkt':          return _registrarTareaMkt(datos);
     case 'editarTareaMkt':             return _editarTareaMkt(datos);
     case 'eliminarTareaMkt':           return _eliminarTareaMkt(datos);
@@ -1671,7 +1679,9 @@ function _getOrCrearSheetContenidoMkt() {
   var sh = ss.getSheetByName(HOJAS.MKT_CONTENIDO);
   if (!sh) {
     sh = ss.insertSheet(HOJAS.MKT_CONTENIDO);
-    sh.appendRow(['ID', 'FECHA', 'PLATAFORMA', 'TIPO', 'IDEA_TITULO', 'ESTADO', 'NOTAS', 'CREADO_POR', 'ACTUALIZADO']);
+    sh.appendRow(['ID', 'FECHA', 'PLATAFORMA', 'TIPO', 'IDEA_TITULO', 'ESTADO', 'NOTAS', 'CREADO_POR', 'ACTUALIZADO', 'IMAGEN_URL']);
+  } else if (!sh.getRange(1, 10).getValue()) {
+    sh.getRange(1, 10).setValue('IMAGEN_URL');
   }
   return sh;
 }
@@ -1687,8 +1697,8 @@ function _registrarContenidoMkt(b) {
     var sh = _getOrCrearSheetContenidoMkt();
     var id = _nextId(HOJAS.MKT_CONTENIDO, 'MKTC');
     var fila = _siguienteFilaLibre(sh, 5);
-    sh.getRange(fila, 1, 1, 9).setValues([[
-      id, fecha, b.plataforma || '', b.tipo || '', ideaTitulo, b.estado || 'Planeado', b.notas || '', b.creadoPor || '', new Date(),
+    sh.getRange(fila, 1, 1, 10).setValues([[
+      id, fecha, b.plataforma || '', b.tipo || '', ideaTitulo, b.estado || 'Planeado', b.notas || '', b.creadoPor || '', new Date(), b.imagenUrl || '',
     ]]);
     return _json({ status: 'ok', id: id, fila: fila });
   } catch (e) { return _err(e.message); }
@@ -1710,6 +1720,7 @@ function _editarContenidoMkt(b) {
       fecha, b.plataforma || '', b.tipo || '', ideaTitulo, b.estado || 'Planeado', b.notas || '',
     ]]);
     sh.getRange(fila, 9).setValue(new Date());
+    if (b.imagenUrl) sh.getRange(fila, 10).setValue(b.imagenUrl);
     return _json({ status: 'ok' });
   } catch (e) { return _err(e.message); }
   finally { lock.releaseLock(); }
@@ -1727,6 +1738,118 @@ function _eliminarContenidoMkt(b) {
     var sh = _getOrCrearSheetContenidoMkt();
     filas.forEach(function(f){ sh.deleteRow(f); });
     return _json({ status: 'ok', eliminados: filas.length });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+// ── MARKETING DIGITAL: PUBLICAR EN INSTAGRAM Y FACEBOOK ─────────────────
+// La imagen que se sube desde "Contenido programado" se guarda en una
+// carpeta de Drive y se sirve de vuelta con este mismo dominio de Apps
+// Script (doGet ?imgmkt=<id>) -- Meta necesita poder "verla" en una URL
+// pública, y los enlaces normales de Drive (uc?export=view) a veces
+// fallan al ser descargados por crawlers externos.
+function _mktCarpetaImagenes() {
+  var props = PropertiesService.getScriptProperties();
+  var folderId = props.getProperty('MKT_IMAGENES_FOLDER_ID');
+  if (folderId) {
+    try { return DriveApp.getFolderById(folderId); } catch (e) { /* se recrea abajo */ }
+  }
+  var folder = DriveApp.createFolder('Luna Smart - Imágenes Marketing');
+  props.setProperty('MKT_IMAGENES_FOLDER_ID', folder.getId());
+  return folder;
+}
+
+function _subirImagenMkt(b) {
+  try {
+    if (!b.datosBase64 || !b.tipoMime) return _err('Falta la imagen');
+    var bytes = Utilities.base64Decode(b.datosBase64);
+    var blob = Utilities.newBlob(bytes, b.tipoMime, b.nombre || ('imagen_' + Date.now()));
+    var folder = _mktCarpetaImagenes();
+    var file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    var url = ScriptApp.getService().getUrl() + '?imgmkt=' + file.getId();
+    return _json({ status: 'ok', url: url, fileId: file.getId() });
+  } catch (e) { return _err(e.message); }
+}
+
+function _servirImagenMkt(fileId) {
+  return DriveApp.getFileById(fileId).getBlob();
+}
+
+// Publica en la página de Facebook: foto con leyenda si hay imagen, o solo
+// texto si no la hay.
+function _fbPublicarPost(b) {
+  var props = PropertiesService.getScriptProperties();
+  var pageId = props.getProperty('FB_PAGE_ID');
+  var token = props.getProperty('FB_PAGE_ACCESS_TOKEN');
+  if (!pageId || !token) return { ok: false, msg: 'Facebook no está conectado -- usa "Conectar Facebook" en el panel' };
+
+  var mensaje = String(b.mensaje || '').trim();
+  var imagenUrl = b.imagenUrl || '';
+  var resp;
+  if (imagenUrl) {
+    resp = UrlFetchApp.fetch('https://graph.facebook.com/v21.0/' + pageId + '/photos', {
+      method: 'post', muteHttpExceptions: true,
+      payload: { url: imagenUrl, caption: mensaje, access_token: token },
+    });
+  } else {
+    resp = UrlFetchApp.fetch('https://graph.facebook.com/v21.0/' + pageId + '/feed', {
+      method: 'post', muteHttpExceptions: true,
+      payload: { message: mensaje, access_token: token },
+    });
+  }
+  var data = JSON.parse(resp.getContentText());
+  if (data.error) return { ok: false, msg: 'Facebook: ' + data.error.message };
+  return { ok: true, postId: data.post_id || data.id };
+}
+
+// Publica en Instagram -- la API de publicación de contenido no admite
+// posts de solo texto, siempre necesita una imagen. Dos pasos: crear el
+// contenedor de medios y, ya que está listo, publicarlo.
+function _igPublicarPost(b) {
+  var props = PropertiesService.getScriptProperties();
+  var userId = props.getProperty('IG_USER_ID');
+  var token = props.getProperty('IG_ACCESS_TOKEN');
+  if (!userId || !token) return { ok: false, msg: 'Instagram no está conectado' };
+  var imagenUrl = b.imagenUrl || '';
+  if (!imagenUrl) return { ok: false, msg: 'Instagram necesita una imagen para publicar' };
+  var caption = String(b.mensaje || '').trim();
+
+  var resp1 = UrlFetchApp.fetch('https://graph.instagram.com/v21.0/' + userId + '/media', {
+    method: 'post', muteHttpExceptions: true,
+    payload: { image_url: imagenUrl, caption: caption, access_token: token },
+  });
+  var data1 = JSON.parse(resp1.getContentText());
+  if (data1.error) return { ok: false, msg: 'Instagram (crear medio): ' + data1.error.message };
+
+  var resp2 = UrlFetchApp.fetch('https://graph.instagram.com/v21.0/' + userId + '/media_publish', {
+    method: 'post', muteHttpExceptions: true,
+    payload: { creation_id: data1.id, access_token: token },
+  });
+  var data2 = JSON.parse(resp2.getContentText());
+  if (data2.error) return { ok: false, msg: 'Instagram (publicar): ' + data2.error.message };
+
+  return { ok: true, postId: data2.id };
+}
+
+function _publicarContenidoMkt(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var fila = parseInt(b.fila, 10);
+    if (!fila || fila < 2) return _err('Fila inválida');
+
+    var resultado;
+    if (b.plataforma === 'Facebook') resultado = _fbPublicarPost(b);
+    else if (b.plataforma === 'Instagram') resultado = _igPublicarPost(b);
+    else return _err('Publicación automática no disponible para ' + b.plataforma);
+
+    if (!resultado.ok) return _err(resultado.msg);
+
+    var sh = _getOrCrearSheetContenidoMkt();
+    sh.getRange(fila, 6).setValue('Publicado'); // col 6 = ESTADO
+    sh.getRange(fila, 9).setValue(new Date());
+    return _json({ status: 'ok', postId: resultado.postId });
   } catch (e) { return _err(e.message); }
   finally { lock.releaseLock(); }
 }

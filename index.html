@@ -1012,6 +1012,87 @@
       transition: background 0.15s;
     }
     .btn-save:hover { background: var(--terra-claro); }
+
+    /* ── Ventanilla "Contenido programado" ─────────────────────────────── */
+    .mkt-cont-modal { max-width: 720px; }
+    .mkt-cont-layout { display: grid; grid-template-columns: 1.3fr 1fr; gap: 22px; align-items: start; }
+    @media (max-width: 720px) { .mkt-cont-layout { grid-template-columns: 1fr; } }
+    .mkt-cont-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    .mkt-cont-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .btn-publicar {
+      padding: 9px 18px; border-radius: var(--r);
+      border: none; cursor: pointer; color: #fff; font-size: 13px;
+      font-family: inherit; font-weight: 600;
+      display: flex; align-items: center; gap: 7px;
+      background: linear-gradient(135deg,#f9ce34,#ee2a7b,#6228d7);
+      box-shadow: 0 2px 10px rgba(238,42,123,0.35);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-publicar:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(238,42,123,0.45); }
+    .btn-publicar:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+
+    .mkt-cont-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .mkt-cont-chip {
+      display: flex; align-items: center; gap: 7px;
+      padding: 6px 12px 6px 6px; border-radius: 999px;
+      border: 1.5px solid var(--line-2); background: var(--cafe-800);
+      cursor: pointer; font-size: 12.5px; color: var(--tx-2);
+      transition: all 0.15s;
+    }
+    .mkt-cont-chip:hover { border-color: var(--terra); }
+    .mkt-cont-chip.on { border-color: var(--terra); background: rgba(177,70,24,0.14); color: var(--tx); font-weight: 600; }
+    .mkt-cont-chip-ico {
+      width: 22px; height: 22px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 12px; flex-shrink: 0;
+    }
+
+    .mkt-cont-dropzone {
+      position: relative; border: 1.5px dashed var(--line-2); border-radius: var(--r-lg);
+      background: var(--cafe-800); cursor: pointer; overflow: hidden;
+      min-height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 4px; text-align: center; padding: 16px; transition: border-color 0.15s, background 0.15s;
+      color: var(--tx-3); font-size: 12.5px;
+    }
+    .mkt-cont-dropzone:hover { border-color: var(--terra); background: rgba(177,70,24,0.05); }
+    .mkt-cont-dropzone i.ti-photo-plus { font-size: 26px; color: var(--tx-4); margin-bottom: 2px; }
+    .mkt-cont-dz-sub { color: var(--tx-4); font-size: 11px; }
+    .mkt-cont-dropzone img { width: 100%; max-height: 220px; object-fit: cover; border-radius: calc(var(--r-lg) - 2px); }
+    .mkt-cont-img-quitar {
+      position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 50%;
+      background: rgba(20,11,5,0.72); color: #fff; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; font-size: 13px;
+      backdrop-filter: blur(2px);
+    }
+    .mkt-cont-img-quitar:hover { background: rgba(212,104,94,0.85); }
+
+    .mkt-prev-label { font-size: 10px; font-weight: 600; color: var(--tx-3); text-transform: uppercase; letter-spacing: .08em; }
+    .mkt-prev-card {
+      margin-top: 6px; border: 1px solid var(--line-2); border-radius: var(--r-lg);
+      background: var(--cafe-800); overflow: hidden; box-shadow: var(--sh-1);
+    }
+    .mkt-prev-head { display: flex; align-items: center; gap: 9px; padding: 10px 12px; }
+    .mkt-prev-avatar {
+      width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+      background: linear-gradient(135deg,#f9ce34,#ee2a7b,#6228d7);
+      display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px;
+      padding: 2px; box-sizing: border-box;
+    }
+    .mkt-prev-avatar i { background: var(--cafe-900); border-radius: 50%; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+    .mkt-prev-nombre { font-size: 12.5px; font-weight: 700; color: var(--tx); }
+    .mkt-prev-sub { font-size: 10.5px; color: var(--tx-4); }
+    .mkt-prev-imgwrap { width: 100%; aspect-ratio: 1/1; background: var(--cafe-900); }
+    .mkt-prev-imgwrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .mkt-prev-body { padding: 10px 12px 14px; }
+    .mkt-prev-acciones { display: flex; gap: 12px; font-size: 18px; color: var(--tx-2); margin-bottom: 8px; }
+    .mkt-prev-caption { font-size: 12px; color: var(--tx-2); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+
+    .mkt-cont-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; display: block; }
+    .mkt-cont-thumb-empty {
+      display: flex; align-items: center; justify-content: center;
+      background: var(--cafe-800); color: var(--tx-4); font-size: 16px;
+    }
     .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
 
     /* Total calculado */
@@ -2133,11 +2214,12 @@
       <div class="tbl-wrap">
         <table class="tbl" data-sortable>
           <thead><tr>
+            <th style="width:50px"></th>
             <th class="sortable" data-type="text">Fecha<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
             <th>Plataforma</th><th>Tipo</th><th>Idea / título</th><th>Estado</th><th>Notas</th>
-            <th style="width:60px">Acciones</th>
+            <th style="width:90px">Acciones</th>
           </tr></thead>
-          <tbody id="tabla-mkt-contenido"><tr><td colspan="7" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+          <tbody id="tabla-mkt-contenido"><tr><td colspan="8" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
         </table>
       </div>
       <div class="empty" id="empty-mkt-contenido"><div class="e-ico"><i class="ti ti-calendar-plus"></i></div><div class="e-title">Sin contenido programado</div><div class="e-sub">Agrega ideas de publicaciones para planear con anticipación.</div></div>
@@ -3508,6 +3590,7 @@ const LS_API = (() => {
           notas:       r[6] || '',
           creadoPor:   r[7] || '',
           actualizado: r[8] || '',
+          imagenUrl:   r[9] || '',
         }); });
     } catch(e) { console.error('Error cargando contenido de marketing:', e); return []; }
   }
@@ -3522,6 +3605,16 @@ const LS_API = (() => {
 
   async function eliminarContenidoMkt(filas) {
     return escribirViaScript('eliminarContenidoMkt', { hoja: SHEETS.MKT_CONTENIDO, datos: { filas: Array.isArray(filas) ? filas : [filas] } });
+  }
+
+  // Sube una imagen (base64) a Drive vía Apps Script y devuelve una URL
+  // pública que Meta puede leer para publicar en Instagram/Facebook.
+  async function subirImagenMkt(datosBase64, tipoMime, nombre) {
+    return escribirViaScript('subirImagenMkt', { hoja: SHEETS.MKT_CONTENIDO, datos: { datosBase64, tipoMime, nombre } });
+  }
+
+  async function publicarContenidoMkt(fila, plataforma, mensaje, imagenUrl) {
+    return escribirViaScript('publicarContenidoMkt', { hoja: SHEETS.MKT_CONTENIDO, datos: { fila, plataforma, mensaje, imagenUrl } });
   }
 
   // ── MARKETING DIGITAL: METAS Y TAREAS SEMANALES ────────────────────────
@@ -4454,7 +4547,7 @@ const LS_API = (() => {
     getArticulosDetalle, getClientes, getProveedores, getRecetas, getBD_TIEMPOS, getAsistencia, editarAsistencia, eliminarAsistencia,
     getFechasMkt, registrarFechaMkt, editarFechaMkt, eliminarFechaMkt,
     getMetricasMkt, editarMetricaMkt, eliminarMetricaMkt, actualizarMetricasMktAhora,
-    getContenidoMkt, registrarContenidoMkt, editarContenidoMkt, eliminarContenidoMkt,
+    getContenidoMkt, registrarContenidoMkt, editarContenidoMkt, eliminarContenidoMkt, subirImagenMkt, publicarContenidoMkt,
     getTareasMkt, registrarTareaMkt, editarTareaMkt, eliminarTareaMkt,
     getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos, getSucursalesInventario,
     getVentasPorSucursal, aliasSucursal, nombreSucursal, getProductosVenta,
@@ -10009,10 +10102,12 @@ async function guardarVentaDirecta() {
   }
 
   // Conecta la página de Facebook del negocio vía "Inicio de sesión con
-  // Facebook para empresas" (Business Login) -- la única variante de
-  // Facebook Login disponible para esta app, usa un config_id en vez de
-  // "scope" (los permisos pages_show_list/pages_read_engagement ya están
-  // definidos dentro de esa configuración en Meta for Developers).
+  // Facebook para empresas", con scopes explícitos en vez de config_id (el
+  // wizard de configuraciones en Meta for Developers resultó muy poco
+  // confiable para editar permisos después de creada -- pedir el scope
+  // directo en la URL de autorización funciona igual de bien una vez que
+  // el redirect_uri está en la lista de "URI de redireccionamiento de
+  // OAuth válidos" del producto).
   //
   // Por qué existe este botón: un Page Access Token sacado a mano del
   // Explorador de la API Graph resultó tener solo 24h de vida (ligado a la
@@ -10020,16 +10115,16 @@ async function guardarVentaDirecta() {
   // duración -- un login real como este, en cambio, sí produce un token
   // que no vence.
   const FB_CLIENT_ID = '1980314806015125';
-  const FB_CONFIG_ID = '3346193945571547';
   const FB_REDIRECT_URI = 'https://lunasmart.suenodeluna.com.mx/facebook-callback.html';
+  const FB_SCOPES = 'pages_show_list,pages_read_engagement,pages_manage_posts,business_management';
 
   function conectarFacebook() {
     const state = _b64url(crypto.getRandomValues(new Uint8Array(16)));
     const params = new URLSearchParams({
       client_id: FB_CLIENT_ID,
-      config_id: FB_CONFIG_ID,
       redirect_uri: FB_REDIRECT_URI,
       response_type: 'code',
+      scope: FB_SCOPES,
       state,
     });
     window.location.href = 'https://www.facebook.com/v21.0/dialog/oauth?' + params.toString();
@@ -10091,7 +10186,7 @@ async function guardarVentaDirecta() {
       filtrarContenidoMkt();
     } catch (e) {
       console.error(e);
-      setEl('tabla-mkt-contenido', `<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--tx-3)">Error al cargar contenido</td></tr>`);
+      setEl('tabla-mkt-contenido', `<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--tx-3)">Error al cargar contenido</td></tr>`);
     }
   }
 
@@ -10123,8 +10218,12 @@ async function guardarVentaDirecta() {
     if (empty) empty.classList.remove('show');
     if (wrap) wrap.style.display = '';
     const badgeClase = e => e === 'Cancelado' ? 'badge err' : e === 'Pospuesto' ? 'badge warn' : 'badge';
-    setEl('tabla-mkt-contenido', datos.map(c => `
+    setEl('tabla-mkt-contenido', datos.map(c => {
+      const meta = MKT_CONT_PLATAFORMA_ICO[c.plataforma];
+      const puedePublicar = meta && meta.publicable && c.imagenUrl && c.estado !== 'Publicado';
+      return `
       <tr>
+        <td>${c.imagenUrl ? `<img src="${c.imagenUrl}" class="mkt-cont-thumb">` : `<div class="mkt-cont-thumb mkt-cont-thumb-empty"><i class="ti ti-photo"></i></div>`}</td>
         <td>${c.fecha}</td>
         <td>${c.plataforma || '—'}</td>
         <td>${c.tipo || '—'}</td>
@@ -10132,33 +10231,184 @@ async function guardarVentaDirecta() {
         <td><span class="${badgeClase(c.estado)}">${c.estado}</span></td>
         <td style="max-width:220px">${c.notas || '—'}</td>
         <td>
+          ${puedePublicar ? `<button class="icon-btn" title="Publicar ahora en ${c.plataforma}" onclick="LS_UI.publicarFilaContenidoMkt(${c.fila})"><i class="ti ti-send" style="color:var(--terra-claro)"></i></button>` : ''}
           <button class="icon-btn" title="Editar" onclick="LS_UI.abrirEditarContenidoMkt(${c.fila})"><i class="ti ti-pencil"></i></button>
           <button class="icon-btn" title="Eliminar" onclick="LS_UI.eliminarFilaContenidoMkt(${c.fila}, '${(c.ideaTitulo || '').replace(/'/g, "\\'")}')"><i class="ti ti-trash"></i></button>
         </td>
-      </tr>`).join(''));
+      </tr>`;
+    }).join(''));
+  }
+
+  async function publicarFilaContenidoMkt(fila) {
+    const c = _mktContenidoDatos.find(x => x.fila === fila);
+    if (!c) return;
+    if (!confirm('¿Publicar "' + c.ideaTitulo + '" ahora mismo en ' + c.plataforma + '?')) return;
+    try {
+      const r = await LS_API.publicarContenidoMkt(fila, c.plataforma, c.ideaTitulo + (c.notas ? '\n\n' + c.notas : ''), c.imagenUrl);
+      if (r.status !== 'ok') { toast('No se publicó', r.msg || 'Error al publicar', 'err'); return; }
+      toast('¡Publicado!', 'Se publicó en ' + c.plataforma, 'ok', 'ti-send');
+      await renderMktContenido();
+    } catch (e) {
+      toast('Error', 'No se pudo publicar', 'err');
+    }
+  }
+
+  // Iconos + colores de marca para la ventanilla de contenido -- lo mismo
+  // se usa para los chips de plataforma y para la tarjeta de vista previa.
+  const MKT_CONT_PLATAFORMA_ICO = {
+    'Instagram':              { ico: 'ti-brand-instagram', bg: 'linear-gradient(135deg,#f9ce34,#ee2a7b,#6228d7)', publicable: true },
+    'Facebook':               { ico: 'ti-brand-facebook',  bg: '#1877f2', publicable: true },
+    'TikTok':                 { ico: 'ti-brand-tiktok',    bg: '#000000', publicable: false },
+    'WhatsApp Business':      { ico: 'ti-brand-whatsapp',  bg: '#25d366', publicable: false },
+    'Google Business Profile':{ ico: 'ti-brand-google',    bg: '#4285f4', publicable: false },
+  };
+  // Estado (imagen + medidas) del formulario de contenido mientras el modal
+  // está abierto -- se resetea cada vez que se abre uno nuevo. La imagen no
+  // se sube a Drive hasta el momento de guardar, para no dejar archivos
+  // huérfanos si el usuario cancela.
+  let _mktContForm = { archivoBase64: '', tipoMime: '', nombre: '', imagenUrl: '', plataforma: '' };
+
+  function _mktContSetPlataforma(p) {
+    _mktContForm.plataforma = p;
+    document.querySelectorAll('.mkt-cont-chip').forEach(el => el.classList.toggle('on', el.dataset.plat === p));
+    _mktContActualizarPreview();
+    _mktContActualizarBotonPublicar();
+  }
+
+  function _mktContChipsHTML(seleccionada) {
+    return `<div class="mkt-cont-chips">${MKT_CONT_PLATAFORMAS.map(p => {
+      const meta = MKT_CONT_PLATAFORMA_ICO[p];
+      return `<div class="mkt-cont-chip${p === seleccionada ? ' on' : ''}" data-plat="${p}" onclick="LS_UI._mktContSetPlataforma('${p}')">
+        <div class="mkt-cont-chip-ico" style="background:${meta.bg}"><i class="ti ${meta.ico}"></i></div>
+        <span>${p.replace(' Business', '').replace(' Profile', '')}</span>
+      </div>`;
+    }).join('')}</div>`;
+  }
+
+  function _mktContOnImagenSeleccionada(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAXW = 1080;
+        const escala = Math.min(1, MAXW / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * escala;
+        canvas.height = img.height * escala;
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        _mktContForm.archivoBase64 = dataUrl.split(',')[1];
+        _mktContForm.tipoMime = 'image/jpeg';
+        _mktContForm.nombre = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+        _mktContForm.imagenUrl = ''; // se sube al guardar; invalida la url anterior
+        _mktContActualizarPreview(dataUrl);
+        _mktContActualizarBotonPublicar();
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function _mktContQuitarImagen() {
+    _mktContForm.archivoBase64 = ''; _mktContForm.tipoMime = ''; _mktContForm.nombre = ''; _mktContForm.imagenUrl = '';
+    const inp = document.getElementById('mkt-cont-imagen-input'); if (inp) inp.value = '';
+    _mktContActualizarPreview(''); // '' explícito -- si no, cae al src viejo que sigue en el DOM
+    _mktContActualizarBotonPublicar();
+  }
+
+  function _mktContImagenActualSrc() {
+    const dz = document.getElementById('mkt-cont-dropzone-img');
+    return dz ? dz.getAttribute('src') : '';
+  }
+
+  function _mktContActualizarPreview(nuevaImagenSrc) {
+    const dropzone = document.getElementById('mkt-cont-dropzone');
+    const imgSrc = nuevaImagenSrc !== undefined ? nuevaImagenSrc : (_mktContForm.imagenUrl || _mktContImagenActualSrc());
+    if (dropzone) {
+      dropzone.innerHTML = imgSrc
+        ? `<img id="mkt-cont-dropzone-img" src="${imgSrc}"><button type="button" class="mkt-cont-img-quitar" onclick="event.stopPropagation();LS_UI._mktContQuitarImagen()"><i class="ti ti-x"></i></button>`
+        : `<i class="ti ti-photo-plus"></i><div>Arrastra una imagen o haz clic para elegirla</div><div class="mkt-cont-dz-sub">Se ajusta sola para Instagram/Facebook</div>`;
+    }
+    const cap = (document.getElementById('mkt-cont-idea')?.value || '').trim();
+    const prevImg = document.getElementById('mkt-prev-img');
+    const prevCap = document.getElementById('mkt-prev-caption');
+    const prevWrap = document.getElementById('mkt-prev-imgwrap');
+    if (prevImg) prevImg.src = imgSrc || '';
+    if (prevWrap) prevWrap.style.display = imgSrc ? '' : 'none';
+    if (prevCap) prevCap.textContent = cap || 'Tu idea/título aparecerá aquí…';
+  }
+
+  function _mktContActualizarBotonPublicar() {
+    const btn = document.getElementById('mkt-cont-btn-publicar');
+    if (!btn) return;
+    const meta = MKT_CONT_PLATAFORMA_ICO[_mktContForm.plataforma];
+    const tieneImagen = !!(_mktContForm.archivoBase64 || _mktContForm.imagenUrl);
+    const puede = meta && meta.publicable && tieneImagen;
+    btn.style.display = meta && meta.publicable ? '' : 'none';
+    btn.disabled = !puede;
+    btn.title = !tieneImagen ? 'Agrega una imagen para publicar' : '';
   }
 
   function _mktFormContenidoHTML(c) {
     c = c || {};
+    _mktContForm = { archivoBase64: '', tipoMime: '', nombre: '', imagenUrl: c.imagenUrl || '', plataforma: c.plataforma || MKT_CONT_PLATAFORMAS[0] };
     const esc = s => String(s || '').replace(/"/g, '&quot;');
     return `
-      <div class="ff"><label>Fecha</label><input type="date" id="mkt-cont-fecha" value="${LS_API._fechaISO(c.fecha) || ''}"></div>
-      <div class="ff"><label>Plataforma</label><select id="mkt-cont-plataforma">${MKT_CONT_PLATAFORMAS.map(p => `<option value="${p}"${p === c.plataforma ? ' selected' : ''}>${p}</option>`).join('')}</select></div>
-      <div class="ff"><label>Tipo</label><select id="mkt-cont-tipo">${MKT_CONT_TIPOS.map(t => `<option value="${t}"${t === c.tipo ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
-      <div class="ff"><label>Idea / título</label><input type="text" id="mkt-cont-idea" value="${esc(c.ideaTitulo)}" placeholder="Ej. Reel de latte art"></div>
-      <div class="ff"><label>Estado</label><select id="mkt-cont-estado">${MKT_CONT_ESTADOS.map(e => `<option value="${e}"${e === c.estado ? ' selected' : ''}>${e}</option>`).join('')}</select></div>
-      <div class="ff"><label>Notas</label><textarea id="mkt-cont-notas" rows="2" placeholder="Detalles, guion, referencia...">${esc(c.notas)}</textarea></div>
+      <div class="mkt-cont-layout">
+        <div class="mkt-cont-col">
+          <div class="ff"><label>Plataforma</label>${_mktContChipsHTML(_mktContForm.plataforma)}</div>
+          <div class="ff">
+            <label>Imagen</label>
+            <input type="file" id="mkt-cont-imagen-input" accept="image/*" style="display:none" onchange="LS_UI._mktContOnImagenSeleccionada(this)">
+            <div class="mkt-cont-dropzone" id="mkt-cont-dropzone" onclick="document.getElementById('mkt-cont-imagen-input').click()">
+              ${c.imagenUrl
+                ? `<img id="mkt-cont-dropzone-img" src="${c.imagenUrl}"><button type="button" class="mkt-cont-img-quitar" onclick="event.stopPropagation();LS_UI._mktContQuitarImagen()"><i class="ti ti-x"></i></button>`
+                : `<i class="ti ti-photo-plus"></i><div>Arrastra una imagen o haz clic para elegirla</div><div class="mkt-cont-dz-sub">Se ajusta sola para Instagram/Facebook</div>`}
+            </div>
+          </div>
+          <div class="mkt-cont-row2">
+            <div class="ff"><label>Fecha</label><input type="date" id="mkt-cont-fecha" value="${LS_API._fechaISO(c.fecha) || ''}"></div>
+            <div class="ff"><label>Tipo</label><select id="mkt-cont-tipo">${MKT_CONT_TIPOS.map(t => `<option value="${t}"${t === c.tipo ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
+          </div>
+          <div class="ff"><label>Idea / título</label><input type="text" id="mkt-cont-idea" value="${esc(c.ideaTitulo)}" placeholder="Ej. Reel de latte art" oninput="LS_UI._mktContActualizarPreview()"></div>
+          <div class="ff"><label>Estado</label><select id="mkt-cont-estado">${MKT_CONT_ESTADOS.map(e => `<option value="${e}"${e === c.estado ? ' selected' : ''}>${e}</option>`).join('')}</select></div>
+          <div class="ff"><label>Notas</label><textarea id="mkt-cont-notas" rows="2" placeholder="Detalles, guion, referencia...">${esc(c.notas)}</textarea></div>
+        </div>
+        <div class="mkt-cont-col mkt-cont-col-preview">
+          <label class="mkt-prev-label">Vista previa</label>
+          <div class="mkt-prev-card">
+            <div class="mkt-prev-head">
+              <div class="mkt-prev-avatar"><i class="ti ti-coffee"></i></div>
+              <div><div class="mkt-prev-nombre">suenodeluna</div><div class="mkt-prev-sub">Publicación patrocinada · Ahora</div></div>
+            </div>
+            <div class="mkt-prev-imgwrap" id="mkt-prev-imgwrap" style="display:${c.imagenUrl ? '' : 'none'}">
+              <img id="mkt-prev-img" src="${c.imagenUrl || ''}">
+            </div>
+            <div class="mkt-prev-body">
+              <div class="mkt-prev-acciones"><i class="ti ti-heart"></i><i class="ti ti-message-circle"></i><i class="ti ti-send"></i></div>
+              <div class="mkt-prev-caption" id="mkt-prev-caption">${esc(c.ideaTitulo) || 'Tu idea/título aparecerá aquí…'}</div>
+            </div>
+          </div>
+        </div>
+      </div>
     `;
   }
 
   function abrirNuevoContenidoMkt() {
-    _modal2(`<div class="modal" style="max-width:460px"><div class="modal-header"><div class="modal-title"><i class="ti ti-calendar-plus" style="margin-right:6px"></i>Nuevo contenido</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body">${_mktFormContenidoHTML()}</div><div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarNuevoContenidoMkt()">Guardar</button></div></div>`);
+    _modal2(`<div class="modal mkt-cont-modal"><div class="modal-header"><div class="modal-title"><i class="ti ti-calendar-plus" style="margin-right:6px"></i>Nuevo contenido</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body">${_mktFormContenidoHTML()}</div><div class="modal-footer">
+      <button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button>
+      <button class="btn-publicar" id="mkt-cont-btn-publicar" onclick="LS_UI.guardarNuevoContenidoMkt(true)"><i class="ti ti-send"></i>Publicar ahora</button>
+      <button class="btn-save" onclick="LS_UI.guardarNuevoContenidoMkt(false)">Guardar</button>
+    </div></div>`);
+    _mktContActualizarBotonPublicar();
   }
 
   function _leerFormContenidoMkt() {
     return {
       fecha: document.getElementById('mkt-cont-fecha')?.value || '',
-      plataforma: document.getElementById('mkt-cont-plataforma')?.value || '',
+      plataforma: _mktContForm.plataforma || '',
       tipo: document.getElementById('mkt-cont-tipo')?.value || '',
       ideaTitulo: (document.getElementById('mkt-cont-idea')?.value || '').trim(),
       estado: document.getElementById('mkt-cont-estado')?.value || '',
@@ -10166,36 +10416,75 @@ async function guardarVentaDirecta() {
     };
   }
 
-  async function guardarNuevoContenidoMkt() {
+  // Si se eligió una imagen nueva en el dropzone, la sube a Drive y
+  // devuelve su URL pública; si no, conserva la que ya tenía (o '').
+  async function _mktContResolverImagenUrl() {
+    if (_mktContForm.archivoBase64) {
+      const r = await LS_API.subirImagenMkt(_mktContForm.archivoBase64, _mktContForm.tipoMime, _mktContForm.nombre);
+      if (r.status !== 'ok') throw new Error(r.msg || 'No se pudo subir la imagen');
+      return r.url;
+    }
+    return _mktContForm.imagenUrl || '';
+  }
+
+  async function _mktContPublicarSiToca(fila, datos, publicarAhora, imagenUrl) {
+    if (!publicarAhora) return true;
+    if (!imagenUrl) { toast('Falta imagen', 'Agrega una imagen para publicar en ' + datos.plataforma, 'err'); return false; }
+    const r = await LS_API.publicarContenidoMkt(fila, datos.plataforma, datos.ideaTitulo + (datos.notas ? '\n\n' + datos.notas : ''), imagenUrl);
+    if (r.status !== 'ok') { toast('No se publicó', r.msg || 'Error al publicar', 'err'); return false; }
+    toast('¡Publicado!', 'Se publicó en ' + datos.plataforma, 'ok', 'ti-send');
+    return true;
+  }
+
+  async function guardarNuevoContenidoMkt(publicarAhora) {
     const datos = _leerFormContenidoMkt();
     if (!datos.fecha || !datos.ideaTitulo) { toast('Falta información', 'Fecha e idea/título son obligatorios', 'err'); return; }
-    datos.creadoPor = _mktUsuarioActual();
+    const btn = document.getElementById('mkt-cont-btn-publicar');
+    if (btn && publicarAhora) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i>Publicando...'; }
     try {
-      await LS_API.registrarContenidoMkt(datos);
-      toast('Guardado', 'Contenido agregado', 'ok');
+      datos.creadoPor = _mktUsuarioActual();
+      datos.imagenUrl = await _mktContResolverImagenUrl();
+      const r = await LS_API.registrarContenidoMkt(datos);
+      if (r.status !== 'ok') { toast('Error', r.msg || 'No se pudo guardar', 'err'); return; }
+      await _mktContPublicarSiToca(r.fila, datos, publicarAhora, datos.imagenUrl);
+      if (!publicarAhora) toast('Guardado', 'Contenido agregado', 'ok');
       _cerrarModal2();
       await renderMktContenido();
     } catch (e) {
-      toast('Error', 'No se pudo guardar', 'err');
+      toast('Error', e.message || 'No se pudo guardar', 'err');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i>Publicar ahora'; }
     }
   }
 
   function abrirEditarContenidoMkt(fila) {
     const c = _mktContenidoDatos.find(x => x.fila === fila);
     if (!c) return;
-    _modal2(`<div class="modal" style="max-width:460px"><div class="modal-header"><div class="modal-title"><i class="ti ti-pencil" style="margin-right:6px"></i>Editar contenido</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body">${_mktFormContenidoHTML(c)}</div><div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarEditarContenidoMkt(${fila})">Guardar cambios</button></div></div>`);
+    _modal2(`<div class="modal mkt-cont-modal"><div class="modal-header"><div class="modal-title"><i class="ti ti-pencil" style="margin-right:6px"></i>Editar contenido</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body">${_mktFormContenidoHTML(c)}</div><div class="modal-footer">
+      <button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button>
+      <button class="btn-publicar" id="mkt-cont-btn-publicar" onclick="LS_UI.guardarEditarContenidoMkt(${fila},true)"><i class="ti ti-send"></i>Publicar ahora</button>
+      <button class="btn-save" onclick="LS_UI.guardarEditarContenidoMkt(${fila},false)">Guardar cambios</button>
+    </div></div>`);
+    _mktContActualizarBotonPublicar();
   }
 
-  async function guardarEditarContenidoMkt(fila) {
+  async function guardarEditarContenidoMkt(fila, publicarAhora) {
     const datos = _leerFormContenidoMkt();
     if (!datos.fecha || !datos.ideaTitulo) { toast('Falta información', 'Fecha e idea/título son obligatorios', 'err'); return; }
+    const btn = document.getElementById('mkt-cont-btn-publicar');
+    if (btn && publicarAhora) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i>Publicando...'; }
     try {
-      await LS_API.editarContenidoMkt(fila, datos);
-      toast('Guardado', 'Contenido actualizado', 'ok');
+      datos.imagenUrl = await _mktContResolverImagenUrl();
+      const r = await LS_API.editarContenidoMkt(fila, datos);
+      if (r.status !== 'ok') { toast('Error', r.msg || 'No se pudo guardar', 'err'); return; }
+      await _mktContPublicarSiToca(fila, datos, publicarAhora, datos.imagenUrl);
+      if (!publicarAhora) toast('Guardado', 'Contenido actualizado', 'ok');
       _cerrarModal2();
       await renderMktContenido();
     } catch (e) {
-      toast('Error', 'No se pudo guardar', 'err');
+      toast('Error', e.message || 'No se pudo guardar', 'err');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i>Publicar ahora'; }
     }
   }
 
@@ -12358,7 +12647,8 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderAsistencia, filtrarAsistencia, abrirEditarAsistencia, guardarEditarAsistencia, eliminarFilaAsistencia,
     renderMarketing, mktSwitchVista, abrirNuevaFechaMkt, guardarNuevaFechaMkt, abrirEditarFechaMkt, guardarEditarFechaMkt, eliminarFilaFechaMkt,
     renderMktMetricas, abrirEditarMetricaMkt, guardarEditarMetricaMkt, eliminarFilaMetricaMkt, actualizarMetricasMktAhora, conectarTikTok, conectarFacebook,
-    renderMktContenido, filtrarContenidoMkt, abrirNuevoContenidoMkt, guardarNuevoContenidoMkt, abrirEditarContenidoMkt, guardarEditarContenidoMkt, eliminarFilaContenidoMkt,
+    renderMktContenido, filtrarContenidoMkt, abrirNuevoContenidoMkt, guardarNuevoContenidoMkt, abrirEditarContenidoMkt, guardarEditarContenidoMkt, eliminarFilaContenidoMkt, publicarFilaContenidoMkt,
+    _mktContSetPlataforma, _mktContOnImagenSeleccionada, _mktContQuitarImagen, _mktContActualizarPreview,
     renderMktTareas, abrirNuevaTareaMkt, guardarNuevaTareaMkt, abrirEditarTareaMkt, guardarEditarTareaMkt, eliminarFilaTareaMkt, cambiarEstadoTareaMkt,
     _toggleUposDropdown, _uposDropdownTodasChange, _uposDropdownResumen,
     closeModal,
