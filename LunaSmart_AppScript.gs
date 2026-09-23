@@ -155,6 +155,10 @@ function doGet(e) {
   // viejo de IPN) en vez de POST -- se atiende igual en los dos casos.
   if (e.parameter && e.parameter.mpwebhook === '1') return _procesarWebhookMP(e);
 
+  // Callback de OAuth de TikTok Login Kit -- tiktok-callback.html manda el
+  // "code" (y el code_verifier de PKCE) aquí por GET tras la autorización.
+  if (e.parameter && e.parameter.tiktokcallback === '1') return _procesarCallbackTikTok(e);
+
   const accion = (e.parameter && e.parameter.accion) ? e.parameter.accion : '';
 
   const map = {
@@ -1298,9 +1302,10 @@ function _getOrCrearSheetMetricasMkt() {
   var sh = ss.getSheetByName(HOJAS.MKT_METRICAS);
   if (!sh) {
     sh = ss.insertSheet(HOJAS.MKT_METRICAS);
-    sh.appendRow(['ID', 'FECHA', 'SEGUIDORES_INSTAGRAM', 'ALCANCE_INSTAGRAM', 'VISITAS_PERFIL_INSTAGRAM', 'ANUNCIOS_ACTIVOS', 'NOTAS', 'FUENTE', 'ACTUALIZADO', 'SEGUIDORES_FACEBOOK']);
-  } else if (!sh.getRange(1, 10).getValue()) {
-    sh.getRange(1, 10).setValue('SEGUIDORES_FACEBOOK');
+    sh.appendRow(['ID', 'FECHA', 'SEGUIDORES_INSTAGRAM', 'ALCANCE_INSTAGRAM', 'VISITAS_PERFIL_INSTAGRAM', 'ANUNCIOS_ACTIVOS', 'NOTAS', 'FUENTE', 'ACTUALIZADO', 'SEGUIDORES_FACEBOOK', 'SEGUIDORES_TIKTOK']);
+  } else {
+    if (!sh.getRange(1, 10).getValue()) sh.getRange(1, 10).setValue('SEGUIDORES_FACEBOOK');
+    if (!sh.getRange(1, 11).getValue()) sh.getRange(1, 11).setValue('SEGUIDORES_TIKTOK');
   }
   return sh;
 }
@@ -1413,6 +1418,122 @@ function fbActualizarSeguidoresDiarios() {
   }
 }
 
+// ── MARKETING DIGITAL: SEGUIDORES DE TIKTOK (Login Kit, OAuth con PKCE) ────
+// Propiedades del Script que usa este bloque:
+//   TIKTOK_CLIENT_KEY      Client key de la app "Luna Smart" en TikTok for
+//                          Developers (Sandbox mientras esté en revisión)
+//   TIKTOK_CLIENT_SECRET   Client secret de esa misma app
+//   TIKTOK_ACCESS_TOKEN    Token de acceso vigente (dura 24h, se autorrenueva)
+//   TIKTOK_REFRESH_TOKEN   Token de refresco (TikTok lo rota en cada uso --
+//                          se reescribe aquí mismo cada vez que se usa)
+//   TIKTOK_TOKEN_ACTUALIZADO  Fecha (ISO) de la última renovación
+// El primer par ACCESS/REFRESH_TOKEN se obtiene una sola vez con el botón
+// "Conectar TikTok" del panel (LS_UI.conectarTikTok en index.html), que
+// redirige a TikTok y de vuelta a tiktok-callback.html -- esa página le
+// pasa el "code" a _procesarCallbackTikTok, que hace el intercambio inicial
+// y ya no hace falta repetirlo (el refresh token dura ~365 días y se va
+// renovando solo).
+function _procesarCallbackTikTok(e) {
+  try {
+    var code = e.parameter.code;
+    var codeVerifier = e.parameter.code_verifier;
+    if (!code || !codeVerifier) return _json({ status: 'error', msg: 'Falta code o code_verifier' });
+
+    var props = PropertiesService.getScriptProperties();
+    var clientKey = props.getProperty('TIKTOK_CLIENT_KEY');
+    var clientSecret = props.getProperty('TIKTOK_CLIENT_SECRET');
+    if (!clientKey || !clientSecret) return _json({ status: 'error', msg: 'Faltan TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET en Propiedades del script' });
+
+    var resp = UrlFetchApp.fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+      method: 'post',
+      contentType: 'application/x-www-form-urlencoded',
+      muteHttpExceptions: true,
+      payload: {
+        client_key: clientKey,
+        client_secret: clientSecret,
+        code: code,
+        grant_type: 'authorization_code',
+        redirect_uri: 'https://lunasmart.suenodeluna.com.mx/tiktok-callback.html',
+        code_verifier: codeVerifier,
+      },
+    });
+    var data = JSON.parse(resp.getContentText());
+    if (!data.access_token) return _json({ status: 'error', msg: 'TikTok: ' + (data.error_description || data.error || 'no se recibió access_token') });
+
+    props.setProperty('TIKTOK_ACCESS_TOKEN', data.access_token);
+    props.setProperty('TIKTOK_REFRESH_TOKEN', data.refresh_token);
+    props.setProperty('TIKTOK_TOKEN_ACTUALIZADO', new Date().toISOString());
+    return _json({ status: 'ok' });
+  } catch (e) {
+    return _json({ status: 'error', msg: e.message });
+  }
+}
+
+// Renueva el token de acceso de TikTok si tiene 12h o más desde la última
+// renovación (el access token dura 24h). TikTok rota el refresh_token en
+// cada uso, así que siempre se reescriben los dos.
+function _tiktokRefrescarTokenSiNecesario() {
+  var props = PropertiesService.getScriptProperties();
+  var token = props.getProperty('TIKTOK_ACCESS_TOKEN');
+  var refreshToken = props.getProperty('TIKTOK_REFRESH_TOKEN');
+  var clientKey = props.getProperty('TIKTOK_CLIENT_KEY');
+  var clientSecret = props.getProperty('TIKTOK_CLIENT_SECRET');
+  if (!token || !refreshToken) throw new Error('Falta conectar TikTok -- usa el botón "Conectar TikTok" en el panel');
+  if (!clientKey || !clientSecret) throw new Error('Faltan TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET en Propiedades del script');
+
+  var actualizado = props.getProperty('TIKTOK_TOKEN_ACTUALIZADO');
+  var horasDesdeRenovacion = actualizado ? (Date.now() - new Date(actualizado).getTime()) / 3600000 : 999;
+  if (horasDesdeRenovacion < 12) return token;
+
+  var resp = UrlFetchApp.fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+    method: 'post',
+    contentType: 'application/x-www-form-urlencoded',
+    muteHttpExceptions: true,
+    payload: {
+      client_key: clientKey,
+      client_secret: clientSecret,
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+    },
+  });
+  var data = JSON.parse(resp.getContentText());
+  if (!data.access_token) throw new Error('No se pudo renovar el token de TikTok: ' + resp.getContentText());
+
+  props.setProperty('TIKTOK_ACCESS_TOKEN', data.access_token);
+  props.setProperty('TIKTOK_REFRESH_TOKEN', data.refresh_token);
+  props.setProperty('TIKTOK_TOKEN_ACTUALIZADO', new Date().toISOString());
+  return data.access_token;
+}
+
+function _tiktokPullSeguidoresYGuardar() {
+  var token = _tiktokRefrescarTokenSiNecesario();
+
+  var resp = UrlFetchApp.fetch('https://open.tiktokapis.com/v2/user/info/?fields=follower_count,display_name', {
+    method: 'get',
+    headers: { Authorization: 'Bearer ' + token },
+    muteHttpExceptions: true,
+  });
+  var data = JSON.parse(resp.getContentText());
+  if (data.error && data.error.code !== 'ok') throw new Error('Error de TikTok: ' + data.error.message);
+
+  var seguidores = (data.data && data.data.user && data.data.user.follower_count) || 0;
+  var sh = _getOrCrearSheetMetricasMkt();
+  var fila = _mktMetricasFilaHoy(sh);
+  sh.getRange(fila, 11).setValue(seguidores);
+  sh.getRange(fila, 9).setValue(new Date());
+
+  return { seguidores: seguidores };
+}
+
+function tiktokActualizarSeguidoresDiarios() {
+  try {
+    var r = _tiktokPullSeguidoresYGuardar();
+    Logger.log('Seguidores de TikTok actualizados: ' + JSON.stringify(r));
+  } catch (e) {
+    Logger.log('Error actualizando seguidores de TikTok: ' + e.message);
+  }
+}
+
 // Punto de entrada para el activador de tiempo. No deja escapar errores
 // porque un activador que revienta con una excepción no tiene quién la
 // vea -- solo se deja constancia en el registro de ejecuciones (Apps
@@ -1433,7 +1554,9 @@ function _pullMetricasMktAhora(b) {
   catch (eIg) { errores.push('Instagram: ' + eIg.message); }
   try { r.facebook = _fbPullSeguidoresYGuardar().seguidores; }
   catch (eFb) { errores.push('Facebook: ' + eFb.message); }
-  if (errores.length && !r.seguidores && r.facebook === undefined) return _err(errores.join(' | '));
+  try { r.tiktok = _tiktokPullSeguidoresYGuardar().seguidores; }
+  catch (eTt) { errores.push('TikTok: ' + eTt.message); }
+  if (errores.length === 3) return _err(errores.join(' | '));
   if (errores.length) r.avisos = errores;
   return _json({ status: 'ok', metricas: r });
 }

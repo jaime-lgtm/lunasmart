@@ -2092,6 +2092,7 @@
     <div class="kpis">
       <div class="kpi"><div class="kpi-top"><div class="kpi-label">Seguidores en Instagram</div><div class="kpi-ico"><i class="ti ti-brand-instagram"></i></div></div><div class="kpi-val" id="mkt-kpi-seguidores">—</div><div class="kpi-sub">Dato más reciente</div></div>
       <div class="kpi"><div class="kpi-top"><div class="kpi-label">Seguidores en Facebook</div><div class="kpi-ico"><i class="ti ti-brand-facebook"></i></div></div><div class="kpi-val" id="mkt-kpi-seguidores-fb">—</div><div class="kpi-sub">Dato más reciente</div></div>
+      <div class="kpi"><div class="kpi-top"><div class="kpi-label">Seguidores en TikTok</div><div class="kpi-ico"><i class="ti ti-brand-tiktok"></i></div></div><div class="kpi-val" id="mkt-kpi-seguidores-tt">—</div><div class="kpi-sub">Dato más reciente</div></div>
       <div class="kpi"><div class="kpi-top"><div class="kpi-label">Alcance · período</div><div class="kpi-ico g"><i class="ti ti-eye"></i></div></div><div class="kpi-val" id="mkt-kpi-alcance">—</div><div class="kpi-sub">Cuentas alcanzadas, suma del período</div></div>
       <div class="kpi"><div class="kpi-top"><div class="kpi-label">Visitas al perfil · período</div><div class="kpi-ico"><i class="ti ti-user-search"></i></div></div><div class="kpi-val" id="mkt-kpi-visitas">—</div><div class="kpi-sub">Suma del período</div></div>
       <div class="kpi"><div class="kpi-top"><div class="kpi-label">Anuncios activos</div><div class="kpi-ico"><i class="ti ti-ad"></i></div></div><div class="kpi-val" id="mkt-kpi-anuncios">—</div><div class="kpi-sub">Dato más reciente, capturado a mano</div></div>
@@ -2099,17 +2100,20 @@
     <div class="card">
       <div class="card-head">
         <div><div class="card-title"><i class="ti ti-chart-line"></i>Histórico de métricas <span id="mkt-metricas-titulo-periodo"></span></div><div class="card-sub">Instagram y Facebook se actualizan solos todos los días -- anuncios activos y notas se capturan a mano</div></div>
-        <div class="card-actions"><button class="btn btn-sm" id="mkt-btn-actualizar" onclick="LS_UI.actualizarMetricasMktAhora()"><i class="ti ti-refresh"></i>Actualizar ahora</button></div>
+        <div class="card-actions">
+          <button class="btn btn-sm" id="mkt-btn-tiktok" onclick="LS_UI.conectarTikTok()"><i class="ti ti-brand-tiktok"></i>Conectar TikTok</button>
+          <button class="btn btn-sm" id="mkt-btn-actualizar" onclick="LS_UI.actualizarMetricasMktAhora()"><i class="ti ti-refresh"></i>Actualizar ahora</button>
+        </div>
       </div>
       <div class="tbl-wrap">
         <table class="tbl" data-sortable>
           <thead><tr>
             <th class="sortable" data-type="text">Fecha<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
-            <th class="num">Seguidores IG</th><th class="num">Seguidores FB</th><th class="num">Alcance</th><th class="num">Visitas al perfil</th>
+            <th class="num">Seguidores IG</th><th class="num">Seguidores FB</th><th class="num">Seguidores TT</th><th class="num">Alcance</th><th class="num">Visitas al perfil</th>
             <th>Anuncios activos</th><th>Notas</th><th>Fuente</th>
             <th style="width:60px">Acciones</th>
           </tr></thead>
-          <tbody id="tabla-mkt-metricas"><tr><td colspan="9" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+          <tbody id="tabla-mkt-metricas"><tr><td colspan="10" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
         </table>
       </div>
       <div class="empty" id="empty-mkt-metricas"><div class="e-ico"><i class="ti ti-chart-line"></i></div><div class="e-title">Todavía no hay métricas</div><div class="e-sub">Se registran solas cada día -- o presiona "Actualizar ahora" para jalar el dato de hoy.</div></div>
@@ -3478,6 +3482,7 @@ const LS_API = (() => {
           fuente:          r[7] || '',
           actualizado:     r[8] || '',
           seguidoresFacebook: parseFloat(r[9]) || 0,
+          seguidoresTikTok: parseFloat(r[10]) || 0,
         }); });
     } catch(e) { console.error('Error cargando métricas de marketing:', e); return []; }
   }
@@ -9917,6 +9922,7 @@ async function guardarVentaDirecta() {
       const ultimo = _mktMetricasDatos[_mktMetricasDatos.length - 1];
       setTxt('mkt-kpi-seguidores', ultimo ? ultimo.seguidores.toLocaleString('es-MX') : '—');
       setTxt('mkt-kpi-seguidores-fb', ultimo ? ultimo.seguidoresFacebook.toLocaleString('es-MX') : '—');
+      setTxt('mkt-kpi-seguidores-tt', ultimo ? ultimo.seguidoresTikTok.toLocaleString('es-MX') : '—');
       setTxt('mkt-kpi-anuncios', ultimo && ultimo.anunciosActivos !== '' ? ultimo.anunciosActivos : '—');
       setTxt('mkt-kpi-alcance', filtrados.reduce((s, m) => s + m.alcance, 0).toLocaleString('es-MX'));
       setTxt('mkt-kpi-visitas', filtrados.reduce((s, m) => s + m.visitasPerfil, 0).toLocaleString('es-MX'));
@@ -9924,7 +9930,7 @@ async function guardarVentaDirecta() {
       _pintarTablaMetricasMkt(filtrados.slice().reverse());
     } catch (e) {
       console.error(e);
-      setEl('tabla-mkt-metricas', `<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--tx-3)">Error al cargar métricas</td></tr>`);
+      setEl('tabla-mkt-metricas', `<tr><td colspan="10" style="text-align:center;padding:28px;color:var(--tx-3)">Error al cargar métricas</td></tr>`);
     }
   }
 
@@ -9944,6 +9950,7 @@ async function guardarVentaDirecta() {
         <td>${m.fecha}</td>
         <td class="num">${m.seguidores.toLocaleString('es-MX')}</td>
         <td class="num">${m.seguidoresFacebook.toLocaleString('es-MX')}</td>
+        <td class="num">${m.seguidoresTikTok.toLocaleString('es-MX')}</td>
         <td class="num">${m.alcance.toLocaleString('es-MX')}</td>
         <td class="num">${m.visitasPerfil.toLocaleString('es-MX')}</td>
         <td>${m.anunciosActivos || '—'}</td>
@@ -9994,6 +10001,45 @@ async function guardarVentaDirecta() {
     } finally {
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-refresh"></i>Actualizar ahora'; }
     }
+  }
+
+  // Conecta la cuenta de TikTok del negocio vía Login Kit (OAuth con PKCE,
+  // obligatorio en la API v2). El code_verifier se guarda en localStorage
+  // porque el redirect_uri es otra página (tiktok-callback.html) que lo
+  // necesita para completar el intercambio en Apps Script.
+  //
+  // TIKTOK_CLIENT_KEY es el de Sandbox mientras la app "Luna Smart" está en
+  // revisión -- solo funciona con la cuenta agregada como Target User en
+  // TikTok for Developers. Al aprobarse para producción, cambiar por el
+  // Client Key de Production (misma pantalla, pestaña "Production").
+  const TIKTOK_CLIENT_KEY = 'sbawwqnr748keq0vwv';
+  const TIKTOK_REDIRECT_URI = 'https://lunasmart.suenodeluna.com.mx/tiktok-callback.html';
+
+  function _b64url(bytes) {
+    let bin = '';
+    bytes.forEach(b => bin += String.fromCharCode(b));
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  async function conectarTikTok() {
+    const verifierBytes = crypto.getRandomValues(new Uint8Array(64));
+    const codeVerifier = _b64url(verifierBytes);
+    localStorage.setItem('ls_tiktok_code_verifier', codeVerifier);
+
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(codeVerifier));
+    const codeChallenge = _b64url(new Uint8Array(digest));
+
+    const state = _b64url(crypto.getRandomValues(new Uint8Array(16)));
+    const params = new URLSearchParams({
+      client_key: TIKTOK_CLIENT_KEY,
+      scope: 'user.info.basic,user.info.profile,user.info.stats',
+      response_type: 'code',
+      redirect_uri: TIKTOK_REDIRECT_URI,
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+    });
+    window.location.href = 'https://www.tiktok.com/v2/auth/authorize/?' + params.toString();
   }
 
   // Nombre del usuario con la sesión activa (para CREADO_POR) -- se lee de
@@ -12279,7 +12325,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderEventos, abrirNuevoEvento, editarEvento, guardarEvento, confirmarBorrarEvento, ejecutarBorrarEvento, verInscritosEvento, _evSubirImagen, _evAgregarCampoExtra, _evToggleOpcionesCampo,
     renderAsistencia, filtrarAsistencia, abrirEditarAsistencia, guardarEditarAsistencia, eliminarFilaAsistencia,
     renderMarketing, mktSwitchVista, abrirNuevaFechaMkt, guardarNuevaFechaMkt, abrirEditarFechaMkt, guardarEditarFechaMkt, eliminarFilaFechaMkt,
-    renderMktMetricas, abrirEditarMetricaMkt, guardarEditarMetricaMkt, actualizarMetricasMktAhora,
+    renderMktMetricas, abrirEditarMetricaMkt, guardarEditarMetricaMkt, actualizarMetricasMktAhora, conectarTikTok,
     renderMktContenido, filtrarContenidoMkt, abrirNuevoContenidoMkt, guardarNuevoContenidoMkt, abrirEditarContenidoMkt, guardarEditarContenidoMkt, eliminarFilaContenidoMkt,
     renderMktTareas, abrirNuevaTareaMkt, guardarNuevaTareaMkt, abrirEditarTareaMkt, guardarEditarTareaMkt, eliminarFilaTareaMkt, cambiarEstadoTareaMkt,
     _toggleUposDropdown, _uposDropdownTodasChange, _uposDropdownResumen,

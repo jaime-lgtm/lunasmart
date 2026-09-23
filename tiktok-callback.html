@@ -77,14 +77,20 @@
       msg.textContent = text;
     }
 
+    const codeVerifier = localStorage.getItem('ls_tiktok_code_verifier') || '';
+
     if (errorParam) {
       showError('TikTok no autorizó la conexión: ' + errorParam);
     } else if (!code) {
       showError('No se recibió el código de autorización de TikTok.');
+    } else if (!codeVerifier) {
+      showError('Se perdió el código de verificación (PKCE) de esta sesión. Vuelve a intentar la conexión desde el panel.');
     } else {
-      fetch(APPS_SCRIPT_URL + '?tiktokcallback=1&code=' + encodeURIComponent(code))
+      const url = APPS_SCRIPT_URL + '?tiktokcallback=1&code=' + encodeURIComponent(code) + '&code_verifier=' + encodeURIComponent(codeVerifier);
+      fetch(url)
         .then(r => r.json())
         .then(data => {
+          localStorage.removeItem('ls_tiktok_code_verifier');
           if (data.status === 'ok') {
             showOk('Ya puedes cerrar esta pestaña y volver al panel de Luna Smart.');
           } else {
