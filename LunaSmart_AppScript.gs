@@ -1263,33 +1263,61 @@ function _eliminarFechaMkt(b) {
   finally { lock.releaseLock(); }
 }
 
-// ── MARKETING DIGITAL: MÉTRICAS SEMANALES (Instagram automático) ───────────
+// ── MARKETING DIGITAL: MÉTRICAS SEMANALES (Instagram + Facebook automático) ─
 // Columnas de BD_MARKETING_METRICAS (1-based): 1 ID, 2 FECHA,
 // 3 SEGUIDORES_INSTAGRAM, 4 ALCANCE_INSTAGRAM, 5 VISITAS_PERFIL_INSTAGRAM,
-// 6 ANUNCIOS_ACTIVOS, 7 NOTAS, 8 FUENTE, 9 ACTUALIZADO.
-// Los datos de Instagram se jalan solos todos los días (ver
-// igActualizarMetricasDiarias, pensada para un activador de tiempo en Apps
-// Script -- Activadores -> Agregar activador -> función
-// igActualizarMetricasDiarias -> Basado en tiempo -> Temporizador diario).
+// 6 ANUNCIOS_ACTIVOS, 7 NOTAS, 8 FUENTE, 9 ACTUALIZADO, 10 SEGUIDORES_FACEBOOK.
+// Los datos de Instagram y Facebook se jalan solos todos los días (ver
+// igActualizarMetricasDiarias / fbActualizarSeguidoresDiarios, pensadas para
+// un activador de tiempo en Apps Script -- Activadores -> Agregar activador
+// -> función -> Basado en tiempo -> Temporizador diario).
 // ANUNCIOS_ACTIVOS y NOTAS son las únicas columnas que se editan a mano.
 //
-// Credenciales de Instagram: NUNCA van en este archivo (igual que
-// MP_ACCESS_TOKEN) -- se guardan en Propiedades del Script (Configuración
-// del proyecto -> Propiedades del script):
+// Credenciales: NUNCA van en este archivo (igual que MP_ACCESS_TOKEN) -- se
+// guardan en Propiedades del Script (Configuración del proyecto ->
+// Propiedades del script):
 //   IG_APP_ID              Identificador de la app de Instagram
 //   IG_APP_SECRET          Clave secreta de la app de Instagram
 //   IG_USER_ID             ID de la cuenta de Instagram (numérico largo)
 //   IG_ACCESS_TOKEN        Token de acceso vigente (se autorrenueva y se
 //                          reescribe aquí mismo cada vez que se usa)
 //   IG_TOKEN_ACTUALIZADO   Fecha (ISO) de la última renovación del token
+//   FB_PAGE_ID             ID de la página de Facebook (numérico)
+//   FB_PAGE_ACCESS_TOKEN   Token de acceso de la página, obtenido a partir
+//                          de un token de usuario de larga duración -- a
+//                          diferencia de Instagram, este NO vence solo (Meta
+//                          no expira los Page Access Token derivados de un
+//                          token de usuario de larga duración salvo que se
+//                          revoque el acceso), así que no necesita
+//                          renovarse solo. Meta Insights de Página
+//                          (alcance/impresiones) ya no está disponible vía
+//                          Graph API para apps nuevas -- solo se jala el
+//                          conteo de seguidores.
 function _getOrCrearSheetMetricasMkt() {
   var ss = SpreadsheetApp.openById(SHEET_ID);
   var sh = ss.getSheetByName(HOJAS.MKT_METRICAS);
   if (!sh) {
     sh = ss.insertSheet(HOJAS.MKT_METRICAS);
-    sh.appendRow(['ID', 'FECHA', 'SEGUIDORES_INSTAGRAM', 'ALCANCE_INSTAGRAM', 'VISITAS_PERFIL_INSTAGRAM', 'ANUNCIOS_ACTIVOS', 'NOTAS', 'FUENTE', 'ACTUALIZADO']);
+    sh.appendRow(['ID', 'FECHA', 'SEGUIDORES_INSTAGRAM', 'ALCANCE_INSTAGRAM', 'VISITAS_PERFIL_INSTAGRAM', 'ANUNCIOS_ACTIVOS', 'NOTAS', 'FUENTE', 'ACTUALIZADO', 'SEGUIDORES_FACEBOOK']);
+  } else if (!sh.getRange(1, 10).getValue()) {
+    sh.getRange(1, 10).setValue('SEGUIDORES_FACEBOOK');
   }
   return sh;
+}
+
+// Devuelve el número de fila de HOY en BD_MARKETING_METRICAS, creándola (con
+// solo ID y FECHA) si todavía no existe -- así los jalones de Instagram y
+// Facebook pueden correr en cualquier orden, el mismo día, sin duplicar fila.
+function _mktMetricasFilaHoy(sh) {
+  var hoy = _fechaHoy();
+  var vals = sh.getDataRange().getValues();
+  for (var i = 1; i < vals.length; i++) {
+    if (String(vals[i][1]) === hoy) return i + 1;
+  }
+  var id = _nextId(HOJAS.MKT_METRICAS, 'MKTM');
+  var fila = _siguienteFilaLibre(sh, 3);
+  sh.getRange(fila, 1, 1, 2).setValues([[id, hoy]]);
+  return fila;
 }
 
 // Renueva el token de acceso de Instagram si tiene 50 días o más desde la
@@ -1341,25 +1369,42 @@ function _igPullMetricasYGuardar() {
   });
 
   var sh = _getOrCrearSheetMetricasMkt();
-  var hoy = _fechaHoy();
-  var vals = sh.getDataRange().getValues();
-  var filaHoy = -1;
-  for (var i = 1; i < vals.length; i++) {
-    if (String(vals[i][1]) === hoy) { filaHoy = i + 1; break; }
-  }
-
-  if (filaHoy > 0) {
-    sh.getRange(filaHoy, 3, 1, 4).setValues([[perfil.followers_count || 0, alcance, visitas, 'Automático']]);
-    sh.getRange(filaHoy, 9).setValue(new Date());
-  } else {
-    var id = _nextId(HOJAS.MKT_METRICAS, 'MKTM');
-    var fila = _siguienteFilaLibre(sh, 3);
-    sh.getRange(fila, 1, 1, 9).setValues([[
-      id, hoy, perfil.followers_count || 0, alcance, visitas, '', '', 'Automático', new Date(),
-    ]]);
-  }
+  var fila = _mktMetricasFilaHoy(sh);
+  sh.getRange(fila, 3, 1, 4).setValues([[perfil.followers_count || 0, alcance, visitas, 'Automático']]);
+  sh.getRange(fila, 9).setValue(new Date());
 
   return { seguidores: perfil.followers_count || 0, alcance: alcance, visitas: visitas };
+}
+
+// Jala el conteo de seguidores/fans de la página de Facebook y lo guarda en
+// la fila de hoy (columna 10). Meta ya no expone alcance/impresiones de
+// página vía Graph API para apps nuevas, así que solo se jala este dato.
+function _fbPullSeguidoresYGuardar() {
+  var props = PropertiesService.getScriptProperties();
+  var pageId = props.getProperty('FB_PAGE_ID');
+  var token = props.getProperty('FB_PAGE_ACCESS_TOKEN');
+  if (!pageId || !token) throw new Error('Faltan FB_PAGE_ID / FB_PAGE_ACCESS_TOKEN en Propiedades del script');
+
+  var resp = UrlFetchApp.fetch('https://graph.facebook.com/v21.0/' + pageId + '?fields=followers_count,fan_count&access_token=' + encodeURIComponent(token), { muteHttpExceptions: true });
+  var data = JSON.parse(resp.getContentText());
+  if (data.error) throw new Error('Error de Facebook: ' + data.error.message);
+
+  var seguidores = data.followers_count || data.fan_count || 0;
+  var sh = _getOrCrearSheetMetricasMkt();
+  var fila = _mktMetricasFilaHoy(sh);
+  sh.getRange(fila, 10).setValue(seguidores);
+  sh.getRange(fila, 9).setValue(new Date());
+
+  return { seguidores: seguidores };
+}
+
+function fbActualizarSeguidoresDiarios() {
+  try {
+    var r = _fbPullSeguidoresYGuardar();
+    Logger.log('Seguidores de Facebook actualizados: ' + JSON.stringify(r));
+  } catch (e) {
+    Logger.log('Error actualizando seguidores de Facebook: ' + e.message);
+  }
 }
 
 // Punto de entrada para el activador de tiempo. No deja escapar errores
@@ -1376,10 +1421,15 @@ function igActualizarMetricasDiarias() {
 }
 
 function _pullMetricasMktAhora(b) {
-  try {
-    var r = _igPullMetricasYGuardar();
-    return _json({ status: 'ok', metricas: r });
-  } catch (e) { return _err(e.message); }
+  var r = {};
+  var errores = [];
+  try { var ig = _igPullMetricasYGuardar(); r.seguidores = ig.seguidores; r.alcance = ig.alcance; r.visitas = ig.visitas; }
+  catch (eIg) { errores.push('Instagram: ' + eIg.message); }
+  try { r.facebook = _fbPullSeguidoresYGuardar().seguidores; }
+  catch (eFb) { errores.push('Facebook: ' + eFb.message); }
+  if (errores.length && !r.seguidores && r.facebook === undefined) return _err(errores.join(' | '));
+  if (errores.length) r.avisos = errores;
+  return _json({ status: 'ok', metricas: r });
 }
 
 function _editarMetricaMkt(b) {
