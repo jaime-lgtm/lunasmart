@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conectando TikTok — Luna Smart</title>
+<style>
+  :root {
+    --cafe-950: #140b05;
+    --cafe-card: #241710;
+    --terra: #b14618;
+    --terra-claro: #d4622a;
+    --tx: #f0e6d3;
+    --tx-2: #c8b393;
+    --tx-3: #9c8161;
+    --verde: #5ba972;
+    --rojo: #d4685e;
+    --line: rgba(177,70,24,0.13);
+    --r: 9px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--cafe-950);
+    color: var(--tx);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .card {
+    background: var(--cafe-card);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    padding: 32px 28px;
+    max-width: 420px;
+    text-align: center;
+  }
+  h1 { font-size: 18px; margin: 0 0 8px; color: var(--terra-claro); }
+  p { color: var(--tx-2); font-size: 14px; line-height: 1.55; margin: 0; }
+  .ok { color: var(--verde); }
+  .err { color: var(--rojo); }
+  .spinner {
+    width: 28px; height: 28px; margin: 0 auto 16px;
+    border: 3px solid var(--line); border-top-color: var(--terra);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="spinner" id="spinner"></div>
+    <h1 id="title">Conectando tu cuenta de TikTok…</h1>
+    <p id="msg">Un momento, estamos guardando la conexión.</p>
+  </div>
+  <script>
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby3ndEcQz4zKXzBWqaZqwtt-BAG3MPxuvmaac_3fKchshwMs_31NZ2-tbE5WFaHz9zB/exec';
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const errorParam = params.get('error');
+    const spinner = document.getElementById('spinner');
+    const title = document.getElementById('title');
+    const msg = document.getElementById('msg');
+
+    function showError(text) {
+      spinner.style.display = 'none';
+      title.textContent = 'No se pudo conectar';
+      title.classList.add('err');
+      msg.textContent = text;
+    }
+    function showOk(text) {
+      spinner.style.display = 'none';
+      title.textContent = 'Cuenta de TikTok conectada';
+      title.classList.add('ok');
+      msg.textContent = text;
+    }
+
+    if (errorParam) {
+      showError('TikTok no autorizó la conexión: ' + errorParam);
+    } else if (!code) {
+      showError('No se recibió el código de autorización de TikTok.');
+    } else {
+      fetch(APPS_SCRIPT_URL + '?tiktokcallback=1&code=' + encodeURIComponent(code))
+        .then(r => r.json())
+        .then(data => {
+          if (data.status === 'ok') {
+            showOk('Ya puedes cerrar esta pestaña y volver al panel de Luna Smart.');
+          } else {
+            showError(data.msg || 'Ocurrió un error al guardar la conexión.');
+          }
+        })
+        .catch(() => showError('No se pudo contactar al servidor. Intenta de nuevo.'));
+    }
+  </script>
+</body>
+</html>
