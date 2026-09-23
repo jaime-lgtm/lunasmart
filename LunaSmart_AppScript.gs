@@ -51,6 +51,7 @@ const HOJAS = {
   TIEMPOS:        'BD_TIEMPOS',
   ASISTENCIA:     'BD_ASISTENCIA',
   MKT_FECHAS:     'BD_MARKETING_FECHAS',
+  MKT_METRICAS:   'BD_MARKETING_METRICAS',
 };
 
 // ── JSON OUTPUT ─────────────────────────────────────────────────────────────
@@ -173,6 +174,7 @@ function doGet(e) {
     getBD_TIEMPOS:                 HOJAS.TIEMPOS,
     getBD_ASISTENCIA:              HOJAS.ASISTENCIA,
     getBD_MARKETING_FECHAS:        HOJAS.MKT_FECHAS,
+    getBD_MARKETING_METRICAS:      HOJAS.MKT_METRICAS,
   };
 
   if (accion === 'getUSUARIOS') return _getUsuarios();
@@ -250,6 +252,8 @@ function doPost(e) {
     case 'registrarFechaMkt':          return _registrarFechaMkt(datos);
     case 'editarFechaMkt':             return _editarFechaMkt(datos);
     case 'eliminarFechaMkt':           return _eliminarFechaMkt(datos);
+    case 'editarMetricaMkt':           return _editarMetricaMkt(datos);
+    case 'pullMetricasMktAhora':       return _pullMetricasMktAhora(datos);
     case 'crearPreferenciaMP':         return _crearPreferenciaMP(datos);
     case 'mpListarTerminales':         return _mpListarTerminales();
     case 'mpCrearCobroTerminal':       return _mpCrearCobroTerminal(datos);
@@ -1245,6 +1249,139 @@ function _eliminarFechaMkt(b) {
     var sh = _getOrCrearSheetFechasMkt();
     filas.forEach(function(f){ sh.deleteRow(f); });
     return _json({ status: 'ok', eliminados: filas.length });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+// ── MARKETING DIGITAL: MÉTRICAS SEMANALES (Instagram automático) ───────────
+// Columnas de BD_MARKETING_METRICAS (1-based): 1 ID, 2 FECHA,
+// 3 SEGUIDORES_INSTAGRAM, 4 ALCANCE_INSTAGRAM, 5 VISITAS_PERFIL_INSTAGRAM,
+// 6 ANUNCIOS_ACTIVOS, 7 NOTAS, 8 FUENTE, 9 ACTUALIZADO.
+// Los datos de Instagram se jalan solos todos los días (ver
+// igActualizarMetricasDiarias, pensada para un activador de tiempo en Apps
+// Script -- Activadores -> Agregar activador -> función
+// igActualizarMetricasDiarias -> Basado en tiempo -> Temporizador diario).
+// ANUNCIOS_ACTIVOS y NOTAS son las únicas columnas que se editan a mano.
+//
+// Credenciales de Instagram: NUNCA van en este archivo (igual que
+// MP_ACCESS_TOKEN) -- se guardan en Propiedades del Script (Configuración
+// del proyecto -> Propiedades del script):
+//   IG_APP_ID              Identificador de la app de Instagram
+//   IG_APP_SECRET          Clave secreta de la app de Instagram
+//   IG_USER_ID             ID de la cuenta de Instagram (numérico largo)
+//   IG_ACCESS_TOKEN        Token de acceso vigente (se autorrenueva y se
+//                          reescribe aquí mismo cada vez que se usa)
+//   IG_TOKEN_ACTUALIZADO   Fecha (ISO) de la última renovación del token
+function _getOrCrearSheetMetricasMkt() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sh = ss.getSheetByName(HOJAS.MKT_METRICAS);
+  if (!sh) {
+    sh = ss.insertSheet(HOJAS.MKT_METRICAS);
+    sh.appendRow(['ID', 'FECHA', 'SEGUIDORES_INSTAGRAM', 'ALCANCE_INSTAGRAM', 'VISITAS_PERFIL_INSTAGRAM', 'ANUNCIOS_ACTIVOS', 'NOTAS', 'FUENTE', 'ACTUALIZADO']);
+  }
+  return sh;
+}
+
+// Renueva el token de acceso de Instagram si tiene 50 días o más desde la
+// última renovación (Meta exige mínimo 24h de antigüedad para renovar y lo
+// deja vencer a los 60 días -- 50 deja margen de sobra). Se ejecuta sola
+// dentro del jalón diario, así Jaime nunca tiene que volver a iniciar
+// sesión a mano.
+function _igRefrescarTokenSiNecesario() {
+  var props = PropertiesService.getScriptProperties();
+  var token = props.getProperty('IG_ACCESS_TOKEN');
+  var appSecret = props.getProperty('IG_APP_SECRET');
+  if (!token || !appSecret) throw new Error('Faltan IG_ACCESS_TOKEN / IG_APP_SECRET en Propiedades del script');
+
+  var actualizado = props.getProperty('IG_TOKEN_ACTUALIZADO');
+  var diasDesdeRenovacion = actualizado ? (Date.now() - new Date(actualizado).getTime()) / 86400000 : 999;
+  if (diasDesdeRenovacion < 50) return token;
+
+  var resp = UrlFetchApp.fetch('https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=' + encodeURIComponent(token), { muteHttpExceptions: true });
+  var data = JSON.parse(resp.getContentText());
+  if (!data.access_token) throw new Error('No se pudo renovar el token de Instagram: ' + resp.getContentText());
+
+  props.setProperty('IG_ACCESS_TOKEN', data.access_token);
+  props.setProperty('IG_TOKEN_ACTUALIZADO', new Date().toISOString());
+  return data.access_token;
+}
+
+// Jala seguidores + alcance + visitas al perfil de Instagram y los guarda
+// (una fila por día -- si hoy ya existe una fila la actualiza en vez de
+// duplicarla, sin tocar ANUNCIOS_ACTIVOS/NOTAS si ya traían una edición
+// manual).
+function _igPullMetricasYGuardar() {
+  var token = _igRefrescarTokenSiNecesario();
+  var userId = PropertiesService.getScriptProperties().getProperty('IG_USER_ID');
+  if (!userId) throw new Error('Falta IG_USER_ID en Propiedades del script');
+
+  var perfilResp = UrlFetchApp.fetch('https://graph.instagram.com/v21.0/me?fields=followers_count&access_token=' + encodeURIComponent(token), { muteHttpExceptions: true });
+  var perfil = JSON.parse(perfilResp.getContentText());
+  if (perfil.error) throw new Error('Error de Instagram (perfil): ' + perfil.error.message);
+
+  var insightsResp = UrlFetchApp.fetch('https://graph.instagram.com/v21.0/' + userId + '/insights?metric=reach,profile_views&period=day&metric_type=total_value&access_token=' + encodeURIComponent(token), { muteHttpExceptions: true });
+  var insights = JSON.parse(insightsResp.getContentText());
+  if (insights.error) throw new Error('Error de Instagram (insights): ' + insights.error.message);
+
+  var alcance = 0, visitas = 0;
+  (insights.data || []).forEach(function(m) {
+    var v = (m.total_value && typeof m.total_value.value === 'number') ? m.total_value.value : 0;
+    if (m.name === 'reach') alcance = v;
+    if (m.name === 'profile_views') visitas = v;
+  });
+
+  var sh = _getOrCrearSheetMetricasMkt();
+  var hoy = _fechaHoy();
+  var vals = sh.getDataRange().getValues();
+  var filaHoy = -1;
+  for (var i = 1; i < vals.length; i++) {
+    if (String(vals[i][1]) === hoy) { filaHoy = i + 1; break; }
+  }
+
+  if (filaHoy > 0) {
+    sh.getRange(filaHoy, 3, 1, 4).setValues([[perfil.followers_count || 0, alcance, visitas, 'Automático']]);
+    sh.getRange(filaHoy, 9).setValue(new Date());
+  } else {
+    var id = _nextId(HOJAS.MKT_METRICAS, 'MKTM');
+    var fila = _siguienteFilaLibre(sh, 3);
+    sh.getRange(fila, 1, 1, 9).setValues([[
+      id, hoy, perfil.followers_count || 0, alcance, visitas, '', '', 'Automático', new Date(),
+    ]]);
+  }
+
+  return { seguidores: perfil.followers_count || 0, alcance: alcance, visitas: visitas };
+}
+
+// Punto de entrada para el activador de tiempo. No deja escapar errores
+// porque un activador que revienta con una excepción no tiene quién la
+// vea -- solo se deja constancia en el registro de ejecuciones (Apps
+// Script -> Ejecuciones).
+function igActualizarMetricasDiarias() {
+  try {
+    var r = _igPullMetricasYGuardar();
+    Logger.log('Métricas de Instagram actualizadas: ' + JSON.stringify(r));
+  } catch (e) {
+    Logger.log('Error actualizando métricas de Instagram: ' + e.message);
+  }
+}
+
+function _pullMetricasMktAhora(b) {
+  try {
+    var r = _igPullMetricasYGuardar();
+    return _json({ status: 'ok', metricas: r });
+  } catch (e) { return _err(e.message); }
+}
+
+function _editarMetricaMkt(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var fila = parseInt(b.fila, 10);
+    if (!fila || fila < 2) return _err('Fila inválida');
+    var sh = _getOrCrearSheetMetricasMkt();
+    sh.getRange(fila, 6, 1, 2).setValues([[b.anunciosActivos || '', b.notas || '']]);
+    sh.getRange(fila, 9).setValue(new Date());
+    return _json({ status: 'ok' });
   } catch (e) { return _err(e.message); }
   finally { lock.releaseLock(); }
 }

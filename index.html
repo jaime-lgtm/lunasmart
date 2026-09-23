@@ -2089,7 +2089,30 @@
 
   <!-- MÉTRICAS SEMANALES -->
   <div id="mkt-view-metricas" style="display:none">
-    <div class="empty show"><div class="e-ico"><i class="ti ti-chart-line"></i></div><div class="e-title">Próximamente</div><div class="e-sub">Estamos construyendo esta sección.</div></div>
+    <div class="kpis">
+      <div class="kpi"><div class="kpi-top"><div class="kpi-label">Seguidores en Instagram</div><div class="kpi-ico"><i class="ti ti-brand-instagram"></i></div></div><div class="kpi-val" id="mkt-kpi-seguidores">—</div><div class="kpi-sub">Dato más reciente</div></div>
+      <div class="kpi"><div class="kpi-top"><div class="kpi-label">Alcance · período</div><div class="kpi-ico g"><i class="ti ti-eye"></i></div></div><div class="kpi-val" id="mkt-kpi-alcance">—</div><div class="kpi-sub">Cuentas alcanzadas, suma del período</div></div>
+      <div class="kpi"><div class="kpi-top"><div class="kpi-label">Visitas al perfil · período</div><div class="kpi-ico"><i class="ti ti-user-search"></i></div></div><div class="kpi-val" id="mkt-kpi-visitas">—</div><div class="kpi-sub">Suma del período</div></div>
+      <div class="kpi"><div class="kpi-top"><div class="kpi-label">Anuncios activos</div><div class="kpi-ico"><i class="ti ti-ad"></i></div></div><div class="kpi-val" id="mkt-kpi-anuncios">—</div><div class="kpi-sub">Dato más reciente, capturado a mano</div></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title"><i class="ti ti-chart-line"></i>Histórico de métricas <span id="mkt-metricas-titulo-periodo"></span></div><div class="card-sub">Instagram se actualiza solo todos los días -- anuncios activos y notas se capturan a mano</div></div>
+        <div class="card-actions"><button class="btn btn-sm" id="mkt-btn-actualizar" onclick="LS_UI.actualizarMetricasMktAhora()"><i class="ti ti-refresh"></i>Actualizar ahora</button></div>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl" data-sortable>
+          <thead><tr>
+            <th class="sortable" data-type="text">Fecha<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+            <th class="num">Seguidores</th><th class="num">Alcance</th><th class="num">Visitas al perfil</th>
+            <th>Anuncios activos</th><th>Notas</th><th>Fuente</th>
+            <th style="width:60px">Acciones</th>
+          </tr></thead>
+          <tbody id="tabla-mkt-metricas"><tr><td colspan="8" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="empty" id="empty-mkt-metricas"><div class="e-ico"><i class="ti ti-chart-line"></i></div><div class="e-title">Todavía no hay métricas</div><div class="e-sub">Se registran solas cada día -- o presiona "Actualizar ahora" para jalar el dato de hoy.</div></div>
+    </div>
   </div>
 
   <!-- CONTENIDO PROGRAMADO -->
@@ -3375,6 +3398,42 @@ const LS_API = (() => {
     return escribirViaScript('eliminarFechaMkt', { hoja: SHEETS.MKT_FECHAS, datos: { filas: Array.isArray(filas) ? filas : [filas] } });
   }
 
+  // ── MARKETING DIGITAL: MÉTRICAS SEMANALES (Instagram automático) ──────
+  // BD_MARKETING_METRICAS: ID, FECHA, SEGUIDORES_INSTAGRAM, ALCANCE_INSTAGRAM,
+  // VISITAS_PERFIL_INSTAGRAM, ANUNCIOS_ACTIVOS, NOTAS, FUENTE, ACTUALIZADO.
+  // Las columnas de Instagram las llena solo un trigger diario en Apps
+  // Script -- aquí solo se editan ANUNCIOS_ACTIVOS/NOTAS a mano.
+  async function getMetricasMkt() {
+    try {
+      const rows = await leerHoja(SHEETS.MKT_METRICAS);
+      if (!rows) return [];
+      return rows
+        .map((r, idx) => ({ r, fila: idx + 1 }))
+        .slice(1)
+        .filter(x => x.r.length > 0 && x.r[0])
+        .map(x => { const r = x.r; return ({
+          id:              r[0] || '',
+          fila:            x.fila,
+          fecha:           r[1] || '',
+          seguidores:      parseFloat(r[2]) || 0,
+          alcance:         parseFloat(r[3]) || 0,
+          visitasPerfil:   parseFloat(r[4]) || 0,
+          anunciosActivos: r[5] || '',
+          notas:           r[6] || '',
+          fuente:          r[7] || '',
+          actualizado:     r[8] || '',
+        }); });
+    } catch(e) { console.error('Error cargando métricas de marketing:', e); return []; }
+  }
+
+  async function editarMetricaMkt(fila, datos) {
+    return escribirViaScript('editarMetricaMkt', { hoja: SHEETS.MKT_METRICAS, datos: Object.assign({ fila }, datos) });
+  }
+
+  async function actualizarMetricasMktAhora() {
+    return escribirViaScript('pullMetricasMktAhora', { hoja: SHEETS.MKT_METRICAS, datos: {} });
+  }
+
   // Obtener recetas
   async function getRecetas() {
     try {
@@ -4267,6 +4326,7 @@ const LS_API = (() => {
     getIngresos, getConciliacion, getFacturas,
     getArticulosDetalle, getClientes, getProveedores, getRecetas, getBD_TIEMPOS, getAsistencia, editarAsistencia, eliminarAsistencia,
     getFechasMkt, registrarFechaMkt, editarFechaMkt, eliminarFechaMkt,
+    getMetricasMkt, editarMetricaMkt, actualizarMetricasMktAhora,
     getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos, getSucursalesInventario,
     getVentasPorSucursal, aliasSucursal, nombreSucursal, getProductosVenta,
     // Escritura
@@ -9526,25 +9586,33 @@ async function guardarVentaDirecta() {
      Una sola página con 4 sub-vistas (fechas / métricas / contenido /
      tareas) intercambiadas localmente con .seg + display:none -- son
      sub-vistas de UNA página, no pasan por el router de páginas completo.
-     Por ahora solo "Fechas importantes" está construida; las otras 3
-     quedan con un aviso de "Próximamente" hasta el siguiente paso. */
+     "Fechas importantes" y "Métricas semanales" ya están construidas;
+     las otras 2 quedan con un aviso de "Próximamente" hasta el siguiente
+     paso. Métricas de Instagram se jalan solas (ver LunaSmart_AppScript.gs,
+     igActualizarMetricasDiarias) -- aquí solo se leen y se pintan. */
   const MKT_CATEGORIAS = ['Temporada de bebida', 'Día festivo MX', 'Fecha comercial', 'Otro'];
   let _mktVista = 'fechas';
   const _mktCargado = new Set();
   let _mktFechasDatos = [];
+  let _mktMetricasDatos = [];
 
-  function mktSwitchVista(vista) {
+  function mktSwitchVista(vista, forzarRecarga) {
     _mktVista = vista;
     document.querySelectorAll('#p-marketing .seg button').forEach(b => b.classList.toggle('on', b.dataset.mktVista === vista));
     ['fechas', 'metricas', 'contenido', 'tareas'].forEach(v => {
       const el = document.getElementById('mkt-view-' + v);
       if (el) el.style.display = (v === vista) ? '' : 'none';
     });
-    if (vista === 'fechas' && !_mktCargado.has('fechas')) { _mktCargado.add('fechas'); renderMktFechas(); }
+    if (vista === 'fechas' && (forzarRecarga || !_mktCargado.has('fechas'))) { _mktCargado.add('fechas'); renderMktFechas(); }
+    if (vista === 'metricas' && (forzarRecarga || !_mktCargado.has('metricas'))) { _mktCargado.add('metricas'); renderMktMetricas(); }
   }
 
+  // forzarRecarga=true porque "Métricas semanales" depende del filtro global
+  // de período (Hoy/Semana/Mes/Año) -- al cambiar de período, LS_UI.invalidarCacheYRecargar
+  // vuelve a llamar renderMarketing() y hay que releer/repintar aunque la
+  // sub-vista ya se haya cargado antes.
   async function renderMarketing() {
-    mktSwitchVista(_mktVista);
+    mktSwitchVista(_mktVista, true);
   }
 
   async function renderMktFechas() {
@@ -9690,6 +9758,97 @@ async function guardarVentaDirecta() {
       await renderMktFechas();
     } catch (e) {
       toast('Error', 'No se pudo eliminar', 'err');
+    }
+  }
+
+  // ── MARKETING DIGITAL: MÉTRICAS SEMANALES ──────────────────
+  async function renderMktMetricas() {
+    try {
+      const period = (typeof state !== 'undefined' && state.period) ? state.period : 'mes';
+      const rango = LS_API.getRangoPeriodo(period);
+      setTxt('mkt-metricas-titulo-periodo', '— ' + rango.label);
+
+      const todos = await LS_API.getMetricasMkt();
+      _mktMetricasDatos = todos.slice().sort((a, b) => (LS_API._fechaISO(a.fecha) || '').localeCompare(LS_API._fechaISO(b.fecha) || ''));
+      const filtrados = _mktMetricasDatos.filter(m => LS_API._enRango(m.fecha, rango.desde, rango.hasta));
+
+      const ultimo = _mktMetricasDatos[_mktMetricasDatos.length - 1];
+      setTxt('mkt-kpi-seguidores', ultimo ? ultimo.seguidores.toLocaleString('es-MX') : '—');
+      setTxt('mkt-kpi-anuncios', ultimo && ultimo.anunciosActivos !== '' ? ultimo.anunciosActivos : '—');
+      setTxt('mkt-kpi-alcance', filtrados.reduce((s, m) => s + m.alcance, 0).toLocaleString('es-MX'));
+      setTxt('mkt-kpi-visitas', filtrados.reduce((s, m) => s + m.visitasPerfil, 0).toLocaleString('es-MX'));
+
+      _pintarTablaMetricasMkt(filtrados.slice().reverse());
+    } catch (e) {
+      console.error(e);
+      setEl('tabla-mkt-metricas', `<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--tx-3)">Error al cargar métricas</td></tr>`);
+    }
+  }
+
+  function _pintarTablaMetricasMkt(datos) {
+    const empty = document.getElementById('empty-mkt-metricas');
+    const wrap = document.querySelector('#mkt-view-metricas .tbl-wrap');
+    if (!datos.length) {
+      setEl('tabla-mkt-metricas', '');
+      if (empty) empty.classList.add('show');
+      if (wrap) wrap.style.display = 'none';
+      return;
+    }
+    if (empty) empty.classList.remove('show');
+    if (wrap) wrap.style.display = '';
+    setEl('tabla-mkt-metricas', datos.map(m => `
+      <tr>
+        <td>${m.fecha}</td>
+        <td class="num">${m.seguidores.toLocaleString('es-MX')}</td>
+        <td class="num">${m.alcance.toLocaleString('es-MX')}</td>
+        <td class="num">${m.visitasPerfil.toLocaleString('es-MX')}</td>
+        <td>${m.anunciosActivos || '—'}</td>
+        <td style="max-width:220px">${m.notas || '—'}</td>
+        <td>${m.fuente === 'Automático' ? '<span class="badge"><i class="ti ti-brand-instagram"></i> Automático</span>' : (m.fuente || '—')}</td>
+        <td><button class="icon-btn" title="Editar anuncios/notas" onclick="LS_UI.abrirEditarMetricaMkt(${m.fila})"><i class="ti ti-pencil"></i></button></td>
+      </tr>`).join(''));
+  }
+
+  function abrirEditarMetricaMkt(fila) {
+    const m = _mktMetricasDatos.find(x => x.fila === fila);
+    if (!m) return;
+    const esc = s => String(s || '').replace(/"/g, '&quot;');
+    _modal2(`<div class="modal" style="max-width:420px"><div class="modal-header"><div class="modal-title"><i class="ti ti-pencil" style="margin-right:6px"></i>Editar · ${m.fecha}</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body">
+      <div class="ff"><label>Anuncios activos</label><input type="text" id="mkt-metrica-anuncios" value="${esc(m.anunciosActivos)}" placeholder="Ej. 2"></div>
+      <div class="ff"><label>Notas</label><textarea id="mkt-metrica-notas" rows="3" placeholder="Lo que quieras recordar de este día">${esc(m.notas)}</textarea></div>
+    </div><div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarEditarMetricaMkt(${fila})">Guardar cambios</button></div></div>`);
+  }
+
+  async function guardarEditarMetricaMkt(fila) {
+    const datos = {
+      anunciosActivos: (document.getElementById('mkt-metrica-anuncios')?.value || '').trim(),
+      notas: (document.getElementById('mkt-metrica-notas')?.value || '').trim(),
+    };
+    try {
+      await LS_API.editarMetricaMkt(fila, datos);
+      toast('Guardado', 'Métrica actualizada', 'ok');
+      _cerrarModal2();
+      await renderMktMetricas();
+    } catch (e) {
+      toast('Error', 'No se pudo guardar', 'err');
+    }
+  }
+
+  async function actualizarMetricasMktAhora() {
+    const btn = document.getElementById('mkt-btn-actualizar');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i>Actualizando...'; }
+    try {
+      const r = await LS_API.actualizarMetricasMktAhora();
+      if (r.status === 'ok') {
+        toast('Actualizado', 'Se jaló el dato de hoy desde Instagram', 'ok');
+        await renderMktMetricas();
+      } else {
+        toast('Error', r.msg || 'No se pudo actualizar', 'err');
+      }
+    } catch (e) {
+      toast('Error', 'No se pudo actualizar', 'err');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-refresh"></i>Actualizar ahora'; }
     }
   }
 
@@ -11692,6 +11851,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderEventos, abrirNuevoEvento, editarEvento, guardarEvento, confirmarBorrarEvento, ejecutarBorrarEvento, verInscritosEvento, _evSubirImagen, _evAgregarCampoExtra, _evToggleOpcionesCampo,
     renderAsistencia, filtrarAsistencia, abrirEditarAsistencia, guardarEditarAsistencia, eliminarFilaAsistencia,
     renderMarketing, mktSwitchVista, abrirNuevaFechaMkt, guardarNuevaFechaMkt, abrirEditarFechaMkt, guardarEditarFechaMkt, eliminarFilaFechaMkt,
+    renderMktMetricas, abrirEditarMetricaMkt, guardarEditarMetricaMkt, actualizarMetricasMktAhora,
     _toggleUposDropdown, _uposDropdownTodasChange, _uposDropdownResumen,
     closeModal,
     // Abrir modales
