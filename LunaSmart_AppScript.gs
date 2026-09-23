@@ -52,6 +52,8 @@ const HOJAS = {
   ASISTENCIA:     'BD_ASISTENCIA',
   MKT_FECHAS:     'BD_MARKETING_FECHAS',
   MKT_METRICAS:   'BD_MARKETING_METRICAS',
+  MKT_CONTENIDO:  'BD_MARKETING_CONTENIDO',
+  MKT_TAREAS:     'BD_MARKETING_TAREAS',
 };
 
 // ── JSON OUTPUT ─────────────────────────────────────────────────────────────
@@ -175,6 +177,8 @@ function doGet(e) {
     getBD_ASISTENCIA:              HOJAS.ASISTENCIA,
     getBD_MARKETING_FECHAS:        HOJAS.MKT_FECHAS,
     getBD_MARKETING_METRICAS:      HOJAS.MKT_METRICAS,
+    getBD_MARKETING_CONTENIDO:     HOJAS.MKT_CONTENIDO,
+    getBD_MARKETING_TAREAS:        HOJAS.MKT_TAREAS,
   };
 
   if (accion === 'getUSUARIOS') return _getUsuarios();
@@ -254,6 +258,12 @@ function doPost(e) {
     case 'eliminarFechaMkt':           return _eliminarFechaMkt(datos);
     case 'editarMetricaMkt':           return _editarMetricaMkt(datos);
     case 'pullMetricasMktAhora':       return _pullMetricasMktAhora(datos);
+    case 'registrarContenidoMkt':      return _registrarContenidoMkt(datos);
+    case 'editarContenidoMkt':         return _editarContenidoMkt(datos);
+    case 'eliminarContenidoMkt':       return _eliminarContenidoMkt(datos);
+    case 'registrarTareaMkt':          return _registrarTareaMkt(datos);
+    case 'editarTareaMkt':             return _editarTareaMkt(datos);
+    case 'eliminarTareaMkt':           return _eliminarTareaMkt(datos);
     case 'crearPreferenciaMP':         return _crearPreferenciaMP(datos);
     case 'mpListarTerminales':         return _mpListarTerminales();
     case 'mpCrearCobroTerminal':       return _mpCrearCobroTerminal(datos);
@@ -1382,6 +1392,141 @@ function _editarMetricaMkt(b) {
     sh.getRange(fila, 6, 1, 2).setValues([[b.anunciosActivos || '', b.notas || '']]);
     sh.getRange(fila, 9).setValue(new Date());
     return _json({ status: 'ok' });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+// ── MARKETING DIGITAL: CONTENIDO PROGRAMADO ─────────────────────────────
+// Columnas de BD_MARKETING_CONTENIDO (1-based): 1 ID, 2 FECHA, 3 PLATAFORMA
+// (Instagram|Facebook|TikTok|WhatsApp Business|Google Business Profile),
+// 4 TIPO (Post|Reel|Story|Otro), 5 IDEA_TITULO, 6 ESTADO
+// (Planeado|Publicado|Pospuesto|Cancelado), 7 NOTAS, 8 CREADO_POR, 9 ACTUALIZADO.
+function _getOrCrearSheetContenidoMkt() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sh = ss.getSheetByName(HOJAS.MKT_CONTENIDO);
+  if (!sh) {
+    sh = ss.insertSheet(HOJAS.MKT_CONTENIDO);
+    sh.appendRow(['ID', 'FECHA', 'PLATAFORMA', 'TIPO', 'IDEA_TITULO', 'ESTADO', 'NOTAS', 'CREADO_POR', 'ACTUALIZADO']);
+  }
+  return sh;
+}
+
+function _registrarContenidoMkt(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var fecha = _normalizarFecha(b.fecha);
+    if (!fecha) return _err('Falta la fecha');
+    var ideaTitulo = String(b.ideaTitulo || '').trim();
+    if (!ideaTitulo) return _err('Falta la idea/título');
+    var sh = _getOrCrearSheetContenidoMkt();
+    var id = _nextId(HOJAS.MKT_CONTENIDO, 'MKTC');
+    var fila = _siguienteFilaLibre(sh, 5);
+    sh.getRange(fila, 1, 1, 9).setValues([[
+      id, fecha, b.plataforma || '', b.tipo || '', ideaTitulo, b.estado || 'Planeado', b.notas || '', b.creadoPor || '', new Date(),
+    ]]);
+    return _json({ status: 'ok', id: id, fila: fila });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+function _editarContenidoMkt(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var fila = parseInt(b.fila, 10);
+    if (!fila || fila < 2) return _err('Fila inválida');
+    var fecha = _normalizarFecha(b.fecha);
+    if (!fecha) return _err('Falta la fecha');
+    var ideaTitulo = String(b.ideaTitulo || '').trim();
+    if (!ideaTitulo) return _err('Falta la idea/título');
+    var sh = _getOrCrearSheetContenidoMkt();
+    sh.getRange(fila, 2, 1, 6).setValues([[
+      fecha, b.plataforma || '', b.tipo || '', ideaTitulo, b.estado || 'Planeado', b.notas || '',
+    ]]);
+    sh.getRange(fila, 9).setValue(new Date());
+    return _json({ status: 'ok' });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+function _eliminarContenidoMkt(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var filas = (b.filas || (b.fila ? [b.fila] : []))
+      .map(function(f){ return parseInt(f, 10); })
+      .filter(function(f){ return f && f >= 2; })
+      .sort(function(a, b2){ return b2 - a; });
+    if (!filas.length) return _err('No se especificó ninguna fila');
+    var sh = _getOrCrearSheetContenidoMkt();
+    filas.forEach(function(f){ sh.deleteRow(f); });
+    return _json({ status: 'ok', eliminados: filas.length });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+// ── MARKETING DIGITAL: METAS Y TAREAS SEMANALES ─────────────────────────
+// Columnas de BD_MARKETING_TAREAS (1-based): 1 ID, 2 SEMANA, 3 TAREA,
+// 4 RESPONSABLE, 5 ESTADO (Pendiente|En progreso|Completado), 6 NOTAS,
+// 7 CREADO_POR, 8 ACTUALIZADO.
+function _getOrCrearSheetTareasMkt() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sh = ss.getSheetByName(HOJAS.MKT_TAREAS);
+  if (!sh) {
+    sh = ss.insertSheet(HOJAS.MKT_TAREAS);
+    sh.appendRow(['ID', 'SEMANA', 'TAREA', 'RESPONSABLE', 'ESTADO', 'NOTAS', 'CREADO_POR', 'ACTUALIZADO']);
+  }
+  return sh;
+}
+
+function _registrarTareaMkt(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var tarea = String(b.tarea || '').trim();
+    if (!tarea) return _err('Falta la tarea');
+    var sh = _getOrCrearSheetTareasMkt();
+    var id = _nextId(HOJAS.MKT_TAREAS, 'MKTT');
+    var fila = _siguienteFilaLibre(sh, 3);
+    sh.getRange(fila, 1, 1, 8).setValues([[
+      id, b.semana || '', tarea, b.responsable || '', b.estado || 'Pendiente', b.notas || '', b.creadoPor || '', new Date(),
+    ]]);
+    return _json({ status: 'ok', id: id, fila: fila });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+function _editarTareaMkt(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var fila = parseInt(b.fila, 10);
+    if (!fila || fila < 2) return _err('Fila inválida');
+    var tarea = String(b.tarea || '').trim();
+    if (!tarea) return _err('Falta la tarea');
+    var sh = _getOrCrearSheetTareasMkt();
+    sh.getRange(fila, 2, 1, 5).setValues([[
+      b.semana || '', tarea, b.responsable || '', b.estado || 'Pendiente', b.notas || '',
+    ]]);
+    sh.getRange(fila, 8).setValue(new Date());
+    return _json({ status: 'ok' });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+function _eliminarTareaMkt(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var filas = (b.filas || (b.fila ? [b.fila] : []))
+      .map(function(f){ return parseInt(f, 10); })
+      .filter(function(f){ return f && f >= 2; })
+      .sort(function(a, b2){ return b2 - a; });
+    if (!filas.length) return _err('No se especificó ninguna fila');
+    var sh = _getOrCrearSheetTareasMkt();
+    filas.forEach(function(f){ sh.deleteRow(f); });
+    return _json({ status: 'ok', eliminados: filas.length });
   } catch (e) { return _err(e.message); }
   finally { lock.releaseLock(); }
 }

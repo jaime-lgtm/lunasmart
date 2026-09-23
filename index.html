@@ -2117,12 +2117,65 @@
 
   <!-- CONTENIDO PROGRAMADO -->
   <div id="mkt-view-contenido" style="display:none">
-    <div class="empty show"><div class="e-ico"><i class="ti ti-calendar-plus"></i></div><div class="e-title">Próximamente</div><div class="e-sub">Estamos construyendo esta sección.</div></div>
+    <div class="kpis">
+      <div class="kpi"><div class="kpi-top"><div class="kpi-label">Planeado</div><div class="kpi-ico"><i class="ti ti-bulb"></i></div></div><div class="kpi-val" id="mkt-cont-kpi-planeado">—</div><div class="kpi-sub">Por publicar</div></div>
+      <div class="kpi"><div class="kpi-top"><div class="kpi-label">Publicado</div><div class="kpi-ico g"><i class="ti ti-circle-check"></i></div></div><div class="kpi-val" id="mkt-cont-kpi-publicado">—</div><div class="kpi-sub">Ya salió</div></div>
+      <div class="kpi"><div class="kpi-top"><div class="kpi-label">Pospuesto</div><div class="kpi-ico"><i class="ti ti-clock-pause"></i></div></div><div class="kpi-val" id="mkt-cont-kpi-pospuesto">—</div><div class="kpi-sub">Se movió de fecha</div></div>
+      <div class="kpi"><div class="kpi-top"><div class="kpi-label">Cancelado</div><div class="kpi-ico r"><i class="ti ti-circle-x"></i></div></div><div class="kpi-val" id="mkt-cont-kpi-cancelado">—</div><div class="kpi-sub">Ya no se hace</div></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title"><i class="ti ti-calendar-plus"></i>Contenido programado</div><div class="card-sub">Qué se va a publicar y cuándo -- se sube a cada red a mano como siempre</div></div>
+        <div class="card-actions">
+          <select id="mkt-cont-filtro-plataforma" onchange="LS_UI.filtrarContenidoMkt()" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px">
+            <option value="">Todas las plataformas</option>
+            <option>Instagram</option><option>Facebook</option><option>TikTok</option><option>WhatsApp Business</option><option>Google Business Profile</option>
+          </select>
+          <select id="mkt-cont-filtro-estado" onchange="LS_UI.filtrarContenidoMkt()" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px">
+            <option value="">Todos los estados</option>
+            <option>Planeado</option><option>Publicado</option><option>Pospuesto</option><option>Cancelado</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="LS_UI.abrirNuevoContenidoMkt()"><i class="ti ti-plus"></i>Agregar contenido</button>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl" data-sortable>
+          <thead><tr>
+            <th class="sortable" data-type="text">Fecha<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+            <th>Plataforma</th><th>Tipo</th><th>Idea / título</th><th>Estado</th><th>Notas</th>
+            <th style="width:60px">Acciones</th>
+          </tr></thead>
+          <tbody id="tabla-mkt-contenido"><tr><td colspan="7" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="empty" id="empty-mkt-contenido"><div class="e-ico"><i class="ti ti-calendar-plus"></i></div><div class="e-title">Sin contenido programado</div><div class="e-sub">Agrega ideas de publicaciones para planear con anticipación.</div></div>
+    </div>
   </div>
 
   <!-- METAS Y TAREAS -->
   <div id="mkt-view-tareas" style="display:none">
-    <div class="empty show"><div class="e-ico"><i class="ti ti-checklist"></i></div><div class="e-title">Próximamente</div><div class="e-sub">Estamos construyendo esta sección.</div></div>
+    <div class="kpis">
+      <div class="kpi"><div class="kpi-top"><div class="kpi-label">Pendientes</div><div class="kpi-ico"><i class="ti ti-circle-dashed"></i></div></div><div class="kpi-val" id="mkt-tar-kpi-pendiente">—</div><div class="kpi-sub">Sin empezar</div></div>
+      <div class="kpi"><div class="kpi-top"><div class="kpi-label">En progreso</div><div class="kpi-ico"><i class="ti ti-progress"></i></div></div><div class="kpi-val" id="mkt-tar-kpi-progreso">—</div><div class="kpi-sub">Ya se está trabajando</div></div>
+      <div class="kpi"><div class="kpi-top"><div class="kpi-label">Completadas</div><div class="kpi-ico g"><i class="ti ti-circle-check"></i></div></div><div class="kpi-val" id="mkt-tar-kpi-completado">—</div><div class="kpi-sub">Listas</div></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title"><i class="ti ti-checklist"></i>Metas y tareas semanales</div><div class="card-sub">Pendientes del equipo de marketing, semana por semana</div></div>
+        <div class="card-actions"><button class="btn btn-primary btn-sm" onclick="LS_UI.abrirNuevaTareaMkt()"><i class="ti ti-plus"></i>Agregar tarea</button></div>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl" data-sortable>
+          <thead><tr>
+            <th class="sortable" data-type="text">Semana<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+            <th>Tarea</th><th>Responsable</th><th>Estado</th><th>Notas</th>
+            <th style="width:60px">Acciones</th>
+          </tr></thead>
+          <tbody id="tabla-mkt-tareas"><tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="empty" id="empty-mkt-tareas"><div class="e-ico"><i class="ti ti-checklist"></i></div><div class="e-title">Sin tareas registradas</div><div class="e-sub">Agrega los pendientes de la semana para el equipo de marketing.</div></div>
+    </div>
   </div>
 </div>
 
@@ -3434,6 +3487,81 @@ const LS_API = (() => {
     return escribirViaScript('pullMetricasMktAhora', { hoja: SHEETS.MKT_METRICAS, datos: {} });
   }
 
+  // ── MARKETING DIGITAL: CONTENIDO PROGRAMADO ────────────────────────────
+  // BD_MARKETING_CONTENIDO: ID, FECHA, PLATAFORMA, TIPO, IDEA_TITULO,
+  // ESTADO, NOTAS, CREADO_POR, ACTUALIZADO.
+  async function getContenidoMkt() {
+    try {
+      const rows = await leerHoja(SHEETS.MKT_CONTENIDO);
+      if (!rows) return [];
+      return rows
+        .map((r, idx) => ({ r, fila: idx + 1 }))
+        .slice(1)
+        .filter(x => x.r.length > 0 && x.r[0])
+        .map(x => { const r = x.r; return ({
+          id:          r[0] || '',
+          fila:        x.fila,
+          fecha:       r[1] || '',
+          plataforma:  r[2] || '',
+          tipo:        r[3] || '',
+          ideaTitulo:  r[4] || '',
+          estado:      r[5] || '',
+          notas:       r[6] || '',
+          creadoPor:   r[7] || '',
+          actualizado: r[8] || '',
+        }); });
+    } catch(e) { console.error('Error cargando contenido de marketing:', e); return []; }
+  }
+
+  async function registrarContenidoMkt(datos) {
+    return escribirViaScript('registrarContenidoMkt', { hoja: SHEETS.MKT_CONTENIDO, datos });
+  }
+
+  async function editarContenidoMkt(fila, datos) {
+    return escribirViaScript('editarContenidoMkt', { hoja: SHEETS.MKT_CONTENIDO, datos: Object.assign({ fila }, datos) });
+  }
+
+  async function eliminarContenidoMkt(filas) {
+    return escribirViaScript('eliminarContenidoMkt', { hoja: SHEETS.MKT_CONTENIDO, datos: { filas: Array.isArray(filas) ? filas : [filas] } });
+  }
+
+  // ── MARKETING DIGITAL: METAS Y TAREAS SEMANALES ────────────────────────
+  // BD_MARKETING_TAREAS: ID, SEMANA, TAREA, RESPONSABLE, ESTADO, NOTAS,
+  // CREADO_POR, ACTUALIZADO.
+  async function getTareasMkt() {
+    try {
+      const rows = await leerHoja(SHEETS.MKT_TAREAS);
+      if (!rows) return [];
+      return rows
+        .map((r, idx) => ({ r, fila: idx + 1 }))
+        .slice(1)
+        .filter(x => x.r.length > 0 && x.r[0])
+        .map(x => { const r = x.r; return ({
+          id:          r[0] || '',
+          fila:        x.fila,
+          semana:      r[1] || '',
+          tarea:       r[2] || '',
+          responsable: r[3] || '',
+          estado:      r[4] || '',
+          notas:       r[5] || '',
+          creadoPor:   r[6] || '',
+          actualizado: r[7] || '',
+        }); });
+    } catch(e) { console.error('Error cargando tareas de marketing:', e); return []; }
+  }
+
+  async function registrarTareaMkt(datos) {
+    return escribirViaScript('registrarTareaMkt', { hoja: SHEETS.MKT_TAREAS, datos });
+  }
+
+  async function editarTareaMkt(fila, datos) {
+    return escribirViaScript('editarTareaMkt', { hoja: SHEETS.MKT_TAREAS, datos: Object.assign({ fila }, datos) });
+  }
+
+  async function eliminarTareaMkt(filas) {
+    return escribirViaScript('eliminarTareaMkt', { hoja: SHEETS.MKT_TAREAS, datos: { filas: Array.isArray(filas) ? filas : [filas] } });
+  }
+
   // Obtener recetas
   async function getRecetas() {
     try {
@@ -4327,6 +4455,8 @@ const LS_API = (() => {
     getArticulosDetalle, getClientes, getProveedores, getRecetas, getBD_TIEMPOS, getAsistencia, editarAsistencia, eliminarAsistencia,
     getFechasMkt, registrarFechaMkt, editarFechaMkt, eliminarFechaMkt,
     getMetricasMkt, editarMetricaMkt, actualizarMetricasMktAhora,
+    getContenidoMkt, registrarContenidoMkt, editarContenidoMkt, eliminarContenidoMkt,
+    getTareasMkt, registrarTareaMkt, editarTareaMkt, eliminarTareaMkt,
     getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos, getSucursalesInventario,
     getVentasPorSucursal, aliasSucursal, nombreSucursal, getProductosVenta,
     // Escritura
@@ -9595,6 +9725,13 @@ async function guardarVentaDirecta() {
   const _mktCargado = new Set();
   let _mktFechasDatos = [];
   let _mktMetricasDatos = [];
+  let _mktContenidoDatos = [];
+  let _mktContenidoVista = [];
+  const MKT_CONT_PLATAFORMAS = ['Instagram', 'Facebook', 'TikTok', 'WhatsApp Business', 'Google Business Profile'];
+  const MKT_CONT_TIPOS = ['Post', 'Reel', 'Story', 'Otro'];
+  const MKT_CONT_ESTADOS = ['Planeado', 'Publicado', 'Pospuesto', 'Cancelado'];
+  let _mktTareasDatos = [];
+  const MKT_TAR_ESTADOS = ['Pendiente', 'En progreso', 'Completado'];
 
   function mktSwitchVista(vista, forzarRecarga) {
     _mktVista = vista;
@@ -9605,6 +9742,8 @@ async function guardarVentaDirecta() {
     });
     if (vista === 'fechas' && (forzarRecarga || !_mktCargado.has('fechas'))) { _mktCargado.add('fechas'); renderMktFechas(); }
     if (vista === 'metricas' && (forzarRecarga || !_mktCargado.has('metricas'))) { _mktCargado.add('metricas'); renderMktMetricas(); }
+    if (vista === 'contenido' && (forzarRecarga || !_mktCargado.has('contenido'))) { _mktCargado.add('contenido'); renderMktContenido(); }
+    if (vista === 'tareas' && (forzarRecarga || !_mktCargado.has('tareas'))) { _mktCargado.add('tareas'); renderMktTareas(); }
   }
 
   // forzarRecarga=true porque "Métricas semanales" depende del filtro global
@@ -9849,6 +9988,290 @@ async function guardarVentaDirecta() {
       toast('Error', 'No se pudo actualizar', 'err');
     } finally {
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-refresh"></i>Actualizar ahora'; }
+    }
+  }
+
+  // Nombre del usuario con la sesión activa (para CREADO_POR) -- se lee de
+  // sessionStorage en vez de un state global porque LS_UI no depende de las
+  // variables sueltas del script principal.
+  function _mktUsuarioActual() {
+    try {
+      const s = sessionStorage.getItem('ls_user');
+      return s ? (JSON.parse(s).name || '') : '';
+    } catch (e) { return ''; }
+  }
+
+  // ── MARKETING DIGITAL: CONTENIDO PROGRAMADO ────────────────────────
+  async function renderMktContenido() {
+    try {
+      _mktContenidoDatos = await LS_API.getContenidoMkt();
+      filtrarContenidoMkt();
+    } catch (e) {
+      console.error(e);
+      setEl('tabla-mkt-contenido', `<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--tx-3)">Error al cargar contenido</td></tr>`);
+    }
+  }
+
+  function filtrarContenidoMkt() {
+    const plataforma = document.getElementById('mkt-cont-filtro-plataforma')?.value || '';
+    const estado = document.getElementById('mkt-cont-filtro-estado')?.value || '';
+    let lista = _mktContenidoDatos.slice();
+    if (plataforma) lista = lista.filter(c => c.plataforma === plataforma);
+    if (estado) lista = lista.filter(c => c.estado === estado);
+    lista.sort((a, b) => (LS_API._fechaISO(a.fecha) || '').localeCompare(LS_API._fechaISO(b.fecha) || ''));
+    _mktContenidoVista = lista;
+    _pintarTablaContenidoMkt(lista);
+
+    setTxt('mkt-cont-kpi-planeado', _mktContenidoDatos.filter(c => c.estado === 'Planeado').length);
+    setTxt('mkt-cont-kpi-publicado', _mktContenidoDatos.filter(c => c.estado === 'Publicado').length);
+    setTxt('mkt-cont-kpi-pospuesto', _mktContenidoDatos.filter(c => c.estado === 'Pospuesto').length);
+    setTxt('mkt-cont-kpi-cancelado', _mktContenidoDatos.filter(c => c.estado === 'Cancelado').length);
+  }
+
+  function _pintarTablaContenidoMkt(datos) {
+    const empty = document.getElementById('empty-mkt-contenido');
+    const wrap = document.querySelector('#mkt-view-contenido .tbl-wrap');
+    if (!datos.length) {
+      setEl('tabla-mkt-contenido', '');
+      if (empty) empty.classList.add('show');
+      if (wrap) wrap.style.display = 'none';
+      return;
+    }
+    if (empty) empty.classList.remove('show');
+    if (wrap) wrap.style.display = '';
+    const badgeClase = e => e === 'Cancelado' ? 'badge err' : e === 'Pospuesto' ? 'badge warn' : 'badge';
+    setEl('tabla-mkt-contenido', datos.map(c => `
+      <tr>
+        <td>${c.fecha}</td>
+        <td>${c.plataforma || '—'}</td>
+        <td>${c.tipo || '—'}</td>
+        <td style="max-width:280px">${c.ideaTitulo}</td>
+        <td><span class="${badgeClase(c.estado)}">${c.estado}</span></td>
+        <td style="max-width:220px">${c.notas || '—'}</td>
+        <td>
+          <button class="icon-btn" title="Editar" onclick="LS_UI.abrirEditarContenidoMkt(${c.fila})"><i class="ti ti-pencil"></i></button>
+          <button class="icon-btn" title="Eliminar" onclick="LS_UI.eliminarFilaContenidoMkt(${c.fila}, '${(c.ideaTitulo || '').replace(/'/g, "\\'")}')"><i class="ti ti-trash"></i></button>
+        </td>
+      </tr>`).join(''));
+  }
+
+  function _mktFormContenidoHTML(c) {
+    c = c || {};
+    const esc = s => String(s || '').replace(/"/g, '&quot;');
+    return `
+      <div class="ff"><label>Fecha</label><input type="date" id="mkt-cont-fecha" value="${LS_API._fechaISO(c.fecha) || ''}"></div>
+      <div class="ff"><label>Plataforma</label><select id="mkt-cont-plataforma">${MKT_CONT_PLATAFORMAS.map(p => `<option value="${p}"${p === c.plataforma ? ' selected' : ''}>${p}</option>`).join('')}</select></div>
+      <div class="ff"><label>Tipo</label><select id="mkt-cont-tipo">${MKT_CONT_TIPOS.map(t => `<option value="${t}"${t === c.tipo ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
+      <div class="ff"><label>Idea / título</label><input type="text" id="mkt-cont-idea" value="${esc(c.ideaTitulo)}" placeholder="Ej. Reel de latte art"></div>
+      <div class="ff"><label>Estado</label><select id="mkt-cont-estado">${MKT_CONT_ESTADOS.map(e => `<option value="${e}"${e === c.estado ? ' selected' : ''}>${e}</option>`).join('')}</select></div>
+      <div class="ff"><label>Notas</label><textarea id="mkt-cont-notas" rows="2" placeholder="Detalles, guion, referencia...">${esc(c.notas)}</textarea></div>
+    `;
+  }
+
+  function abrirNuevoContenidoMkt() {
+    _modal2(`<div class="modal" style="max-width:460px"><div class="modal-header"><div class="modal-title"><i class="ti ti-calendar-plus" style="margin-right:6px"></i>Nuevo contenido</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body">${_mktFormContenidoHTML()}</div><div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarNuevoContenidoMkt()">Guardar</button></div></div>`);
+  }
+
+  function _leerFormContenidoMkt() {
+    return {
+      fecha: document.getElementById('mkt-cont-fecha')?.value || '',
+      plataforma: document.getElementById('mkt-cont-plataforma')?.value || '',
+      tipo: document.getElementById('mkt-cont-tipo')?.value || '',
+      ideaTitulo: (document.getElementById('mkt-cont-idea')?.value || '').trim(),
+      estado: document.getElementById('mkt-cont-estado')?.value || '',
+      notas: (document.getElementById('mkt-cont-notas')?.value || '').trim(),
+    };
+  }
+
+  async function guardarNuevoContenidoMkt() {
+    const datos = _leerFormContenidoMkt();
+    if (!datos.fecha || !datos.ideaTitulo) { toast('Falta información', 'Fecha e idea/título son obligatorios', 'err'); return; }
+    datos.creadoPor = _mktUsuarioActual();
+    try {
+      await LS_API.registrarContenidoMkt(datos);
+      toast('Guardado', 'Contenido agregado', 'ok');
+      _cerrarModal2();
+      await renderMktContenido();
+    } catch (e) {
+      toast('Error', 'No se pudo guardar', 'err');
+    }
+  }
+
+  function abrirEditarContenidoMkt(fila) {
+    const c = _mktContenidoDatos.find(x => x.fila === fila);
+    if (!c) return;
+    _modal2(`<div class="modal" style="max-width:460px"><div class="modal-header"><div class="modal-title"><i class="ti ti-pencil" style="margin-right:6px"></i>Editar contenido</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body">${_mktFormContenidoHTML(c)}</div><div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarEditarContenidoMkt(${fila})">Guardar cambios</button></div></div>`);
+  }
+
+  async function guardarEditarContenidoMkt(fila) {
+    const datos = _leerFormContenidoMkt();
+    if (!datos.fecha || !datos.ideaTitulo) { toast('Falta información', 'Fecha e idea/título son obligatorios', 'err'); return; }
+    try {
+      await LS_API.editarContenidoMkt(fila, datos);
+      toast('Guardado', 'Contenido actualizado', 'ok');
+      _cerrarModal2();
+      await renderMktContenido();
+    } catch (e) {
+      toast('Error', 'No se pudo guardar', 'err');
+    }
+  }
+
+  async function eliminarFilaContenidoMkt(fila, titulo) {
+    if (!confirm('¿Eliminar "' + titulo + '"? Esta acción no se puede deshacer.')) return;
+    try {
+      await LS_API.eliminarContenidoMkt([fila]);
+      toast('Eliminado', 'Contenido eliminado', 'ok');
+      await renderMktContenido();
+    } catch (e) {
+      toast('Error', 'No se pudo eliminar', 'err');
+    }
+  }
+
+  // ── MARKETING DIGITAL: METAS Y TAREAS SEMANALES ────────────────────
+  // El responsable ofrece los nombres de usuariosPOS (Firebase) + texto
+  // libre para colaboradores externos -- se consulta aparte porque
+  // usuariosPOS solo está en memoria si ya se visitó esa página.
+  let _mktUsuariosPOSNombres = null;
+  async function _mktCargarUsuariosPOSNombres() {
+    if (_mktUsuariosPOSNombres) return _mktUsuariosPOSNombres;
+    try {
+      await fbAuthReady;
+      const snap = await fbDb.ref('usuariosPOS').once('value');
+      const val = snap.val() || {};
+      _mktUsuariosPOSNombres = Object.values(val).map(u => u.nombre).filter(Boolean).sort((a, b) => a.localeCompare(b, 'es'));
+    } catch (e) {
+      console.error('Error cargando usuariosPOS para tareas de marketing:', e);
+      _mktUsuariosPOSNombres = [];
+    }
+    return _mktUsuariosPOSNombres;
+  }
+
+  async function renderMktTareas() {
+    try {
+      _mktTareasDatos = await LS_API.getTareasMkt();
+      _pintarTablaTareasMkt(_mktTareasDatos);
+      setTxt('mkt-tar-kpi-pendiente', _mktTareasDatos.filter(t => t.estado === 'Pendiente').length);
+      setTxt('mkt-tar-kpi-progreso', _mktTareasDatos.filter(t => t.estado === 'En progreso').length);
+      setTxt('mkt-tar-kpi-completado', _mktTareasDatos.filter(t => t.estado === 'Completado').length);
+      _mktCargarUsuariosPOSNombres(); // precarga en segundo plano para cuando se abra el formulario
+    } catch (e) {
+      console.error(e);
+      setEl('tabla-mkt-tareas', `<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--tx-3)">Error al cargar tareas</td></tr>`);
+    }
+  }
+
+  function _pintarTablaTareasMkt(datos) {
+    const empty = document.getElementById('empty-mkt-tareas');
+    const wrap = document.querySelector('#mkt-view-tareas .tbl-wrap');
+    if (!datos.length) {
+      setEl('tabla-mkt-tareas', '');
+      if (empty) empty.classList.add('show');
+      if (wrap) wrap.style.display = 'none';
+      return;
+    }
+    if (empty) empty.classList.remove('show');
+    if (wrap) wrap.style.display = '';
+    const ordenado = datos.slice().sort((a, b) => (b.semana || '').localeCompare(a.semana || ''));
+    setEl('tabla-mkt-tareas', ordenado.map(t => `
+      <tr>
+        <td>${t.semana || '—'}</td>
+        <td style="max-width:280px">${t.tarea}</td>
+        <td>${t.responsable || '—'}</td>
+        <td>
+          <select onchange="LS_UI.cambiarEstadoTareaMkt(${t.fila}, this.value)" style="padding:4px 8px;border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--cafe-800);color:var(--tx);font-size:12px">
+            ${MKT_TAR_ESTADOS.map(e => `<option value="${e}"${e === t.estado ? ' selected' : ''}>${e}</option>`).join('')}
+          </select>
+        </td>
+        <td style="max-width:220px">${t.notas || '—'}</td>
+        <td>
+          <button class="icon-btn" title="Editar" onclick="LS_UI.abrirEditarTareaMkt(${t.fila})"><i class="ti ti-pencil"></i></button>
+          <button class="icon-btn" title="Eliminar" onclick="LS_UI.eliminarFilaTareaMkt(${t.fila}, '${(t.tarea || '').replace(/'/g, "\\'")}')"><i class="ti ti-trash"></i></button>
+        </td>
+      </tr>`).join(''));
+  }
+
+  async function cambiarEstadoTareaMkt(fila, estado) {
+    const t = _mktTareasDatos.find(x => x.fila === fila);
+    if (!t) return;
+    try {
+      await LS_API.editarTareaMkt(fila, { semana: t.semana, tarea: t.tarea, responsable: t.responsable, estado, notas: t.notas });
+      toast('Guardado', 'Estado actualizado', 'ok');
+      await renderMktTareas();
+    } catch (e) {
+      toast('Error', 'No se pudo actualizar', 'err');
+    }
+  }
+
+  function _mktFormTareaHTML(t) {
+    t = t || {};
+    const esc = s => String(s || '').replace(/"/g, '&quot;');
+    const nombres = _mktUsuariosPOSNombres || [];
+    return `
+      <div class="ff"><label>Semana</label><input type="week" id="mkt-tar-semana" value="${esc(t.semana)}"></div>
+      <div class="ff"><label>Tarea</label><input type="text" id="mkt-tar-tarea" value="${esc(t.tarea)}" placeholder="Ej. Grabar reel de temporada"></div>
+      <div class="ff"><label>Responsable</label><input type="text" id="mkt-tar-responsable" list="mkt-tar-responsables-lista" value="${esc(t.responsable)}" placeholder="Nombre del responsable"><datalist id="mkt-tar-responsables-lista">${nombres.map(n => `<option value="${esc(n)}">`).join('')}</datalist></div>
+      <div class="ff"><label>Estado</label><select id="mkt-tar-estado">${MKT_TAR_ESTADOS.map(e => `<option value="${e}"${e === t.estado ? ' selected' : ''}>${e}</option>`).join('')}</select></div>
+      <div class="ff"><label>Notas</label><textarea id="mkt-tar-notas" rows="2" placeholder="Detalles adicionales">${esc(t.notas)}</textarea></div>
+    `;
+  }
+
+  async function abrirNuevaTareaMkt() {
+    await _mktCargarUsuariosPOSNombres();
+    _modal2(`<div class="modal" style="max-width:440px"><div class="modal-header"><div class="modal-title"><i class="ti ti-checklist" style="margin-right:6px"></i>Nueva tarea</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body">${_mktFormTareaHTML()}</div><div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarNuevaTareaMkt()">Guardar</button></div></div>`);
+  }
+
+  function _leerFormTareaMkt() {
+    return {
+      semana: document.getElementById('mkt-tar-semana')?.value || '',
+      tarea: (document.getElementById('mkt-tar-tarea')?.value || '').trim(),
+      responsable: (document.getElementById('mkt-tar-responsable')?.value || '').trim(),
+      estado: document.getElementById('mkt-tar-estado')?.value || '',
+      notas: (document.getElementById('mkt-tar-notas')?.value || '').trim(),
+    };
+  }
+
+  async function guardarNuevaTareaMkt() {
+    const datos = _leerFormTareaMkt();
+    if (!datos.tarea) { toast('Falta información', 'La tarea es obligatoria', 'err'); return; }
+    datos.creadoPor = _mktUsuarioActual();
+    try {
+      await LS_API.registrarTareaMkt(datos);
+      toast('Guardado', 'Tarea agregada', 'ok');
+      _cerrarModal2();
+      await renderMktTareas();
+    } catch (e) {
+      toast('Error', 'No se pudo guardar', 'err');
+    }
+  }
+
+  async function abrirEditarTareaMkt(fila) {
+    const t = _mktTareasDatos.find(x => x.fila === fila);
+    if (!t) return;
+    await _mktCargarUsuariosPOSNombres();
+    _modal2(`<div class="modal" style="max-width:440px"><div class="modal-header"><div class="modal-title"><i class="ti ti-pencil" style="margin-right:6px"></i>Editar tarea</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div><div class="modal-body">${_mktFormTareaHTML(t)}</div><div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button><button class="btn-save" onclick="LS_UI.guardarEditarTareaMkt(${fila})">Guardar cambios</button></div></div>`);
+  }
+
+  async function guardarEditarTareaMkt(fila) {
+    const datos = _leerFormTareaMkt();
+    if (!datos.tarea) { toast('Falta información', 'La tarea es obligatoria', 'err'); return; }
+    try {
+      await LS_API.editarTareaMkt(fila, datos);
+      toast('Guardado', 'Tarea actualizada', 'ok');
+      _cerrarModal2();
+      await renderMktTareas();
+    } catch (e) {
+      toast('Error', 'No se pudo guardar', 'err');
+    }
+  }
+
+  async function eliminarFilaTareaMkt(fila, tarea) {
+    if (!confirm('¿Eliminar "' + tarea + '"? Esta acción no se puede deshacer.')) return;
+    try {
+      await LS_API.eliminarTareaMkt([fila]);
+      toast('Eliminado', 'Tarea eliminada', 'ok');
+      await renderMktTareas();
+    } catch (e) {
+      toast('Error', 'No se pudo eliminar', 'err');
     }
   }
 
@@ -11852,6 +12275,8 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderAsistencia, filtrarAsistencia, abrirEditarAsistencia, guardarEditarAsistencia, eliminarFilaAsistencia,
     renderMarketing, mktSwitchVista, abrirNuevaFechaMkt, guardarNuevaFechaMkt, abrirEditarFechaMkt, guardarEditarFechaMkt, eliminarFilaFechaMkt,
     renderMktMetricas, abrirEditarMetricaMkt, guardarEditarMetricaMkt, actualizarMetricasMktAhora,
+    renderMktContenido, filtrarContenidoMkt, abrirNuevoContenidoMkt, guardarNuevoContenidoMkt, abrirEditarContenidoMkt, guardarEditarContenidoMkt, eliminarFilaContenidoMkt,
+    renderMktTareas, abrirNuevaTareaMkt, guardarNuevaTareaMkt, abrirEditarTareaMkt, guardarEditarTareaMkt, eliminarFilaTareaMkt, cambiarEstadoTareaMkt,
     _toggleUposDropdown, _uposDropdownTodasChange, _uposDropdownResumen,
     closeModal,
     // Abrir modales
