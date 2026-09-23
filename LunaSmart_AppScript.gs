@@ -159,6 +159,10 @@ function doGet(e) {
   // "code" (y el code_verifier de PKCE) aquí por GET tras la autorización.
   if (e.parameter && e.parameter.tiktokcallback === '1') return _procesarCallbackTikTok(e);
 
+  // Callback de OAuth de Facebook (Inicio de sesión con Facebook para
+  // empresas) -- facebook-callback.html manda el "code" aquí por GET.
+  if (e.parameter && e.parameter.facebookcallback === '1') return _procesarCallbackFacebook(e);
+
   const accion = (e.parameter && e.parameter.accion) ? e.parameter.accion : '';
 
   const map = {
@@ -261,6 +265,7 @@ function doPost(e) {
     case 'editarFechaMkt':             return _editarFechaMkt(datos);
     case 'eliminarFechaMkt':           return _eliminarFechaMkt(datos);
     case 'editarMetricaMkt':           return _editarMetricaMkt(datos);
+    case 'eliminarMetricaMkt':         return _eliminarMetricaMkt(datos);
     case 'pullMetricasMktAhora':       return _pullMetricasMktAhora(datos);
     case 'registrarContenidoMkt':      return _registrarContenidoMkt(datos);
     case 'editarContenidoMkt':         return _editarContenidoMkt(datos);
@@ -1387,6 +1392,68 @@ function _igPullMetricasYGuardar() {
   return { seguidores: perfil.followers_count || 0, alcance: alcance, visitas: visitas };
 }
 
+// Recibe el "code" de facebook-callback.html tras un login real con
+// "Inicio de sesión con Facebook para empresas" y produce un
+// FB_PAGE_ACCESS_TOKEN que no vence -- a diferencia de un token sacado a
+// mano del Explorador de la API Graph, que resultó tener solo 24h de vida
+// aunque se intercambiara por uno "de larga duración" (esa duración
+// aparentemente queda ligada a la sesión del Explorador, no es un login
+// real). Tres pasos, los mismos que documenta Meta para Facebook Login:
+// code -> token de usuario corto -> token de usuario largo (~60 días) ->
+// Page Access Token de esa cuenta larga (que no vence).
+//   FB_APP_ID        Identificador de la app de Facebook (mismo que
+//                     IG_APP_ID en algunos casos, pero puede diferir --
+//                     usa el de "Configuración básica" en Meta for
+//                     Developers, no el de la app de Instagram)
+//   FB_APP_SECRET    Clave secreta de esa misma app
+//   FB_PAGE_ID       ID de la página de Facebook (numérico)
+function _procesarCallbackFacebook(e) {
+  try {
+    var code = e.parameter.code;
+    if (!code) return _json({ status: 'error', msg: 'Falta code' });
+
+    var props = PropertiesService.getScriptProperties();
+    var appId = props.getProperty('FB_APP_ID');
+    var appSecret = props.getProperty('FB_APP_SECRET');
+    var pageId = props.getProperty('FB_PAGE_ID');
+    if (!appId || !appSecret) return _json({ status: 'error', msg: 'Faltan FB_APP_ID / FB_APP_SECRET en Propiedades del script' });
+    if (!pageId) return _json({ status: 'error', msg: 'Falta FB_PAGE_ID en Propiedades del script' });
+
+    var redirectUri = 'https://lunasmart.suenodeluna.com.mx/facebook-callback.html';
+
+    var resp1 = UrlFetchApp.fetch('https://graph.facebook.com/v21.0/oauth/access_token' +
+      '?client_id=' + encodeURIComponent(appId) +
+      '&redirect_uri=' + encodeURIComponent(redirectUri) +
+      '&client_secret=' + encodeURIComponent(appSecret) +
+      '&code=' + encodeURIComponent(code), { muteHttpExceptions: true });
+    var data1 = JSON.parse(resp1.getContentText());
+    if (!data1.access_token) return _json({ status: 'error', msg: 'Facebook (paso 1): ' + (data1.error ? data1.error.message : resp1.getContentText()) });
+
+    var resp2 = UrlFetchApp.fetch('https://graph.facebook.com/v21.0/oauth/access_token' +
+      '?grant_type=fb_exchange_token' +
+      '&client_id=' + encodeURIComponent(appId) +
+      '&client_secret=' + encodeURIComponent(appSecret) +
+      '&fb_exchange_token=' + encodeURIComponent(data1.access_token), { muteHttpExceptions: true });
+    var data2 = JSON.parse(resp2.getContentText());
+    if (!data2.access_token) return _json({ status: 'error', msg: 'Facebook (paso 2): ' + (data2.error ? data2.error.message : resp2.getContentText()) });
+
+    var resp3 = UrlFetchApp.fetch('https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token&access_token=' + encodeURIComponent(data2.access_token), { muteHttpExceptions: true });
+    var data3 = JSON.parse(resp3.getContentText());
+    if (!data3.data) return _json({ status: 'error', msg: 'Facebook (paso 3): ' + (data3.error ? data3.error.message : resp3.getContentText()) });
+
+    var pagina = null;
+    for (var i = 0; i < data3.data.length; i++) {
+      if (String(data3.data[i].id) === String(pageId)) { pagina = data3.data[i]; break; }
+    }
+    if (!pagina) return _json({ status: 'error', msg: 'La página configurada (FB_PAGE_ID) no está entre las páginas que administra esta cuenta de Facebook' });
+
+    props.setProperty('FB_PAGE_ACCESS_TOKEN', pagina.access_token);
+    return _json({ status: 'ok' });
+  } catch (e) {
+    return _json({ status: 'error', msg: e.message });
+  }
+}
+
 // Jala el conteo de seguidores/fans de la página de Facebook y lo guarda en
 // la fila de hoy (columna 10). Meta ya no expone alcance/impresiones de
 // página vía Graph API para apps nuevas, así que solo se jala este dato.
@@ -1571,6 +1638,25 @@ function _editarMetricaMkt(b) {
     sh.getRange(fila, 6, 1, 2).setValues([[b.anunciosActivos || '', b.notas || '']]);
     sh.getRange(fila, 9).setValue(new Date());
     return _json({ status: 'ok' });
+  } catch (e) { return _err(e.message); }
+  finally { lock.releaseLock(); }
+}
+
+// Para limpiar filas duplicadas o de prueba en BD_MARKETING_METRICAS (las
+// filas normales las llenan solas los triggers diarios -- esto es para
+// mantenimiento manual, no parte del flujo normal).
+function _eliminarMetricaMkt(b) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
+  try {
+    var filas = (b.filas || (b.fila ? [b.fila] : []))
+      .map(function(f){ return parseInt(f, 10); })
+      .filter(function(f){ return f && f >= 2; })
+      .sort(function(a, b2){ return b2 - a; });
+    if (!filas.length) return _err('No se especificó ninguna fila');
+    var sh = _getOrCrearSheetMetricasMkt();
+    filas.forEach(function(f){ sh.deleteRow(f); });
+    return _json({ status: 'ok', eliminados: filas.length });
   } catch (e) { return _err(e.message); }
   finally { lock.releaseLock(); }
 }

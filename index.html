@@ -2101,6 +2101,7 @@
       <div class="card-head">
         <div><div class="card-title"><i class="ti ti-chart-line"></i>Histórico de métricas <span id="mkt-metricas-titulo-periodo"></span></div><div class="card-sub">Instagram y Facebook se actualizan solos todos los días -- anuncios activos y notas se capturan a mano</div></div>
         <div class="card-actions">
+          <button class="btn btn-sm" id="mkt-btn-facebook" onclick="LS_UI.conectarFacebook()"><i class="ti ti-brand-facebook"></i>Conectar Facebook</button>
           <button class="btn btn-sm" id="mkt-btn-tiktok" onclick="LS_UI.conectarTikTok()"><i class="ti ti-brand-tiktok"></i>Conectar TikTok</button>
           <button class="btn btn-sm" id="mkt-btn-actualizar" onclick="LS_UI.actualizarMetricasMktAhora()"><i class="ti ti-refresh"></i>Actualizar ahora</button>
         </div>
@@ -3491,6 +3492,10 @@ const LS_API = (() => {
     return escribirViaScript('editarMetricaMkt', { hoja: SHEETS.MKT_METRICAS, datos: Object.assign({ fila }, datos) });
   }
 
+  async function eliminarMetricaMkt(filas) {
+    return escribirViaScript('eliminarMetricaMkt', { hoja: SHEETS.MKT_METRICAS, datos: { filas: Array.isArray(filas) ? filas : [filas] } });
+  }
+
   async function actualizarMetricasMktAhora() {
     return escribirViaScript('pullMetricasMktAhora', { hoja: SHEETS.MKT_METRICAS, datos: {} });
   }
@@ -4462,7 +4467,7 @@ const LS_API = (() => {
     getIngresos, getConciliacion, getFacturas,
     getArticulosDetalle, getClientes, getProveedores, getRecetas, getBD_TIEMPOS, getAsistencia, editarAsistencia, eliminarAsistencia,
     getFechasMkt, registrarFechaMkt, editarFechaMkt, eliminarFechaMkt,
-    getMetricasMkt, editarMetricaMkt, actualizarMetricasMktAhora,
+    getMetricasMkt, editarMetricaMkt, eliminarMetricaMkt, actualizarMetricasMktAhora,
     getContenidoMkt, registrarContenidoMkt, editarContenidoMkt, eliminarContenidoMkt,
     getTareasMkt, registrarTareaMkt, editarTareaMkt, eliminarTareaMkt,
     getCatalogo, getCostoProducto, getInventario, getCategorias, getDataIngresos, getSucursalesInventario,
@@ -9956,7 +9961,10 @@ async function guardarVentaDirecta() {
         <td>${m.anunciosActivos || '—'}</td>
         <td style="max-width:220px">${m.notas || '—'}</td>
         <td>${m.fuente === 'Automático' ? '<span class="badge"><i class="ti ti-brand-instagram"></i> Automático</span>' : (m.fuente || '—')}</td>
-        <td><button class="icon-btn" title="Editar anuncios/notas" onclick="LS_UI.abrirEditarMetricaMkt(${m.fila})"><i class="ti ti-pencil"></i></button></td>
+        <td>
+          <button class="icon-btn" title="Editar anuncios/notas" onclick="LS_UI.abrirEditarMetricaMkt(${m.fila})"><i class="ti ti-pencil"></i></button>
+          <button class="icon-btn" title="Eliminar fila" onclick="LS_UI.eliminarFilaMetricaMkt(${m.fila})"><i class="ti ti-trash"></i></button>
+        </td>
       </tr>`).join(''));
   }
 
@@ -9985,6 +9993,17 @@ async function guardarVentaDirecta() {
     }
   }
 
+  async function eliminarFilaMetricaMkt(fila) {
+    if (!confirm('¿Eliminar esta fila de métricas? Esta acción no se puede deshacer.')) return;
+    try {
+      await LS_API.eliminarMetricaMkt([fila]);
+      toast('Eliminado', 'Fila eliminada', 'ok');
+      await renderMktMetricas();
+    } catch (e) {
+      toast('Error', 'No se pudo eliminar', 'err');
+    }
+  }
+
   async function actualizarMetricasMktAhora() {
     const btn = document.getElementById('mkt-btn-actualizar');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i>Actualizando...'; }
@@ -10001,6 +10020,33 @@ async function guardarVentaDirecta() {
     } finally {
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-refresh"></i>Actualizar ahora'; }
     }
+  }
+
+  // Conecta la página de Facebook del negocio vía "Inicio de sesión con
+  // Facebook para empresas" (Business Login) -- la única variante de
+  // Facebook Login disponible para esta app, usa un config_id en vez de
+  // "scope" (los permisos pages_show_list/pages_read_engagement ya están
+  // definidos dentro de esa configuración en Meta for Developers).
+  //
+  // Por qué existe este botón: un Page Access Token sacado a mano del
+  // Explorador de la API Graph resultó tener solo 24h de vida (ligado a la
+  // sesión del Explorador) aunque se haya intercambiado por uno de larga
+  // duración -- un login real como este, en cambio, sí produce un token
+  // que no vence.
+  const FB_CLIENT_ID = '1980314806015125';
+  const FB_CONFIG_ID = '3346193945571547';
+  const FB_REDIRECT_URI = 'https://lunasmart.suenodeluna.com.mx/facebook-callback.html';
+
+  function conectarFacebook() {
+    const state = _b64url(crypto.getRandomValues(new Uint8Array(16)));
+    const params = new URLSearchParams({
+      client_id: FB_CLIENT_ID,
+      config_id: FB_CONFIG_ID,
+      redirect_uri: FB_REDIRECT_URI,
+      response_type: 'code',
+      state,
+    });
+    window.location.href = 'https://www.facebook.com/v21.0/dialog/oauth?' + params.toString();
   }
 
   // Conecta la cuenta de TikTok del negocio vía Login Kit (OAuth con PKCE,
@@ -12325,7 +12371,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderEventos, abrirNuevoEvento, editarEvento, guardarEvento, confirmarBorrarEvento, ejecutarBorrarEvento, verInscritosEvento, _evSubirImagen, _evAgregarCampoExtra, _evToggleOpcionesCampo,
     renderAsistencia, filtrarAsistencia, abrirEditarAsistencia, guardarEditarAsistencia, eliminarFilaAsistencia,
     renderMarketing, mktSwitchVista, abrirNuevaFechaMkt, guardarNuevaFechaMkt, abrirEditarFechaMkt, guardarEditarFechaMkt, eliminarFilaFechaMkt,
-    renderMktMetricas, abrirEditarMetricaMkt, guardarEditarMetricaMkt, actualizarMetricasMktAhora, conectarTikTok,
+    renderMktMetricas, abrirEditarMetricaMkt, guardarEditarMetricaMkt, eliminarFilaMetricaMkt, actualizarMetricasMktAhora, conectarTikTok, conectarFacebook,
     renderMktContenido, filtrarContenidoMkt, abrirNuevoContenidoMkt, guardarNuevoContenidoMkt, abrirEditarContenidoMkt, guardarEditarContenidoMkt, eliminarFilaContenidoMkt,
     renderMktTareas, abrirNuevaTareaMkt, guardarNuevaTareaMkt, abrirEditarTareaMkt, guardarEditarTareaMkt, eliminarFilaTareaMkt, cambiarEstadoTareaMkt,
     _toggleUposDropdown, _uposDropdownTodasChange, _uposDropdownResumen,
