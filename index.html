@@ -2056,14 +2056,14 @@
 <!-- PÁGINA: MARKETING DIGITAL -->
 <div id="p-marketing" class="page" data-screen-label="Marketing Digital">
   <div class="seg" style="margin-bottom:18px">
-    <button class="on" data-mkt-vista="fechas" onclick="LS_UI.mktSwitchVista('fechas')">Fechas importantes</button>
-    <button data-mkt-vista="metricas" onclick="LS_UI.mktSwitchVista('metricas')">Métricas semanales</button>
+    <button class="on" data-mkt-vista="metricas" onclick="LS_UI.mktSwitchVista('metricas')">Métricas semanales</button>
+    <button data-mkt-vista="fechas" onclick="LS_UI.mktSwitchVista('fechas')">Fechas importantes</button>
     <button data-mkt-vista="contenido" onclick="LS_UI.mktSwitchVista('contenido')">Contenido programado</button>
     <button data-mkt-vista="tareas" onclick="LS_UI.mktSwitchVista('tareas')">Metas y tareas</button>
   </div>
 
   <!-- FECHAS IMPORTANTES -->
-  <div id="mkt-view-fechas">
+  <div id="mkt-view-fechas" style="display:none">
     <div class="card" style="margin-bottom:18px">
       <div class="card-head"><div><div class="card-title"><i class="ti ti-calendar-event"></i>Próximas fechas</div><div class="card-sub">Lo que se viene, para preparar contenido con tiempo</div></div></div>
       <div id="mkt-proximas-lista" style="padding:0 18px 18px;display:flex;flex-direction:column;gap:10px"></div>
@@ -2088,7 +2088,7 @@
   </div>
 
   <!-- MÉTRICAS SEMANALES -->
-  <div id="mkt-view-metricas" style="display:none">
+  <div id="mkt-view-metricas">
     <div class="kpis">
       <div class="kpi"><div class="kpi-top"><div class="kpi-label">Seguidores en Instagram</div><div class="kpi-ico"><i class="ti ti-brand-instagram"></i></div></div><div class="kpi-val" id="mkt-kpi-seguidores">—</div><div class="kpi-sub">Dato más reciente</div></div>
       <div class="kpi"><div class="kpi-top"><div class="kpi-label">Seguidores en Facebook</div><div class="kpi-ico"><i class="ti ti-brand-facebook"></i></div></div><div class="kpi-val" id="mkt-kpi-seguidores-fb">—</div><div class="kpi-sub">Dato más reciente</div></div>
@@ -2521,6 +2521,8 @@ function go(id, el) {
   document.querySelectorAll('.m-nav-item').forEach(n => n.classList.toggle('active', n.dataset.mnav === id));
   document.querySelectorAll('.d-item').forEach(n => n.classList.remove('active'));
   updateSubtitle();
+  const btnSyncParrot = document.getElementById('btn-sync-parrot');
+  if (btnSyncParrot) btnSyncParrot.style.display = (id === 'marketing') ? 'none' : '';
   const sa = document.getElementById('scroll-area');
   if (sa) sa.scrollTo({ top: 0, behavior: 'smooth' });
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -9726,15 +9728,15 @@ async function guardarVentaDirecta() {
   }
 
   /* ============ MARKETING DIGITAL ============
-     Una sola página con 4 sub-vistas (fechas / métricas / contenido /
-     tareas) intercambiadas localmente con .seg + display:none -- son
-     sub-vistas de UNA página, no pasan por el router de páginas completo.
-     "Fechas importantes" y "Métricas semanales" ya están construidas;
-     las otras 2 quedan con un aviso de "Próximamente" hasta el siguiente
-     paso. Métricas de Instagram se jalan solas (ver LunaSmart_AppScript.gs,
-     igActualizarMetricasDiarias) -- aquí solo se leen y se pintan. */
+     Una sola página con 4 sub-vistas (métricas / fechas / contenido /
+     tareas, en ese orden) intercambiadas localmente con .seg +
+     display:none -- son sub-vistas de UNA página, no pasan por el router
+     de páginas completo. Métricas de Instagram/Facebook/TikTok se jalan
+     solas (ver LunaSmart_AppScript.gs, igActualizarMetricasDiarias /
+     fbActualizarSeguidoresDiarios / tiktokActualizarSeguidoresDiarios) --
+     aquí solo se leen y se pintan. */
   const MKT_CATEGORIAS = ['Temporada de bebida', 'Día festivo MX', 'Fecha comercial', 'Otro'];
-  let _mktVista = 'fechas';
+  let _mktVista = 'metricas';
   const _mktCargado = new Set();
   let _mktFechasDatos = [];
   let _mktMetricasDatos = [];
