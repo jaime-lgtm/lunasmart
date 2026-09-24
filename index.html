@@ -1184,7 +1184,7 @@
       <button class="login-btn" onclick="doLogin()"><i class="ti ti-login-2"></i>Iniciar sesión</button>
       <div class="login-secure"><i class="ti ti-shield-lock"></i><span>Acceso restringido — solo personal autorizado de Sueño de Luna</span></div>
     </div>
-    <div class="login-foot">Sistema de gestión corporativo · v2.0 · Integrado con Parrot POS</div>
+    <div class="login-foot">Sistema de gestión corporativo · v2.0 · Integrado con Luna Smart POS</div>
   </div>
 </div>
 
@@ -1433,7 +1433,7 @@
   </div>
   <div class="card">
     <div class="card-head">
-      <div><div class="card-title"><i class="ti ti-scale"></i>Detalle por turno <span id="conc-titulo-periodo"></span></div><div class="card-sub">Parrot POS vs efectivo declarado en corte</div></div>
+      <div><div class="card-title"><i class="ti ti-scale"></i>Detalle por turno <span id="conc-titulo-periodo"></span></div><div class="card-sub">Venta registrada vs efectivo declarado en corte</div></div>
       <div class="card-actions"><span class="filter-note" id="fn-conciliacion"><i class="ti ti-filter"></i><span></span><span class="fx" onclick="clearBranch()"><i class="ti ti-x"></i></span></span><button class="btn btn-sm" onclick="exportarMenu(this)"><i class="ti ti-download"></i>Exportar</button></div>
     </div>
     <div class="tbl-wrap">
@@ -1442,7 +1442,7 @@
           <th class="sortable" data-type="text">Sesión<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
           <th class="sortable" data-type="text">Fecha<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
           <th>Turno</th><th>Sucursal</th>
-          <th class="sortable num" data-type="num">Venta Parrot<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
+          <th class="sortable num" data-type="num">Venta registrada<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
           <th class="num">Declarado</th>
           <th class="sortable num" data-type="num">Delta<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
           <th>Estado</th>
@@ -1460,9 +1460,9 @@
 <div id="p-sucursales" class="page" data-screen-label="Sucursales">
   <div class="grid3" id="suc-grid">
     <div class="b-card" data-branch="coffee">
-      <div class="b-card-head"><div class="b-card-ico"><i class="ti ti-coffee"></i></div><div><div class="b-card-name">Sueño de Luna Coffee</div><div class="b-card-meta">Parrot POS · activo</div></div><span class="badge b-s" style="margin-left:auto"><span class="bdot"></span>Activa</span></div>
+      <div class="b-card-head"><div class="b-card-ico"><i class="ti ti-coffee"></i></div><div><div class="b-card-name">Sueño de Luna Coffee</div><div class="b-card-meta">Luna Smart POS · activo</div></div><span class="badge b-s" style="margin-left:auto"><span class="bdot"></span>Activa</span></div>
       <div class="b-card-val">$48,200</div><div class="b-card-sub">Venta del mes · ticket prom. $148</div>
-      <div class="b-card-foot"><span class="chan ch-p"><i class="ti ti-device-desktop"></i>Parrot</span><span class="chan ch-r">Rappi</span><span class="chan ch-u">Uber Eats</span></div>
+      <div class="b-card-foot"><span class="chan ch-p"><i class="ti ti-device-desktop"></i>POS</span><span class="chan ch-r">Rappi</span><span class="chan ch-u">Uber Eats</span></div>
     </div>
     <div class="b-card" data-branch="cultura">
       <div class="b-card-head"><div class="b-card-ico"><i class="ti ti-building-community"></i></div><div><div class="b-card-name">Casa de la Cultura</div><div class="b-card-meta">Registro manual</div></div><span class="badge b-s" style="margin-left:auto"><span class="bdot"></span>Activa</span></div>
@@ -1498,7 +1498,7 @@
   </div>
   <div class="card">
     <div class="card-head">
-      <div><div class="card-title"><i class="ti ti-star"></i><span id="art-titulo">Top vendidos</span></div><div class="card-sub" id="art-sub">Productos más vendidos (Parrot + cortes)</div></div>
+      <div><div class="card-title"><i class="ti ti-star"></i><span id="art-titulo">Top vendidos</span></div><div class="card-sub" id="art-sub">Productos más vendidos (ventas + cortes)</div></div>
       <div class="seg" id="art-toggle">
         <button class="on" data-modo="vendidos" onclick="LS_UI.setModoArticulos('vendidos',this)">Top Ingresos (vendidos)</button>
         <button data-modo="comprados" onclick="LS_UI.setModoArticulos('comprados',this)">Top Egresos (comprados)</button>
@@ -2399,7 +2399,7 @@ try {
 
 const PAGES = {
   dashboard:    { title: 'Dashboard Corporativo', sub: 'Resumen general' },
-  conciliacion: { title: 'Conciliación',          sub: 'Parrot vs declarado por turno' },
+  conciliacion: { title: 'Conciliación',          sub: 'Venta vs declarado por turno' },
   sucursales:   { title: 'Sucursales',            sub: 'Rendimiento por unidad de negocio' },
   articulos:    { title: 'Artículos Estrella',    sub: 'Top productos más vendidos' },
   canales:      { title: 'Canales de Venta',      sub: 'Participación por canal y sucursal' },
@@ -4839,8 +4839,8 @@ const LS_UI = (() => {
           // META por nombre bonito (igual al que devuelve getVentasPorSucursal)
           const META = {
             'Coffee & Roasters':  { ico:'ti-coffee',             tags:['<span class="chan ch-m">Manual</span>','<span class="chan" style="background:rgba(201,168,76,.12);color:var(--dorado);border:1px solid rgba(201,168,76,.25);font-size:9.5px">Expos</span>'] },
-            'Casa de la Cultura': { ico:'ti-building-community', tags:['<span class="chan ch-p"><i class="ti ti-device-desktop"></i>Parrot</span>','<span class="chan ch-r">Rappi</span>'] },
-            'Helfy Fü':           { ico:'ti-salad',              tags:['<span class="chan ch-p"><i class="ti ti-device-desktop"></i>Parrot</span>','<span class="chan ch-r">Rappi</span>','<span class="chan ch-u">Uber</span>'] },
+            'Casa de la Cultura': { ico:'ti-building-community', tags:['<span class="chan ch-p"><i class="ti ti-device-desktop"></i>POS</span>','<span class="chan ch-r">Rappi</span>'] },
+            'Helfy Fü':           { ico:'ti-salad',              tags:['<span class="chan ch-p"><i class="ti ti-device-desktop"></i>POS</span>','<span class="chan ch-r">Rappi</span>','<span class="chan ch-u">Uber</span>'] },
             'Barbacoa y Menudo':  { ico:'ti-meat',               tags:['<span class="chan ch-m">Domingos</span>'] },
             'Eventos':            { ico:'ti-confetti',           tags:['<span class="chan ch-e">Cotización</span>'] },
           };
@@ -5149,7 +5149,7 @@ const LS_UI = (() => {
         <button class="icon-btn" title="Ver detalle" data-idx="${idx}" data-accion="ver"><i class="ti ti-eye"></i></button>
         ${id
           ? `<button class="icon-btn" title="Editar" onclick="LS_UI.editarIngreso('${id}')"><i class="ti ti-pencil"></i></button>`
-          : `<button class="icon-btn" title="Editar (Parrot)" data-idx="${idx}" data-accion="editar-parrot"><i class="ti ti-pencil"></i></button>`}`;
+          : `<button class="icon-btn" title="Editar (corte)" data-idx="${idx}" data-accion="editar-parrot"><i class="ti ti-pencil"></i></button>`}`;
       const isoNum = (LS_API._fechaISO(r.fecha) || '').replace(/-/g, '');
       return `
       <tr>
@@ -5230,7 +5230,7 @@ const LS_UI = (() => {
             </div>
             <div style="border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 14px">
               <div style="font-size:10px;color:var(--tx-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;font-weight:600">Resumen</div>
-              <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0"><span style="color:var(--tx-2)">Venta Parrot/total</span><span style="font-family:var(--mono);color:var(--tx);font-weight:600">${LS_API.formatMXNDec(r.ventaTotal)}</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0"><span style="color:var(--tx-2)">Venta registrada/total</span><span style="font-family:var(--mono);color:var(--tx);font-weight:600">${LS_API.formatMXNDec(r.ventaTotal)}</span></div>
               <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0"><span style="color:var(--tx-2)">Diferencia</span><span style="font-family:var(--mono);font-weight:600;color:${deltaColor(r.diferencia)}">${LS_API.formatMXNDec(r.diferencia)}</span></div>
               <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0"><span style="color:var(--tx-2)">Inicio caja</span><span style="font-family:var(--mono);color:var(--tx);font-weight:600">${LS_API.formatMXNDec(r.inicioCaja)}</span></div>
             </div>
@@ -5287,7 +5287,7 @@ const LS_UI = (() => {
     _modal(`
       <div class="modal" style="max-width:400px">
         <div class="modal-header"><div><div class="modal-title" style="color:var(--rojo)"><i class="ti ti-trash" style="margin-right:6px"></i>Borrar corte</div></div></div>
-        <div class="modal-body"><p style="font-size:13.5px;color:var(--tx-2);line-height:1.6">¿Borrar este corte de Parrot?<br><strong>${LS_API.nombreSucursal(orig.sucursal)}</strong> · ${orig.fecha}<br><span style="color:var(--tx-3);font-size:12px">Se borra el corte y su detalle de venta. No se puede deshacer.</span></p></div>
+        <div class="modal-body"><p style="font-size:13.5px;color:var(--tx-2);line-height:1.6">¿Borrar este corte?<br><strong>${LS_API.nombreSucursal(orig.sucursal)}</strong> · ${orig.fecha}<br><span style="color:var(--tx-3);font-size:12px">Se borra el corte y su detalle de venta. No se puede deshacer.</span></p></div>
         <div class="modal-footer">
           <button class="btn-cancel" onclick="_cerrarModal()">Cancelar</button>
           <button class="btn-save" style="background:var(--rojo)" id="btn-del-ing" onclick="LS_UI.ejecutarBorrarIngresoParrot()"><i class="ti ti-trash"></i> Sí, borrar</button>
@@ -5826,7 +5826,7 @@ const LS_UI = (() => {
 
       // Textos según modo
       setTxt('art-titulo', esVendidos ? 'Top vendidos' : 'Top comprados');
-      setTxt('art-sub', esVendidos ? 'Productos más vendidos (Parrot + cortes)' : 'De tus facturas de proveedores');
+      setTxt('art-sub', esVendidos ? 'Productos más vendidos (ventas + cortes)' : 'De tus facturas de proveedores');
       const thCant = document.querySelector('#p-articulos thead th:nth-child(3)');
       const thTotal = document.querySelector('#p-articulos thead th:nth-child(4)');
       if (thCant) thCant.childNodes[0].nodeValue = 'Cantidad';
@@ -6317,9 +6317,9 @@ return `<tr>
   // ══════════════════════════════════════════════════════════
   const _SUC_META = {
     'SUEÑO DE LUNA':      { nom:'Coffee & Roasters',     ico:'ti-coffee',             meta:'Manual · Expos y granos',  foot:['<span class="chan ch-m">Manual</span>','<span class="chan ch-e">Expos</span>'] },
-    'CASA DE LA CULTURA': { nom:'Casa de la Cultura',    ico:'ti-building-community', meta:'Parrot POS · activo',      foot:['<span class="chan ch-p"><i class="ti ti-device-desktop"></i>Parrot</span>','<span class="chan ch-r">Rappi</span>'] },
-    'HELFY FÜ':           { nom:'Helfy Fü',              ico:'ti-salad',              meta:'Parrot · Delivery',        foot:['<span class="chan ch-p"><i class="ti ti-device-desktop"></i>Parrot</span>','<span class="chan ch-r">Rappi</span>','<span class="chan ch-u">Uber Eats</span>'] },
-    'HELFY FU':           { nom:'Helfy Fü',              ico:'ti-salad',              meta:'Parrot · Delivery',        foot:['<span class="chan ch-p"><i class="ti ti-device-desktop"></i>Parrot</span>','<span class="chan ch-r">Rappi</span>','<span class="chan ch-u">Uber Eats</span>'] },
+    'CASA DE LA CULTURA': { nom:'Casa de la Cultura',    ico:'ti-building-community', meta:'Luna Smart POS · activo',  foot:['<span class="chan ch-p"><i class="ti ti-device-desktop"></i>POS</span>','<span class="chan ch-r">Rappi</span>'] },
+    'HELFY FÜ':           { nom:'Helfy Fü',              ico:'ti-salad',              meta:'POS · Delivery',           foot:['<span class="chan ch-p"><i class="ti ti-device-desktop"></i>POS</span>','<span class="chan ch-r">Rappi</span>','<span class="chan ch-u">Uber Eats</span>'] },
+    'HELFY FU':           { nom:'Helfy Fü',              ico:'ti-salad',              meta:'POS · Delivery',           foot:['<span class="chan ch-p"><i class="ti ti-device-desktop"></i>POS</span>','<span class="chan ch-r">Rappi</span>','<span class="chan ch-u">Uber Eats</span>'] },
     'BARBACOA Y MENUDO':  { nom:'Barbacoa y Menudo',     ico:'ti-meat',               meta:'Domingos · venta directa', foot:['<span class="chan ch-m">Manual</span>'] },
     'EVENTOS':            { nom:'Sueño de Luna Eventos', ico:'ti-confetti',           meta:'Eventos contratados',      foot:['<span class="chan ch-e">Cotización</span>'] },
   };
@@ -6504,11 +6504,11 @@ return `<tr>
                 <input type="number" id="ing-tarjeta" placeholder="0.00" step="0.01" min="0" oninput="LS_UI.calcIngreso()"
                   style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'Figtree',monospace">
               </div>
-              <!-- Terminal Pay (Parrot) -->
+              <!-- Terminal Pay -->
               <div style="padding:12px 16px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)">
                 <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tx-3);margin-bottom:6px">
                   <i class="ti ti-device-tablet-pay" style="font-size:13px;color:var(--terra-claro)"></i>
-                  Terminal Pay (Parrot)
+                  Terminal Pay
                 </div>
                 <input type="number" id="ing-terminal-pay" placeholder="0.00" step="0.01" min="0" oninput="LS_UI.calcIngreso()"
                   style="width:100%;background:transparent;border:none;outline:none;font-size:18px;font-weight:600;color:var(--tx);font-family:'Figtree',monospace">
