@@ -1032,6 +1032,7 @@
     .btn-publicar:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(238,42,123,0.45); }
     .btn-publicar:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 
+    .mkt-cont-hint { font-weight: 400; color: var(--tx-4); text-transform: none; letter-spacing: 0; }
     .mkt-cont-chips { display: flex; flex-wrap: wrap; gap: 8px; }
     .mkt-cont-chip {
       display: flex; align-items: center; gap: 7px;
@@ -10271,16 +10272,25 @@ async function guardarVentaDirecta() {
   let _mktContForm = { archivoBase64: '', tipoMime: '', nombre: '', imagenUrl: '', plataforma: '' };
 
   function _mktContSetPlataforma(p) {
-    _mktContForm.plataforma = p;
-    document.querySelectorAll('.mkt-cont-chip').forEach(el => el.classList.toggle('on', el.dataset.plat === p));
+    if (_mktContForm.multi) {
+      const idx = _mktContForm.plataformas.indexOf(p);
+      if (idx >= 0) {
+        if (_mktContForm.plataformas.length > 1) _mktContForm.plataformas.splice(idx, 1);
+      } else {
+        _mktContForm.plataformas.push(p);
+      }
+    } else {
+      _mktContForm.plataformas = [p];
+    }
+    document.querySelectorAll('.mkt-cont-chip').forEach(el => el.classList.toggle('on', _mktContForm.plataformas.includes(el.dataset.plat)));
     _mktContActualizarPreview();
     _mktContActualizarBotonPublicar();
   }
 
-  function _mktContChipsHTML(seleccionada) {
+  function _mktContChipsHTML(seleccionadas) {
     return `<div class="mkt-cont-chips">${MKT_CONT_PLATAFORMAS.map(p => {
       const meta = MKT_CONT_PLATAFORMA_ICO[p];
-      return `<div class="mkt-cont-chip${p === seleccionada ? ' on' : ''}" data-plat="${p}" onclick="LS_UI._mktContSetPlataforma('${p}')">
+      return `<div class="mkt-cont-chip${seleccionadas.includes(p) ? ' on' : ''}" data-plat="${p}" onclick="LS_UI._mktContSetPlataforma('${p}')">
         <div class="mkt-cont-chip-ico" style="background:${meta.bg}"><i class="ti ${meta.ico}"></i></div>
         <span>${p.replace(' Business', '').replace(' Profile', '')}</span>
       </div>`;
@@ -10337,31 +10347,37 @@ async function guardarVentaDirecta() {
     const prevImg = document.getElementById('mkt-prev-img');
     const prevCap = document.getElementById('mkt-prev-caption');
     const prevWrap = document.getElementById('mkt-prev-imgwrap');
+    const tipo = document.getElementById('mkt-cont-tipo')?.value || 'Post';
+    const vertical = tipo === 'Story' || tipo === 'Reel';
     if (prevImg) prevImg.src = imgSrc || '';
-    if (prevWrap) prevWrap.style.display = imgSrc ? '' : 'none';
+    if (prevWrap) { prevWrap.style.display = imgSrc ? '' : 'none'; prevWrap.style.aspectRatio = vertical ? '9/16' : '1/1'; }
     if (prevCap) prevCap.textContent = cap || 'Tu idea/título aparecerá aquí…';
   }
 
   function _mktContActualizarBotonPublicar() {
     const btn = document.getElementById('mkt-cont-btn-publicar');
     if (!btn) return;
-    const meta = MKT_CONT_PLATAFORMA_ICO[_mktContForm.plataforma];
+    const publicables = (_mktContForm.plataformas || []).filter(p => MKT_CONT_PLATAFORMA_ICO[p] && MKT_CONT_PLATAFORMA_ICO[p].publicable);
     const tieneImagen = !!(_mktContForm.archivoBase64 || _mktContForm.imagenUrl);
-    const necesitaImagen = !meta || meta.requiereImagen;
-    const puede = meta && meta.publicable && (tieneImagen || !necesitaImagen);
-    btn.style.display = meta && meta.publicable ? '' : 'none';
+    const necesitaImagen = publicables.some(p => MKT_CONT_PLATAFORMA_ICO[p].requiereImagen);
+    const puede = publicables.length > 0 && (tieneImagen || !necesitaImagen);
+    btn.style.display = publicables.length > 0 ? '' : 'none';
     btn.disabled = !puede;
     btn.title = (necesitaImagen && !tieneImagen) ? 'Agrega una imagen para publicar' : '';
+    btn.innerHTML = publicables.length > 1
+      ? '<i class="ti ti-send"></i>Publicar en ' + publicables.map(p => p.replace(' Business', '').replace(' Profile', '')).join(' y ')
+      : '<i class="ti ti-send"></i>Publicar ahora';
   }
 
   function _mktFormContenidoHTML(c) {
     c = c || {};
-    _mktContForm = { archivoBase64: '', tipoMime: '', nombre: '', imagenUrl: c.imagenUrl || '', plataforma: c.plataforma || MKT_CONT_PLATAFORMAS[0] };
+    const esNuevo = !c.fila;
+    _mktContForm = { archivoBase64: '', tipoMime: '', nombre: '', imagenUrl: c.imagenUrl || '', plataformas: c.plataforma ? [c.plataforma] : [MKT_CONT_PLATAFORMAS[0]], multi: esNuevo };
     const esc = s => String(s || '').replace(/"/g, '&quot;');
     return `
       <div class="mkt-cont-layout">
         <div class="mkt-cont-col">
-          <div class="ff"><label>Plataforma</label>${_mktContChipsHTML(_mktContForm.plataforma)}</div>
+          <div class="ff"><label>Plataforma${esNuevo ? ' <span class="mkt-cont-hint">(elige una o varias)</span>' : ''}</label>${_mktContChipsHTML(_mktContForm.plataformas)}</div>
           <div class="ff">
             <label>Imagen</label>
             <input type="file" id="mkt-cont-imagen-input" accept="image/*" style="display:none" onchange="LS_UI._mktContOnImagenSeleccionada(this)">
@@ -10373,7 +10389,7 @@ async function guardarVentaDirecta() {
           </div>
           <div class="mkt-cont-row2">
             <div class="ff"><label>Fecha</label><input type="date" id="mkt-cont-fecha" value="${LS_API._fechaISO(c.fecha) || ''}"></div>
-            <div class="ff"><label>Tipo</label><select id="mkt-cont-tipo">${MKT_CONT_TIPOS.map(t => `<option value="${t}"${t === c.tipo ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
+            <div class="ff"><label>Tipo</label><select id="mkt-cont-tipo" onchange="LS_UI._mktContActualizarPreview()">${MKT_CONT_TIPOS.map(t => `<option value="${t}"${t === c.tipo ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
           </div>
           <div class="ff"><label>Idea / título</label><input type="text" id="mkt-cont-idea" value="${esc(c.ideaTitulo)}" placeholder="Ej. Reel de latte art" oninput="LS_UI._mktContActualizarPreview()"></div>
           <div class="ff"><label>Estado</label><select id="mkt-cont-estado">${MKT_CONT_ESTADOS.map(e => `<option value="${e}"${e === c.estado ? ' selected' : ''}>${e}</option>`).join('')}</select></div>
@@ -10406,12 +10422,14 @@ async function guardarVentaDirecta() {
       <button class="btn-save" onclick="LS_UI.guardarNuevoContenidoMkt(false)">Guardar</button>
     </div></div>`);
     _mktContActualizarBotonPublicar();
+    _mktContActualizarPreview();
   }
 
   function _leerFormContenidoMkt() {
     return {
       fecha: document.getElementById('mkt-cont-fecha')?.value || '',
-      plataforma: _mktContForm.plataforma || '',
+      plataformas: (_mktContForm.plataformas || []).slice(),
+      plataforma: (_mktContForm.plataformas || [])[0] || '',
       tipo: document.getElementById('mkt-cont-tipo')?.value || '',
       ideaTitulo: (document.getElementById('mkt-cont-idea')?.value || '').trim(),
       estado: document.getElementById('mkt-cont-estado')?.value || '',
@@ -10432,9 +10450,10 @@ async function guardarVentaDirecta() {
 
   async function _mktContPublicarSiToca(fila, datos, publicarAhora, imagenUrl) {
     if (!publicarAhora) return true;
-    if (!imagenUrl) { toast('Falta imagen', 'Agrega una imagen para publicar en ' + datos.plataforma, 'err'); return false; }
+    const meta = MKT_CONT_PLATAFORMA_ICO[datos.plataforma];
+    if (meta && meta.requiereImagen && !imagenUrl) { toast('Falta imagen', 'Agrega una imagen para publicar en ' + datos.plataforma, 'err'); return false; }
     const r = await LS_API.publicarContenidoMkt(fila, datos.plataforma, datos.ideaTitulo + (datos.notas ? '\n\n' + datos.notas : ''), imagenUrl);
-    if (r.status !== 'ok') { toast('No se publicó', r.msg || 'Error al publicar', 'err'); return false; }
+    if (r.status !== 'ok') { toast('No se publicó', r.msg || 'Error al publicar en ' + datos.plataforma, 'err'); return false; }
     toast('¡Publicado!', 'Se publicó en ' + datos.plataforma, 'ok', 'ti-send');
     return true;
   }
@@ -10442,21 +10461,28 @@ async function guardarVentaDirecta() {
   async function guardarNuevoContenidoMkt(publicarAhora) {
     const datos = _leerFormContenidoMkt();
     if (!datos.fecha || !datos.ideaTitulo) { toast('Falta información', 'Fecha e idea/título son obligatorios', 'err'); return; }
+    if (!datos.plataformas.length) { toast('Falta información', 'Elige al menos una plataforma', 'err'); return; }
     const btn = document.getElementById('mkt-cont-btn-publicar');
+    const btnHtmlOriginal = btn ? btn.innerHTML : '';
     if (btn && publicarAhora) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i>Publicando...'; }
     try {
-      datos.creadoPor = _mktUsuarioActual();
-      datos.imagenUrl = await _mktContResolverImagenUrl();
-      const r = await LS_API.registrarContenidoMkt(datos);
-      if (r.status !== 'ok') { toast('Error', r.msg || 'No se pudo guardar', 'err'); return; }
-      await _mktContPublicarSiToca(r.fila, datos, publicarAhora, datos.imagenUrl);
-      if (!publicarAhora) toast('Guardado', 'Contenido agregado', 'ok');
-      _cerrarModal2();
+      const imagenUrl = await _mktContResolverImagenUrl();
+      const creadoPor = _mktUsuarioActual();
+      let huboError = false;
+      for (const plataforma of datos.plataformas) {
+        const filaDatos = { fecha: datos.fecha, plataforma, tipo: datos.tipo, ideaTitulo: datos.ideaTitulo, estado: datos.estado, notas: datos.notas, creadoPor, imagenUrl };
+        const r = await LS_API.registrarContenidoMkt(filaDatos);
+        if (r.status !== 'ok') { toast('Error', r.msg || ('No se pudo guardar en ' + plataforma), 'err'); huboError = true; continue; }
+        const ok = await _mktContPublicarSiToca(r.fila, filaDatos, publicarAhora, imagenUrl);
+        if (publicarAhora && !ok) huboError = true;
+      }
+      if (!publicarAhora && !huboError) toast('Guardado', 'Contenido agregado', 'ok');
       await renderMktContenido();
+      if (!huboError) _cerrarModal2();
     } catch (e) {
       toast('Error', e.message || 'No se pudo guardar', 'err');
     } finally {
-      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-send"></i>Publicar ahora'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = btnHtmlOriginal || '<i class="ti ti-send"></i>Publicar ahora'; }
     }
   }
 
@@ -10469,6 +10495,7 @@ async function guardarVentaDirecta() {
       <button class="btn-save" onclick="LS_UI.guardarEditarContenidoMkt(${fila},false)">Guardar cambios</button>
     </div></div>`);
     _mktContActualizarBotonPublicar();
+    _mktContActualizarPreview();
   }
 
   async function guardarEditarContenidoMkt(fila, publicarAhora) {
