@@ -10220,7 +10220,7 @@ async function guardarVentaDirecta() {
     const badgeClase = e => e === 'Cancelado' ? 'badge err' : e === 'Pospuesto' ? 'badge warn' : 'badge';
     setEl('tabla-mkt-contenido', datos.map(c => {
       const meta = MKT_CONT_PLATAFORMA_ICO[c.plataforma];
-      const puedePublicar = meta && meta.publicable && c.imagenUrl && c.estado !== 'Publicado';
+      const puedePublicar = meta && meta.publicable && (c.imagenUrl || !meta.requiereImagen) && c.estado !== 'Publicado';
       return `
       <tr>
         <td>${c.imagenUrl ? `<img src="${c.imagenUrl}" class="mkt-cont-thumb">` : `<div class="mkt-cont-thumb mkt-cont-thumb-empty"><i class="ti ti-photo"></i></div>`}</td>
@@ -10259,10 +10259,10 @@ async function guardarVentaDirecta() {
   // apruebe el acceso a su API de Perfil de Negocio que ya solicitamos --
   // ese día se activa igual que Instagram/Facebook (misma API de "Posts").
   const MKT_CONT_PLATAFORMA_ICO = {
-    'Instagram':              { ico: 'ti-brand-instagram', bg: 'linear-gradient(135deg,#f9ce34,#ee2a7b,#6228d7)', publicable: true },
-    'Facebook':               { ico: 'ti-brand-facebook',  bg: '#1877f2', publicable: true },
-    'WhatsApp Business':      { ico: 'ti-brand-whatsapp',  bg: '#25d366', publicable: false },
-    'Google Business Profile':{ ico: 'ti-brand-google',    bg: '#4285f4', publicable: false },
+    'Instagram':              { ico: 'ti-brand-instagram', bg: 'linear-gradient(135deg,#f9ce34,#ee2a7b,#6228d7)', publicable: true, requiereImagen: true },
+    'Facebook':               { ico: 'ti-brand-facebook',  bg: '#1877f2', publicable: true, requiereImagen: false },
+    'WhatsApp Business':      { ico: 'ti-brand-whatsapp',  bg: '#25d366', publicable: false, requiereImagen: false },
+    'Google Business Profile':{ ico: 'ti-brand-google',    bg: '#4285f4', publicable: false, requiereImagen: false },
   };
   // Estado (imagen + medidas) del formulario de contenido mientras el modal
   // está abierto -- se resetea cada vez que se abre uno nuevo. La imagen no
@@ -10347,10 +10347,11 @@ async function guardarVentaDirecta() {
     if (!btn) return;
     const meta = MKT_CONT_PLATAFORMA_ICO[_mktContForm.plataforma];
     const tieneImagen = !!(_mktContForm.archivoBase64 || _mktContForm.imagenUrl);
-    const puede = meta && meta.publicable && tieneImagen;
+    const necesitaImagen = !meta || meta.requiereImagen;
+    const puede = meta && meta.publicable && (tieneImagen || !necesitaImagen);
     btn.style.display = meta && meta.publicable ? '' : 'none';
     btn.disabled = !puede;
-    btn.title = !tieneImagen ? 'Agrega una imagen para publicar' : '';
+    btn.title = (necesitaImagen && !tieneImagen) ? 'Agrega una imagen para publicar' : '';
   }
 
   function _mktFormContenidoHTML(c) {
