@@ -163,12 +163,6 @@ function doGet(e) {
   // empresas) -- facebook-callback.html manda el "code" aquí por GET.
   if (e.parameter && e.parameter.facebookcallback === '1') return _procesarCallbackFacebook(e);
 
-  // Sirve una imagen subida desde "Contenido programado" con este mismo
-  // dominio de Apps Script -- Meta necesita una URL pública para publicar
-  // en Instagram/Facebook, y los enlaces normales de Drive (uc?export=view)
-  // a veces fallan al ser descargados por crawlers externos.
-  if (e.parameter && e.parameter.imgmkt) return _servirImagenMkt(e.parameter.imgmkt);
-
   const accion = (e.parameter && e.parameter.accion) ? e.parameter.accion : '';
 
   const map = {
@@ -1744,10 +1738,11 @@ function _eliminarContenidoMkt(b) {
 
 // ── MARKETING DIGITAL: PUBLICAR EN INSTAGRAM Y FACEBOOK ─────────────────
 // La imagen que se sube desde "Contenido programado" se guarda en una
-// carpeta de Drive y se sirve de vuelta con este mismo dominio de Apps
-// Script (doGet ?imgmkt=<id>) -- Meta necesita poder "verla" en una URL
-// pública, y los enlaces normales de Drive (uc?export=view) a veces
-// fallan al ser descargados por crawlers externos.
+// carpeta de Drive pública y se referencia con el CDN de imágenes de Google
+// (lh3.googleusercontent.com) -- Meta necesita poder "verla" en una URL
+// pública, y tanto los enlaces normales de Drive (uc?export=view) como
+// servirla nosotros mismos desde doGet (retornando un Blob) fallan para
+// crawlers externos o da "valor de retorno no admitido".
 function _mktCarpetaImagenes() {
   var props = PropertiesService.getScriptProperties();
   var folderId = props.getProperty('MKT_IMAGENES_FOLDER_ID');
@@ -1767,13 +1762,9 @@ function _subirImagenMkt(b) {
     var folder = _mktCarpetaImagenes();
     var file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    var url = ScriptApp.getService().getUrl() + '?imgmkt=' + file.getId();
+    var url = 'https://lh3.googleusercontent.com/d/' + file.getId();
     return _json({ status: 'ok', url: url, fileId: file.getId() });
   } catch (e) { return _err(e.message); }
-}
-
-function _servirImagenMkt(fileId) {
-  return DriveApp.getFileById(fileId).getBlob();
 }
 
 // Publica en la página de Facebook: foto con leyenda si hay imagen, o solo
