@@ -9934,6 +9934,7 @@ async function guardarVentaDirecta() {
         <td>${estadoBadge}</td>
         <td>
           <button class="btn-icon" title="Ver inscritos" onclick="LS_UI.verInscritosEvento('${e.id}')" style="background:none;border:none;color:var(--tx-2);cursor:pointer"><i class="ti ti-users"></i></button>
+          <button class="btn-icon" title="Recordatorio por WhatsApp" onclick="LS_UI.recordatorioWhatsAppEvento('${e.id}')" style="background:none;border:none;color:#25d366;cursor:pointer"><i class="ti ti-brand-whatsapp"></i></button>
           <button class="btn-icon" title="Editar" onclick="LS_UI.editarEvento('${e.id}')" style="background:none;border:none;color:var(--azul);cursor:pointer"><i class="ti ti-pencil"></i></button>
           <button class="btn-icon" title="Eliminar" onclick="LS_UI.confirmarBorrarEvento('${e.id}')" style="background:none;border:none;color:var(--rojo);cursor:pointer"><i class="ti ti-trash"></i></button>
         </td>
@@ -10137,6 +10138,83 @@ async function guardarVentaDirecta() {
       console.error(e2);
       toast('Error', 'No se pudieron cargar los inscritos', 'err', 'ti-alert-triangle');
     }
+  }
+
+  /* ---- Recordatorio por WhatsApp a inscritos ----
+     No manda nada solo: arma una fila por NÚMERO (los repetidos se juntan y el
+     mensaje agrega "Registros (N)") y abre el chat de WhatsApp con el texto ya
+     escrito para que se envíe con un toque desde la app de WhatsApp Business.
+     Lo ya enviado se recuerda en este navegador para no duplicar envíos. */
+  const EV_WA_MENSAJE_BASE = [
+    '¡Hola! 👋🏼☕',
+    'Te saludamos de Sueño de Luna Coffee & Roasters. Te recordamos que mañana sábado es la proyección especial de "Café Chairel" a las 6:00 PM en Casa de la Cultura.',
+    '📌 Para asegurar tus accesos en puerta, ¿nos confirmas si sigues contando con tus lugares respondiendo a este mensaje?',
+    'Te sugerimos llegar 15 minutos antes.',
+    '¡Nos vemos mañana! 🎬🍿',
+  ].join('\n\n');
+  let _evWa = { id: '', contactos: [] };
+
+  function _evWaTelNorm(t) { return String(t || '').replace(/\D/g, '').replace(/^52/, '').replace(/^1(?=\d{10}$)/, ''); }
+  function _evWaEnviados(id) { try { return JSON.parse(localStorage.getItem('ls_evwa_' + id) || '[]'); } catch (e) { return []; } }
+  function _evWaMensajePara(base, n) {
+    if (n < 2) return base;
+    const partes = base.split('\n\n');
+    partes.splice(Math.min(2, partes.length), 0, '📋 Registros (' + n + ') con este número.');
+    return partes.join('\n\n');
+  }
+
+  async function recordatorioWhatsAppEvento(id) {
+    const e = _eventosLista.find(x => x.id === id); if (!e) return;
+    try {
+      await fbAuthReady;
+      const val = (await fbDb.ref('eventosInscripciones/' + id).once('value')).val() || {};
+      const porTel = {};
+      Object.keys(val).map(k => val[k]).sort((a, b) => (a.ts || 0) - (b.ts || 0)).forEach(i => {
+        const t = _evWaTelNorm(i.telefono);
+        const c = porTel[t] || (porTel[t] = { tel: t, nombres: [], n: 0 });
+        c.n++; if (i.nombre && c.nombres.indexOf(i.nombre) < 0) c.nombres.push(i.nombre);
+      });
+      _evWa = { id, contactos: Object.values(porTel).filter(c => c.tel.length === 10) };
+      const invalidos = Object.values(porTel).filter(c => c.tel.length !== 10).length;
+      const totalReg = Object.keys(val).length;
+      openModal(`
+      <div class="modal-overlay" id="modal-ev-wa" onclick="if(event.target===this)_cerrarModal()">
+        <div class="modal" style="max-width:640px">
+          <div class="modal-header"><div class="modal-title">Recordatorio por WhatsApp · ${_h(e.titulo)}</div><button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button></div>
+          <div class="modal-body" style="max-height:70vh;overflow-y:auto">
+            <div class="ff"><label>Mensaje <span style="font-weight:400;color:var(--tx-4)">(a los que se repiten se les agrega "Registros (N)")</span></label>
+              <textarea id="ev-wa-msg" rows="9" style="width:100%">${_h(EV_WA_MENSAJE_BASE)}</textarea></div>
+            <div id="ev-wa-resumen" style="font-size:13px;color:var(--tx-3);margin:6px 0 10px"></div>
+            ${invalidos ? `<div style="font-size:12.5px;color:var(--rojo);margin-bottom:8px">${invalidos} número(s) inválido(s) omitidos.</div>` : ''}
+            <table class="tbl"><thead><tr><th>Nombre</th><th>Teléfono</th><th class="num">Reg.</th><th style="width:110px"></th></tr></thead><tbody id="ev-wa-filas"></tbody></table>
+          </div>
+          <div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal()">Cerrar</button></div>
+        </div>
+      </div>`);
+      _evWaPintar(totalReg);
+    } catch (e2) { console.error(e2); toast('Error', 'No se pudieron cargar los inscritos', 'err', 'ti-alert-triangle'); }
+  }
+
+  function _evWaPintar(totalReg) {
+    const env = new Set(_evWaEnviados(_evWa.id));
+    const tb = document.getElementById('ev-wa-filas'); if (!tb) return;
+    tb.innerHTML = _evWa.contactos.map(c => `<tr>
+      <td>${_h(c.nombres.join(' / '))}</td><td style="font-family:monospace">${_h(c.tel)}</td><td class="num">${c.n > 1 ? '<b>' + c.n + '</b>' : c.n}</td>
+      <td>${env.has(c.tel)
+        ? `<button class="btn btn-outline btn-sm" onclick="LS_UI.evWaEnviar('${c.tel}')" style="color:var(--verde)"><i class="ti ti-check"></i>Enviado</button>`
+        : `<button class="btn btn-primary btn-sm" onclick="LS_UI.evWaEnviar('${c.tel}')"><i class="ti ti-brand-whatsapp"></i>Enviar</button>`}</td></tr>`).join('');
+    const res = document.getElementById('ev-wa-resumen');
+    if (res) res.textContent = _evWa.contactos.length + ' personas' + (totalReg ? ' (' + totalReg + ' registros)' : '') + ' · ' + env.size + ' enviados · ' + (_evWa.contactos.length - env.size) + ' pendientes';
+    _evWa.totalReg = totalReg || _evWa.totalReg;
+  }
+
+  function evWaEnviar(tel) {
+    const c = _evWa.contactos.find(x => x.tel === tel); if (!c) return;
+    const base = (document.getElementById('ev-wa-msg') || {}).value || EV_WA_MENSAJE_BASE;
+    window.open('https://wa.me/52' + tel + '?text=' + encodeURIComponent(_evWaMensajePara(base, c.n)), '_blank', 'noopener');
+    const env = new Set(_evWaEnviados(_evWa.id)); env.add(tel);
+    try { localStorage.setItem('ls_evwa_' + _evWa.id, JSON.stringify(Array.from(env))); } catch (e) {}
+    _evWaPintar(_evWa.totalReg);
   }
 
   /* ============ ASISTENCIA ============
@@ -13135,7 +13213,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderUsuariosPOS, abrirNuevoUsuarioPOS, editarUsuarioPOS, guardarUsuarioPOS, confirmarBorrarUsuarioPOS, ejecutarBorrarUsuarioPOS,
     renderChecklists, ckCambiarSuc, ckCambiarFecha, ckSwitchVista, ckAsignar, ckReabrir, ckQuitarTarea, ckRegenerar, ckAbrirTareaExtra, ckGuardarTareaExtra,
     ckToggleActiva, ckBorrarPlantilla, ckEditarPlantilla, ckAgregarTarea, ckGuardarPlantilla, ckClonarPlantilla, ckEjecutarClonar,
-    renderEventos, abrirNuevoEvento, editarEvento, guardarEvento, confirmarBorrarEvento, ejecutarBorrarEvento, verInscritosEvento, _evSubirImagen, _evAgregarCampoExtra, _evToggleOpcionesCampo,
+    renderEventos, abrirNuevoEvento, editarEvento, guardarEvento, confirmarBorrarEvento, ejecutarBorrarEvento, verInscritosEvento, recordatorioWhatsAppEvento, evWaEnviar, _evSubirImagen, _evAgregarCampoExtra, _evToggleOpcionesCampo,
     renderAsistencia, filtrarAsistencia, abrirEditarAsistencia, guardarEditarAsistencia, eliminarFilaAsistencia,
     renderMarketing, mktSwitchVista, abrirNuevaFechaMkt, guardarNuevaFechaMkt, abrirEditarFechaMkt, guardarEditarFechaMkt, eliminarFilaFechaMkt,
     renderMktMetricas, abrirEditarMetricaMkt, guardarEditarMetricaMkt, eliminarFilaMetricaMkt, actualizarMetricasMktAhora, conectarTikTok, conectarFacebook,
