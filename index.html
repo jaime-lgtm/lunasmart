@@ -324,7 +324,12 @@
     /* ═══════════════════════════════════════════════════════
        APP SHELL
     ═══════════════════════════════════════════════════════ */
-    #app { display: none; min-height: 100vh; }
+    /* color explícito aquí (no solo heredado de body) -- si no, cualquier
+       texto sin su propio "color" se queda con el --tx congelado del tema
+       de body (fuera de #app, donde no llegan las variables de data-theme)
+       en vez de recalcularlo con el tema activo -- así se veía casi
+       invisible el detalle de artículos de una factura en tema Formal. */
+    #app { display: none; min-height: 100vh; color: var(--tx); }
     .layout { display: flex; min-height: 100vh; }
 
     /* SIDEBAR */
