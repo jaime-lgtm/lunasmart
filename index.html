@@ -449,6 +449,7 @@
     }
     .period-seg button:hover { color: var(--tx); }
     .period-seg button.on { background: var(--terra); color: #fff; box-shadow: var(--sh-1); }
+    .period-seg .ps-cal { display: flex; align-items: center; padding: 5px 9px; font-size: 13px; }
 
     /* Theme switch */
     .theme-switch { position: relative; }
@@ -1290,6 +1291,7 @@
           <button class="ps-q" data-period="semana" onclick="setPeriod('semana',this)">Semana</button>
           <button class="on" data-period="mes" onclick="setPeriod('mes',this)">Mes</button>
           <button data-period="ano" onclick="setPeriod('ano',this)">Año</button>
+          <button class="ps-cal" data-period="personalizado" id="ps-personalizado-btn" onclick="abrirPeriodoPersonalizado()" title="Rango personalizado"><i class="ti ti-calendar"></i></button>
         </div>
         <div class="theme-switch" id="theme-switch">
           <button class="theme-btn" onclick="toggleThemeMenu(event)" title="Cambiar vista">
@@ -2518,7 +2520,7 @@ const THEMES = {
 };
 const THEME_ORDER = ['dia', 'noche', 'ocular'];
 
-let state = { page: 'dashboard', branch: 'all', period: 'mes', theme: 'dia' };
+let state = { page: 'dashboard', branch: 'all', period: 'mes', theme: 'dia', periodoPersonalizado: null };
 
 /* ─── THEME ─── */
 function buildThemeMenu() {
@@ -2821,6 +2823,45 @@ function setPeriod(p, el) {
   state.desde = desde;
 
   // Recargar la página activa con el nuevo período (usar el id limpio de state.page)
+  const paginaActual = (typeof state !== 'undefined' && state.page) ? state.page : 'dashboard';
+  if (typeof LS_UI !== 'undefined' && LS_UI.invalidarCacheYRecargar) {
+    LS_UI.invalidarCacheYRecargar(paginaActual);
+  }
+}
+
+// Rango de fechas a mano (una fecha específica, o un "Desde" y "Hasta") --
+// mismo mecanismo que Hoy/Semana/Mes/Año: se guarda en state y todas las
+// páginas que ya leen LS_API.getRangoPeriodo(state.period) lo recogen solas.
+function abrirPeriodoPersonalizado() {
+  const c = state.periodoPersonalizado || {};
+  const hoyIso = new Date().toISOString().split('T')[0];
+  _modal2(`
+    <div class="modal" style="max-width:360px">
+      <div class="modal-header"><div class="modal-title">Rango de fechas personalizado</div><button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button></div>
+      <div class="modal-body">
+        <div class="fg">
+          <div class="ff"><label>Desde</label><input type="date" id="pp-desde" value="${c.desde || hoyIso}"></div>
+          <div class="ff"><label>Hasta</label><input type="date" id="pp-hasta" value="${c.hasta || hoyIso}"></div>
+        </div>
+        <div style="font-size:11.5px;color:var(--tx-4)">Deja "Hasta" igual que "Desde" para ver un solo día.</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button>
+        <button class="btn-save" onclick="aplicarPeriodoPersonalizado()">Aplicar</button>
+      </div>
+    </div>`);
+}
+function aplicarPeriodoPersonalizado() {
+  const desde = document.getElementById('pp-desde').value;
+  const hasta = document.getElementById('pp-hasta').value || desde;
+  if (!desde) { toast('Falta información', 'Elige al menos la fecha "Desde"', 'err'); return; }
+  if (hasta < desde) { toast('Rango inválido', '"Hasta" no puede ser antes que "Desde"', 'err'); return; }
+  state.periodoPersonalizado = { desde, hasta };
+  state.period = 'personalizado';
+  state.desde = desde;
+  document.querySelectorAll('#period-seg button').forEach(b => b.classList.toggle('on', b.id === 'ps-personalizado-btn'));
+  updateSubtitle();
+  _cerrarModal2();
   const paginaActual = (typeof state !== 'undefined' && state.page) ? state.page : 'dashboard';
   if (typeof LS_UI !== 'undefined' && LS_UI.invalidarCacheYRecargar) {
     LS_UI.invalidarCacheYRecargar(paginaActual);
@@ -4480,6 +4521,12 @@ const LS_API = (() => {
     const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
     const anio = hoyD.getFullYear();
+    if (period === 'personalizado') {
+      const c = (typeof state !== 'undefined' && state.periodoPersonalizado) || {};
+      const d = c.desde || iso(hoyD), h = c.hasta || d;
+      const fmt = s => (s || '').split('-').reverse().join('/');
+      return { desde: d, hasta: h, label: d === h ? fmt(d) : ('del ' + fmt(d) + ' al ' + fmt(h)) };
+    }
     if (period === 'hoy') {
       return { desde: iso(hoyD), hasta: iso(hoyD), label: 'hoy ' + iso(hoyD).split('-').reverse().join('/') };
     }
@@ -4502,6 +4549,15 @@ const LS_API = (() => {
     const hoyD = new Date();
     const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    if (period === 'personalizado') {
+      const c = (typeof state !== 'undefined' && state.periodoPersonalizado) || {};
+      if (!c.desde) return { desde: iso(hoyD), hasta: iso(hoyD), label: '' };
+      const d0 = new Date(c.desde + 'T12:00:00'), d1 = new Date((c.hasta || c.desde) + 'T12:00:00');
+      const dias = Math.round((d1 - d0) / 86400000) + 1;
+      const finAnt = new Date(d0); finAnt.setDate(finAnt.getDate() - 1);
+      const inicioAnt = new Date(finAnt); inicioAnt.setDate(inicioAnt.getDate() - (dias - 1));
+      return { desde: iso(inicioAnt), hasta: iso(finAnt), label: 'período anterior' };
+    }
     if (period === 'hoy') {
       const ayer = new Date(hoyD); ayer.setDate(ayer.getDate() - 1);
       return { desde: iso(ayer), hasta: iso(ayer), label: 'ayer' };
