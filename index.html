@@ -1922,7 +1922,7 @@
         <div class="card-sub">Productos en venta por sucursal, en vivo desde Firebase — vincula cada uno con su receta</div>
       </div>
       <div class="card-actions">
-        <button class="btn btn-sm" onclick="LS_UI.abrirOrdenCategorias()"><i class="ti ti-arrows-sort"></i>Ordenar categorías</button>
+        <button class="btn btn-sm" onclick="LS_UI.abrirOrdenCategorias()"><i class="ti ti-tags"></i>Categorías y subcategorías</button>
         <button class="btn btn-primary btn-sm" onclick="LS_UI.abrirNuevoProductoPOS()"><i class="ti ti-plus"></i>Nuevo producto</button>
       </div>
     </div>
@@ -7661,6 +7661,7 @@ async function guardarVentaDirecta() {
   let _catposSucursal = 'cafeteria';
   let _catposUltimaBranchSincronizada; // evita que renderCatalogoPOS() pise una eleccion manual de chip de sucursal cada vez que se re-renderiza la pagina
   let _catposProductos = [];
+  let _catposCatMapActual = { categorias: [], subcategorias: {} }; // categorias/subcategorias registradas, de la sucursal abierta ahora en el form de producto
   let _catposRecetas = [];
   let _comisionesDelivery = { rappi: 0, ubereats: 0, didi: 0 };
   let _catposSoloSinReceta = false;
@@ -7824,34 +7825,212 @@ async function guardarVentaDirecta() {
     _catposAplicarFiltros();
   }
 
-  // ── Orden manual de categorias/subcategorias (categoriasOrden/<suc> en Firebase) ──
-  async function abrirOrdenCategorias() {
+  // ── Categorias/subcategorias del menu POS (categoriasOrden/<suc> en Firebase) ──
+  // Este nodo guarda el REGISTRO real (no solo el orden): una categoria o
+  // subcategoria puede existir aqui aunque ningun producto la use todavia
+  // (para poder crearla de antemano), y se le une cualquier valor "suelto"
+  // que ya traigan productos viejos (para no perder datos que nunca se
+  // registraron formalmente).
+  async function _catposCargarCatMap(suc) {
     const categoriasReales = Array.from(new Set((_catposProductos||[]).map(p => p.menu).filter(Boolean)));
     let guardado = { categorias: [], subcategorias: {} };
     try {
       await fbAuthReady;
-      const snap = await fbDb.ref('categoriasOrden/' + _catposSucursal).once('value');
+      const snap = await fbDb.ref('categoriasOrden/' + suc).once('value');
       guardado = snap.val() || guardado;
     } catch(e) { console.error(e); }
-    const ordenGuardado = guardado.categorias || [];
+    const registradas = guardado.categorias || [];
     const categorias = [
-      ...ordenGuardado.filter(c => categoriasReales.includes(c)),
-      ...categoriasReales.filter(c => !ordenGuardado.includes(c)).sort((a,b)=>a.localeCompare(b)),
+      ...registradas,
+      ...categoriasReales.filter(c => !registradas.includes(c)).sort((a,b)=>a.localeCompare(b)),
     ];
-    window._ordenCatSubGuardado = guardado.subcategorias || {};
+    const subcategorias = {};
+    categorias.forEach(cat => {
+      const subsReales = Array.from(new Set((_catposProductos||[]).filter(p => p.menu === cat).map(p => p.sub).filter(Boolean)));
+      const subsRegistradas = (guardado.subcategorias||{})[cat] || [];
+      subcategorias[cat] = [
+        ...subsRegistradas,
+        ...subsReales.filter(s => !subsRegistradas.includes(s)).sort((a,b)=>a.localeCompare(b)),
+      ];
+    });
+    return { categorias, subcategorias };
+  }
+
+  async function _catposRegistrarCategoriaSiNueva(suc, menu, sub) {
+    if (!menu) return;
+    try {
+      await fbAuthReady;
+      await fbDb.ref('categoriasOrden/' + suc).transaction(cur => {
+        cur = cur || {};
+        cur.categorias = cur.categorias || [];
+        if (!cur.categorias.includes(menu)) cur.categorias.push(menu);
+        if (sub) {
+          cur.subcategorias = cur.subcategorias || {};
+          cur.subcategorias[menu] = cur.subcategorias[menu] || [];
+          if (!cur.subcategorias[menu].includes(sub)) cur.subcategorias[menu].push(sub);
+        }
+        return cur;
+      });
+    } catch(e) { console.error(e); }
+  }
+
+  // ── Selects de categoria/subcategoria dentro del formulario de producto ──
+  function _catposOpcionesCategoriaHTML(catMap, actual) {
+    const cats = (catMap.categorias || []).slice();
+    if (actual && !cats.includes(actual)) cats.unshift(actual);
+    return '<option value="">— Ninguna —</option>'
+      + cats.map(c => `<option value="${_h(c)}" ${c===actual?'selected':''}>${_h(c)}</option>`).join('')
+      + '<option value="__nueva__">+ Nueva categoría...</option>';
+  }
+
+  function _catposOpcionesSubcategoriaHTML(catMap, categoria, actual) {
+    const subs = ((catMap.subcategorias||{})[categoria] || []).slice();
+    if (actual && !subs.includes(actual)) subs.unshift(actual);
+    return '<option value="">— Ninguna —</option>'
+      + subs.map(s => `<option value="${_h(s)}" ${s===actual?'selected':''}>${_h(s)}</option>`).join('')
+      + '<option value="__nueva__">+ Nueva subcategoría...</option>';
+  }
+
+  function _catposRefrescarSubSelect(categoria, valorActual) {
+    const sel = document.getElementById('pp-sub');
+    if (!sel) return;
+    sel.innerHTML = _catposOpcionesSubcategoriaHTML(_catposCatMapActual, categoria, valorActual || '');
+    const fila = document.getElementById('pp-sub-nueva');
+    if (fila) fila.style.display = 'none';
+  }
+
+  function _onCambiaCategoriaPOS(selectEl) {
+    const fila = document.getElementById('pp-menu-nueva');
+    if (selectEl.value === '__nueva__') {
+      if (fila) { fila.style.display = 'flex'; const inp = document.getElementById('pp-menu-nueva-input'); if (inp) { inp.value = ''; inp.focus(); } }
+      return;
+    }
+    if (fila) fila.style.display = 'none';
+    _catposRefrescarSubSelect(selectEl.value, '');
+  }
+
+  async function _confirmarNuevaCategoriaPOS() {
+    const inp = document.getElementById('pp-menu-nueva-input');
+    const nombre = (inp.value || '').trim();
+    if (!nombre) return;
+    const sel = document.getElementById('pp-menu');
+    if ([...sel.options].some(o => o.value.toLowerCase() === nombre.toLowerCase())) { toast('Ya existe', 'Esa categoría ya está en la lista', 'err', 'ti-alert-triangle'); return; }
+    const opt = document.createElement('option');
+    opt.value = nombre; opt.textContent = nombre;
+    sel.insertBefore(opt, sel.querySelector('option[value="__nueva__"]'));
+    sel.value = nombre;
+    document.getElementById('pp-menu-nueva').style.display = 'none';
+    _catposCatMapActual.categorias = _catposCatMapActual.categorias || [];
+    if (!_catposCatMapActual.categorias.includes(nombre)) _catposCatMapActual.categorias.push(nombre);
+    _catposRefrescarSubSelect(nombre, '');
+    await _catposRegistrarCategoriaSiNueva(_catposSucursal, nombre, null);
+  }
+
+  function _onCambiaSubcategoriaPOS(selectEl) {
+    const fila = document.getElementById('pp-sub-nueva');
+    if (selectEl.value === '__nueva__') {
+      if (fila) { fila.style.display = 'flex'; const inp = document.getElementById('pp-sub-nueva-input'); if (inp) { inp.value = ''; inp.focus(); } }
+    } else if (fila) fila.style.display = 'none';
+  }
+
+  async function _confirmarNuevaSubcategoriaPOS() {
+    const inp = document.getElementById('pp-sub-nueva-input');
+    const nombre = (inp.value || '').trim();
+    if (!nombre) return;
+    const sel = document.getElementById('pp-sub');
+    if ([...sel.options].some(o => o.value.toLowerCase() === nombre.toLowerCase())) { toast('Ya existe', 'Esa subcategoría ya está en la lista', 'err', 'ti-alert-triangle'); return; }
+    const opt = document.createElement('option');
+    opt.value = nombre; opt.textContent = nombre;
+    sel.insertBefore(opt, sel.querySelector('option[value="__nueva__"]'));
+    sel.value = nombre;
+    document.getElementById('pp-sub-nueva').style.display = 'none';
+    const catSel = document.getElementById('pp-menu');
+    const categoria = catSel ? catSel.value : '';
+    if (categoria) {
+      _catposCatMapActual.subcategorias = _catposCatMapActual.subcategorias || {};
+      _catposCatMapActual.subcategorias[categoria] = _catposCatMapActual.subcategorias[categoria] || [];
+      if (!_catposCatMapActual.subcategorias[categoria].includes(nombre)) _catposCatMapActual.subcategorias[categoria].push(nombre);
+      await _catposRegistrarCategoriaSiNueva(_catposSucursal, categoria, nombre);
+    }
+  }
+
+  async function _catposRenombrarCategoria(viejo, nuevo) {
+    await fbAuthReady;
+    await fbDb.ref('categoriasOrden/' + _catposSucursal).transaction(cur => {
+      cur = cur || {};
+      cur.categorias = (cur.categorias || []).map(c => c === viejo ? nuevo : c);
+      if (!cur.categorias.includes(nuevo)) cur.categorias.push(nuevo);
+      cur.subcategorias = cur.subcategorias || {};
+      if (cur.subcategorias[viejo]) { cur.subcategorias[nuevo] = cur.subcategorias[viejo]; delete cur.subcategorias[viejo]; }
+      return cur;
+    });
+    const updates = {};
+    (_catposProductos || []).forEach(p => { if (p.menu === viejo) updates['catalogo/' + _catposSucursal + '/' + p.id + '/menu'] = nuevo; });
+    if (Object.keys(updates).length) await fbDb.ref().update(updates);
+  }
+
+  async function _catposBorrarCategoria(nombre) {
+    const enUso = (_catposProductos || []).some(p => p.menu === nombre);
+    if (enUso) { toast('No se puede borrar', 'Hay productos usando esta categoría. Cámbialos de categoría primero.', 'err', 'ti-alert-triangle'); return false; }
+    await fbAuthReady;
+    await fbDb.ref('categoriasOrden/' + _catposSucursal).transaction(cur => {
+      cur = cur || {};
+      cur.categorias = (cur.categorias || []).filter(c => c !== nombre);
+      if (cur.subcategorias) delete cur.subcategorias[nombre];
+      return cur;
+    });
+    return true;
+  }
+
+  async function _catposRenombrarSubcategoria(categoria, viejo, nuevo) {
+    await fbAuthReady;
+    await fbDb.ref('categoriasOrden/' + _catposSucursal).transaction(cur => {
+      cur = cur || {};
+      cur.subcategorias = cur.subcategorias || {};
+      const subs = cur.subcategorias[categoria] || [];
+      cur.subcategorias[categoria] = subs.map(s => s === viejo ? nuevo : s);
+      if (!cur.subcategorias[categoria].includes(nuevo)) cur.subcategorias[categoria].push(nuevo);
+      return cur;
+    });
+    const updates = {};
+    (_catposProductos || []).forEach(p => { if (p.menu === categoria && p.sub === viejo) updates['catalogo/' + _catposSucursal + '/' + p.id + '/sub'] = nuevo; });
+    if (Object.keys(updates).length) await fbDb.ref().update(updates);
+  }
+
+  async function _catposBorrarSubcategoria(categoria, nombre) {
+    const enUso = (_catposProductos || []).some(p => p.menu === categoria && p.sub === nombre);
+    if (enUso) { toast('No se puede borrar', 'Hay productos usando esta subcategoría. Cámbialos de subcategoría primero.', 'err', 'ti-alert-triangle'); return false; }
+    await fbAuthReady;
+    await fbDb.ref('categoriasOrden/' + _catposSucursal).transaction(cur => {
+      cur = cur || {};
+      cur.subcategorias = cur.subcategorias || {};
+      cur.subcategorias[categoria] = (cur.subcategorias[categoria] || []).filter(s => s !== nombre);
+      return cur;
+    });
+    return true;
+  }
+
+  async function abrirOrdenCategorias() {
+    const catMap = await _catposCargarCatMap(_catposSucursal);
+    const categorias = catMap.categorias;
+    window._ordenCatSubGuardado = catMap.subcategorias || {};
     openModal(`
     <div class="modal-overlay" id="modal-orden-cat" onclick="if(event.target===this)_cerrarModal()">
       <div class="modal" style="max-width:480px">
         <div class="modal-header">
           <div>
-            <div class="modal-title">Ordenar categorías</div>
+            <div class="modal-title">Categorías y subcategorías</div>
             <div class="modal-sub">${(CATPOS_SUCURSALES.find(s=>s.id===_catposSucursal)||{}).nombre||''}</div>
           </div>
           <button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button>
         </div>
         <div class="modal-body">
           <div class="ff"><label>Categorías</label>
-            <div style="font-size:11px;color:var(--tx-4);margin:-4px 0 10px">Este es el orden en que aparecen en el POS al tomar un pedido.</div>
+            <div style="font-size:11px;color:var(--tx-4);margin:-4px 0 10px">Arrastra desde &#9776; para ordenar como aparecen en el POS. Usa el lápiz para renombrar (actualiza todos los productos) y la papelera para borrar (solo si nada la está usando).</div>
+            <div style="display:flex;gap:6px;margin-bottom:10px">
+              <input type="text" id="orden-cat-nueva-input" placeholder="Nueva categoría..." style="flex:1;padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px" onkeydown="if(event.key==='Enter'){event.preventDefault();LS_UI._adminAgregarCategoria();}">
+              <button type="button" class="btn btn-sm btn-primary" onclick="LS_UI._adminAgregarCategoria()"><i class="ti ti-plus"></i> Agregar</button>
+            </div>
             <div id="orden-cat-lista">${categorias.map(c => _ordenCatItemHTML('cat', c)).join('')}</div>
           </div>
           <div class="ff" style="margin-top:14px">
@@ -7859,7 +8038,11 @@ async function guardarVentaDirecta() {
             <select id="orden-cat-select" data-prev="${categorias[0]?_h(categorias[0]):''}" onchange="LS_UI._cambiarCategoriaOrdenSub(this)" style="width:100%;padding:9px 12px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px">
               ${categorias.map(c => `<option value="${_h(c)}">${_h(c)}</option>`).join('')}
             </select>
-            <div id="orden-sub-lista" style="margin-top:10px"></div>
+            <div style="display:flex;gap:6px;margin:10px 0">
+              <input type="text" id="orden-sub-nueva-input" placeholder="Nueva subcategoría..." style="flex:1;padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px" onkeydown="if(event.key==='Enter'){event.preventDefault();LS_UI._adminAgregarSubcategoria();}">
+              <button type="button" class="btn btn-sm btn-primary" onclick="LS_UI._adminAgregarSubcategoria()"><i class="ti ti-plus"></i> Agregar</button>
+            </div>
+            <div id="orden-sub-lista"></div>
           </div>
         </div>
         <div class="modal-footer">
@@ -7874,9 +8057,11 @@ async function guardarVentaDirecta() {
 
   function _ordenCatItemHTML(tipo, nombre) {
     const idSafe = nombre.replace(/[^a-zA-Z0-9]/g, '_');
-    return `<div class="orden-cat-item" draggable="true" data-nombre="${_h(nombre)}" id="orden-${tipo}-${idSafe}" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;margin-bottom:6px;background:var(--cafe-card)">
+    return `<div class="orden-cat-item" draggable="true" data-tipo="${tipo}" data-nombre="${_h(nombre)}" id="orden-${tipo}-${idSafe}" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;margin-bottom:6px;background:var(--cafe-card)">
       <span class="drag-handle">&#9776;</span>
       <span style="flex:1;font-size:13px">${_h(nombre)}</span>
+      <button type="button" class="icon-btn" title="Renombrar" onclick="LS_UI._renombrarCatAdmin(this)"><i class="ti ti-pencil"></i></button>
+      <button type="button" class="icon-btn" title="Borrar" onclick="LS_UI._borrarCatAdmin(this)"><i class="ti ti-trash"></i></button>
     </div>`;
   }
 
@@ -7896,14 +8081,126 @@ async function guardarVentaDirecta() {
   function _renderOrdenSubcategorias(categoria) {
     const cont = document.getElementById('orden-sub-lista');
     if (!cont) return;
-    const subsReales = Array.from(new Set((_catposProductos||[]).filter(p => p.menu === categoria).map(p => p.sub).filter(Boolean)));
-    const guardado = (window._ordenCatSubGuardado || {})[categoria] || [];
-    const subs = [
-      ...guardado.filter(s => subsReales.includes(s)),
-      ...subsReales.filter(s => !guardado.includes(s)).sort((a,b)=>a.localeCompare(b)),
-    ];
+    const subs = (window._ordenCatSubGuardado || {})[categoria] || [];
     cont.innerHTML = subs.length ? subs.map(s => _ordenCatItemHTML('sub', s)).join('') : '<div class="sub" style="font-size:12px;color:var(--tx-4)">Sin subcategorías en esta categoría</div>';
     _habilitarArrastre('orden-sub-lista');
+  }
+
+  async function _adminAgregarCategoria() {
+    const inp = document.getElementById('orden-cat-nueva-input');
+    const nombre = (inp.value || '').trim();
+    if (!nombre) return;
+    const lista = document.getElementById('orden-cat-lista');
+    const existentes = [...lista.querySelectorAll('.orden-cat-item')].map(el => el.dataset.nombre.toLowerCase());
+    if (existentes.includes(nombre.toLowerCase())) { toast('Ya existe', 'Esa categoría ya está en la lista', 'err', 'ti-alert-triangle'); return; }
+    try {
+      await _catposRegistrarCategoriaSiNueva(_catposSucursal, nombre, null);
+      lista.insertAdjacentHTML('beforeend', _ordenCatItemHTML('cat', nombre));
+      _habilitarArrastre('orden-cat-lista');
+      const sel = document.getElementById('orden-cat-select');
+      if (sel) { const o = document.createElement('option'); o.value = nombre; o.textContent = nombre; sel.appendChild(o); }
+      window._ordenCatSubGuardado = window._ordenCatSubGuardado || {};
+      window._ordenCatSubGuardado[nombre] = [];
+      inp.value = '';
+      toast('Categoría agregada', '', 'ok', 'ti-check');
+    } catch(e) { console.error(e); toast('Error', 'No se pudo agregar', 'err', 'ti-alert-triangle'); }
+  }
+
+  async function _adminAgregarSubcategoria() {
+    const sel = document.getElementById('orden-cat-select');
+    const categoria = sel ? sel.value : null;
+    if (!categoria) { toast('Primero elige una categoría', '', 'err', 'ti-alert-triangle'); return; }
+    const inp = document.getElementById('orden-sub-nueva-input');
+    const nombre = (inp.value || '').trim();
+    if (!nombre) return;
+    const cont = document.getElementById('orden-sub-lista');
+    const existentes = [...cont.querySelectorAll('.orden-cat-item')].map(el => el.dataset.nombre.toLowerCase());
+    if (existentes.includes(nombre.toLowerCase())) { toast('Ya existe', 'Esa subcategoría ya está en la lista', 'err', 'ti-alert-triangle'); return; }
+    try {
+      await _catposRegistrarCategoriaSiNueva(_catposSucursal, categoria, nombre);
+      window._ordenCatSubGuardado = window._ordenCatSubGuardado || {};
+      window._ordenCatSubGuardado[categoria] = [...(window._ordenCatSubGuardado[categoria]||[]), nombre];
+      if (cont.querySelector('.sub')) cont.innerHTML = '';
+      cont.insertAdjacentHTML('beforeend', _ordenCatItemHTML('sub', nombre));
+      _habilitarArrastre('orden-sub-lista');
+      inp.value = '';
+      toast('Subcategoría agregada', '', 'ok', 'ti-check');
+    } catch(e) { console.error(e); toast('Error', 'No se pudo agregar', 'err', 'ti-alert-triangle'); }
+  }
+
+  function _renombrarCatAdmin(btn) {
+    const item = btn.closest('.orden-cat-item');
+    if (!item || item.querySelector('.orden-cat-rename-inp')) return;
+    const tipo = item.dataset.tipo;
+    const actual = item.dataset.nombre;
+    const span = item.querySelector('span:last-of-type');
+    const original = span.outerHTML;
+    span.outerHTML = `<input type="text" class="orden-cat-rename-inp" value="${_h(actual)}" style="flex:1;padding:4px 8px;border:1px solid var(--line-2);border-radius:6px;background:var(--cafe-800);color:var(--tx);font-size:13px">`;
+    const inp = item.querySelector('.orden-cat-rename-inp');
+    inp.focus(); inp.select();
+    let resuelto = false;
+    const confirmar = async () => {
+      if (resuelto) return; resuelto = true;
+      const nuevo = inp.value.trim();
+      if (!nuevo || nuevo === actual) { inp.outerHTML = original; return; }
+      inp.disabled = true;
+      try {
+        if (tipo === 'cat') await _catposRenombrarCategoria(actual, nuevo);
+        else {
+          const sel = document.getElementById('orden-cat-select');
+          await _catposRenombrarSubcategoria(sel ? sel.value : null, actual, nuevo);
+        }
+        await _catposCargar();
+        toast('Renombrado', '', 'ok', 'ti-check');
+        abrirOrdenCategorias();
+      } catch(e) {
+        console.error(e);
+        toast('Error', 'No se pudo renombrar', 'err', 'ti-alert-triangle');
+        inp.outerHTML = original;
+      }
+    };
+    inp.addEventListener('blur', confirmar);
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') inp.blur();
+      else if (e.key === 'Escape') { resuelto = true; inp.outerHTML = original; }
+    });
+  }
+
+  function _borrarCatAdmin(btn) {
+    const item = btn.closest('.orden-cat-item');
+    if (!item) return;
+    const tipo = item.dataset.tipo;
+    const nombre = item.dataset.nombre;
+    const sel = document.getElementById('orden-cat-select');
+    const categoriaPadre = tipo === 'sub' ? ((sel && sel.value) || '') : '';
+    _modal2(`
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header">
+        <div class="modal-title">¿Borrar "${_h(nombre)}"?</div>
+        <button class="modal-close" onclick="_cerrarModal2()"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="modal-body"><p style="color:var(--tx-2);font-size:13px">Solo se puede borrar si ningún producto la está usando actualmente.</p></div>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="_cerrarModal2()">Cancelar</button>
+        <button class="btn-save" data-tipo="${tipo}" data-nombre="${_h(nombre)}" data-cat-padre="${_h(categoriaPadre)}" style="background:var(--rojo)" onclick="LS_UI._confirmarBorrarCatAdmin(this)">Borrar</button>
+      </div>
+    </div>`);
+  }
+
+  async function _confirmarBorrarCatAdmin(btn) {
+    const { tipo, nombre, catPadre } = btn.dataset;
+    try {
+      const ok = tipo === 'cat' ? await _catposBorrarCategoria(nombre) : await _catposBorrarSubcategoria(catPadre, nombre);
+      _cerrarModal2();
+      if (!ok) return;
+      toast('Eliminado', '', 'ok', 'ti-check');
+      await _catposCargar();
+      abrirOrdenCategorias();
+    } catch(e) {
+      console.error(e);
+      _cerrarModal2();
+      toast('Error', 'No se pudo eliminar', 'err', 'ti-alert-triangle');
+    }
   }
 
   async function guardarOrdenCategorias() {
@@ -8508,15 +8805,21 @@ async function guardarVentaDirecta() {
     const idParaFoto = producto ? producto.id : _catposSiguienteId();
 
     let artOpts = '';
+    let catMap = { categorias: [], subcategorias: {} };
     try {
-      const [prods, snapMods] = await Promise.all([
+      const [prods, snapMods, cm] = await Promise.all([
         LS_API.getCatalogo(),
         fbDb ? (async () => { await fbAuthReady; return fbDb.ref('modificadores/' + _catposSucursal).once('value'); })() : Promise.resolve(null),
+        _catposCargarCatMap(_catposSucursal),
       ]);
       artOpts = prods.map(p => `<option value="${String(p.articulo).replace(/"/g,'&quot;')}">`).join('');
       const valMods = snapMods ? (snapMods.val() || {}) : {};
       _formLibModsList = Object.keys(valMods).map(id => Object.assign({ id }, valMods[id])).sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+      catMap = cm;
     } catch(e) {}
+    _catposCatMapActual = catMap;
+    const menuActual = producto ? (producto.menu || '') : '';
+    const subActual = producto ? (producto.sub || '') : '';
     const libModsList = _formLibModsList;
     // Solo se muestran los YA ASIGNADOS (en el orden en que se guardaron --
     // ese es el orden en que apareceran al tomar el pedido en el POS). Los
@@ -8632,10 +8935,23 @@ async function guardarVentaDirecta() {
             <label for="pp-dinero-electronico" style="margin:0;text-transform:none;font-size:13px;color:var(--tx-2);cursor:pointer">💰 Genera dinero electrónico (2%) -- desmarcar en combos y promociones</label>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <div class="ff"><label>Categoría (menú)</label><input type="text" id="pp-menu" list="pp-menu-list" value="${_h(producto ? producto.menu : '')}" placeholder="Bebidas, Alimentos..."></div>
-            <div class="ff"><label>Subcategoría</label><input type="text" id="pp-sub" list="pp-sub-list" value="${_h(producto ? producto.sub : '')}" placeholder="Cafés Calientes..."></div>
-            <datalist id="pp-menu-list">${Array.from(new Set((_catposProductos||[]).map(p=>p.menu).filter(Boolean))).sort((a,b)=>a.localeCompare(b)).map(m=>`<option value="${_h(m)}">`).join('')}</datalist>
-            <datalist id="pp-sub-list">${Array.from(new Set((_catposProductos||[]).map(p=>p.sub).filter(Boolean))).sort((a,b)=>a.localeCompare(b)).map(s=>`<option value="${_h(s)}">`).join('')}</datalist>
+            <div class="ff"><label>Categoría (menú)</label>
+              <select id="pp-menu" onchange="LS_UI._onCambiaCategoriaPOS(this)">${_catposOpcionesCategoriaHTML(catMap, menuActual)}</select>
+              <div id="pp-menu-nueva" style="display:none;margin-top:8px;gap:6px">
+                <input type="text" id="pp-menu-nueva-input" placeholder="Nombre de la nueva categoría" style="flex:1;padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px">
+                <button type="button" class="btn btn-sm btn-primary" onclick="LS_UI._confirmarNuevaCategoriaPOS()">Agregar</button>
+              </div>
+            </div>
+            <div class="ff"><label>Subcategoría</label>
+              <select id="pp-sub" onchange="LS_UI._onCambiaSubcategoriaPOS(this)">${_catposOpcionesSubcategoriaHTML(catMap, menuActual, subActual)}</select>
+              <div id="pp-sub-nueva" style="display:none;margin-top:8px;gap:6px">
+                <input type="text" id="pp-sub-nueva-input" placeholder="Nombre de la nueva subcategoría" style="flex:1;padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:13px">
+                <button type="button" class="btn btn-sm btn-primary" onclick="LS_UI._confirmarNuevaSubcategoriaPOS()">Agregar</button>
+              </div>
+            </div>
+          </div>
+          <div style="margin:-6px 0 2px">
+            <button type="button" class="btn btn-sm" onclick="LS_UI.abrirOrdenCategorias()"><i class="ti ti-tags"></i> Administrar categorías y subcategorías</button>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
             <div class="ff"><label>Área de preparación</label>
@@ -8782,6 +9098,7 @@ async function guardarVentaDirecta() {
     if (!nombre) { toast('Falta el nombre', 'Escribe el nombre del producto', 'err', 'ti-alert-triangle'); return; }
     const menu = document.getElementById('pp-menu').value.trim();
     const sub = document.getElementById('pp-sub').value.trim();
+    if (menu === '__nueva__' || sub === '__nueva__') { toast('Falta la categoría', 'Termina de agregar la categoría/subcategoría nueva antes de guardar', 'err', 'ti-alert-triangle'); return; }
     const desc = document.getElementById('pp-desc').value.trim();
     const notaPreparacion = document.getElementById('pp-nota-prep').value.trim();
     const area = document.getElementById('pp-area').value;
@@ -13260,6 +13577,8 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     buscarRecetas, editarReceta,
     renderCatalogoPOS, buscarCatalogoPOS, cambiarSucursalCatalogoPOS, abrirNuevoProductoPOS, editarProductoPOS,
     filtrarCategoriaCatalogoPOS, filtrarSubCategoriaCatalogoPOS, abrirOrdenCategorias, _cambiarCategoriaOrdenSub, _renderOrdenSubcategorias, guardarOrdenCategorias,
+    _adminAgregarCategoria, _adminAgregarSubcategoria, _renombrarCatAdmin, _borrarCatAdmin, _confirmarBorrarCatAdmin,
+    _onCambiaCategoriaPOS, _confirmarNuevaCategoriaPOS, _onCambiaSubcategoriaPOS, _confirmarNuevaSubcategoriaPOS,
     guardarProductoPOS, _toggleSizedProductoPOS, _toggleModInventario, _toggleLibModColapso, _quitarLibMod, filtrarLibModPOS, libModDDNav, cerrarLibModDD, _agregarLibMod, confirmarBorrarProductoPOS, ejecutarBorrarProductoPOS, _catposSubirFoto,
     _actualizarPreciosSugeridosCanales, _usarPrecioSugerido,
     filtrarRecetaPOS, seleccionarRecetaPOS, cerrarRecetaDD, recetaDDNav, toggleCatposSinReceta,
