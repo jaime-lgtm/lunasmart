@@ -5281,13 +5281,13 @@ const LS_UI = (() => {
         <td data-v="${isoNum}">${r.fecha}</td>
         <td>${LS_API.nombreSucursal(r.sucursal)}</td>
         <td>${turnoLabel(r.cliente)}</td>
-        <td style="font-family:var(--mono)">${fmt(r.efectivo)}</td>
-        <td style="font-family:var(--mono)">${fmt(r.tarjeta)}</td>
-        <td style="font-family:var(--mono)">${fmt(r.rappi)}</td>
-        <td style="font-family:var(--mono)">${fmt(r.transferencia)}</td>
-        <td style="font-family:var(--mono);font-weight:600">${fmt(r.ventaTotal)}</td>
-        <td style="font-family:var(--mono)">${fmt(r.totalDeclarado)}</td>
-        <td style="font-family:var(--mono);color:${deltaColor(r.diferencia)};font-weight:600">${fmt(r.diferencia)}</td>
+        <td style="font-family:var(--mono)">${fmtD(r.efectivo)}</td>
+        <td style="font-family:var(--mono)">${fmtD(r.tarjeta)}</td>
+        <td style="font-family:var(--mono)">${fmtD(r.rappi)}</td>
+        <td style="font-family:var(--mono)">${fmtD(r.transferencia)}</td>
+        <td style="font-family:var(--mono);font-weight:600">${fmtD(r.ventaTotal)}</td>
+        <td style="font-family:var(--mono)">${fmtD(r.totalDeclarado)}</td>
+        <td style="font-family:var(--mono);color:${deltaColor(r.diferencia)};font-weight:600">${fmtD(r.diferencia)}</td>
         <td style="white-space:nowrap">${acciones}</td>
       </tr>`;
     }).join(''));
@@ -5546,7 +5546,7 @@ const LS_UI = (() => {
         <td style="font-weight:500">${f.proveedor}</td>
         <td style="font-size:11.5px;color:var(--tx-3)">${f.unidad}</td>
         <td style="font-family:var(--mono);font-size:11px;color:var(--tx-3)">${f.folio || '—'}</td>
-        <td style="font-family:var(--mono);font-weight:600">${fmt(f.total)}</td>
+        <td style="font-family:var(--mono);font-weight:600">${fmtD(f.total)}</td>
         <td style="text-align:center;white-space:nowrap">
           <button onclick="LS_UI.verFactura('${(f.id||'').replace(/'/g,'')}')" title="Ver desglose"
             style="border:none;background:transparent;cursor:pointer;color:var(--terra-claro);font-size:17px;padding:4px 7px;border-radius:var(--r-xs)"
