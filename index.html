@@ -2968,7 +2968,27 @@ document.getElementById('login-password').addEventListener('keypress', e => { if
 document.getElementById('login-email').addEventListener('keypress', e => { if (e.key === 'Enter') document.getElementById('login-password').focus(); });
 
 /* ─── INIT ─── */
-window.addEventListener('load', () => {
+// Una sesion de pantalla guardada pero con Firebase ANONIMO (de antes de que
+// se protegieran datos privados, o por haber caducado) ya no sirve: las
+// reglas la tratan como visitante. Se decide una sola vez para las dos
+// rutinas de arranque y se pide iniciar sesion de nuevo.
+let _sesionValidaP = null;
+function _sesionGuardadaValida() {
+  if (!_sesionValidaP) _sesionValidaP = (async () => {
+    if (!sessionStorage.getItem('ls_user')) return false;
+    try {
+      if (!(window.firebase && firebase.auth)) return true;
+      await fbAuthReady;
+      const fu = firebase.auth().currentUser;
+      if (fu && !fu.isAnonymous) return true;
+    } catch (e) { return true; }
+    sessionStorage.removeItem('ls_user');
+    setTimeout(() => toast('Inicia sesión de nuevo', 'Tu sesión anterior ya no es válida', 'err', 'ti-lock'), 600);
+    return false;
+  })();
+  return _sesionValidaP;
+}
+window.addEventListener('load', async () => {
   buildBranchMenu();
   initSort();
   updateSubtitle();
@@ -2983,7 +3003,7 @@ window.addEventListener('load', () => {
   } catch (e) {}
   applyTheme(savedTheme, false);
   const s = sessionStorage.getItem('ls_user');
-  if (s) {
+  if (s && await _sesionGuardadaValida()) {
     try { enterApp(JSON.parse(s)); } catch (e) {}
   }
 });
@@ -10289,8 +10309,13 @@ async function guardarVentaDirecta() {
       const snap = await fbDb.ref('eventos').once('value');
       const val = snap.val() || {};
       const eventos = Object.keys(val).map(id => Object.assign({ id }, val[id]));
-      const regs = await Promise.all(eventos.map(e => fbDb.ref('eventosInscripciones/' + e.id).once('value').then(s => s.val() || {})));
+      // Si esta sesion no tiene permiso de leer inscritos (ej. sesion
+      // anonima vieja), igual se muestran los eventos en vez de dejar la
+      // tabla vacia.
+      const regs = await Promise.all(eventos.map(e => fbDb.ref('eventosInscripciones/' + e.id).once('value').then(s => s.val() || {}).catch(() => null)));
+      if (regs.some(r => r === null)) toast('Sin acceso a los inscritos', 'Cierra sesión y vuelve a entrar para verlos', 'err', 'ti-lock');
       eventos.forEach((e, i) => {
+        if (regs[i] === null) { e.inscritos = 0; e.pagados = 0; e.sinAcceso = true; return; }
         const lista = Object.keys(regs[i]).map(k => regs[i][k]);
         e.inscritos = lista.length;
         e.pagados = lista.filter(r => r.estadoPago === 'pagado').length;
@@ -10320,8 +10345,8 @@ async function guardarVentaDirecta() {
       const cupoNum = parseInt(e.cupo, 10) || 0;
       const conPrecio = (parseFloat(e.precio) || 0) > 0;
       const prox = e.proximamente === true;
-      let cupoTxt = prox ? (e.inscritos + ' interesados') : (cupoNum > 0 ? (e.inscritos + ' / ' + cupoNum) : (e.inscritos + ' inscritos'));
-      if (conPrecio && !prox) cupoTxt += `<div style="font-size:11px;color:var(--tx-3);margin-top:2px"><span style="color:var(--verde)">${e.pagados} pagados</span> · ${e.inscritos - e.pagados} pendientes</div>`;
+      let cupoTxt = e.sinAcceso ? '—' : prox ? (e.inscritos + ' interesados') : (cupoNum > 0 ? (e.inscritos + ' / ' + cupoNum) : (e.inscritos + ' inscritos'));
+      if (conPrecio && !prox && !e.sinAcceso) cupoTxt += `<div style="font-size:11px;color:var(--tx-3);margin-top:2px"><span style="color:var(--verde)">${e.pagados} pagados</span> · ${e.inscritos - e.pagados} pendientes</div>`;
       const f = e.fecha && !prox ? new Date(e.fecha + 'T00:00:00') : null;
       const pasado = f && f < hoy;
       let estadoBadge;
@@ -13938,10 +13963,10 @@ window._cerrarModal2 = _cerrarModal2;
 window.LS_UI       = LS_UI;
 
 /* ── INICIALIZACIÓN ──────────────────────────────────────── */
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
   // Verificar sesión guardada y cargar datos si hay usuario activo
   const s = sessionStorage.getItem('ls_user');
-  if (s) {
+  if (s && await _sesionGuardadaValida()) {
     try {
       const u = JSON.parse(s);
       document.getElementById('u-name').textContent   = u.name;
