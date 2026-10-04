@@ -2464,7 +2464,17 @@ try {
   // que un fallo real (ej. bucket de Storage aun no listo) se note pronto.
   fbStorage.setMaxUploadRetryTime(12000);
   fbStorage.setMaxOperationRetryTime(12000);
-  fbAuthReady = firebase.auth().signInAnonymously().catch(function(e){ console.error('Firebase auth', e); });
+  // Solo se entra como anonimo si NO hay ya una sesion real (correo/contrasena)
+  // guardada -- si no, al recargar la pagina se perderia la identidad del
+  // admin, y las reglas que protegen datos privados (ej. la lista de
+  // inscritos a eventos) lo tratarian como un visitante cualquiera.
+  fbAuthReady = new Promise(function(resolve) {
+    var unsub = firebase.auth().onAuthStateChanged(function(u) {
+      unsub();
+      if (u) { resolve(u); return; }
+      firebase.auth().signInAnonymously().then(resolve).catch(function(e){ console.error('Firebase auth', e); resolve(null); });
+    });
+  });
 } catch(e) { console.error('No se pudo inicializar Firebase', e); }
 
 const PAGES = {
@@ -10284,6 +10294,9 @@ async function guardarVentaDirecta() {
         const lista = Object.keys(regs[i]).map(k => regs[i][k]);
         e.inscritos = lista.length;
         e.pagados = lista.filter(r => r.estadoPago === 'pagado').length;
+        // El sitio publico solo lee este contador (no la lista, que es
+        // privada) -- aqui se mantiene al dia con el conteo real.
+        fbDb.ref('eventosCupo/' + e.id).set(lista.length).catch(() => {});
       });
       eventos.sort((a, b) => {
         const pa = a.proximamente === true, pb = b.proximamente === true;
