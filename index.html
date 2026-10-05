@@ -11293,14 +11293,14 @@ async function guardarVentaDirecta() {
 
   // Iconos + colores de marca para la ventanilla de contenido -- lo mismo
   // se usa para los chips de plataforma y para la tarjeta de vista previa.
-  // Google Business Profile queda con publicable:false hasta que Google
-  // apruebe el acceso a su API de Perfil de Negocio que ya solicitamos --
-  // ese día se activa igual que Instagram/Facebook (misma API de "Posts").
+  // Google aprobó el acceso a la API de Perfil de Negocio (proyecto
+  // 392846828398); publica igual que Instagram/Facebook (API de "Posts") una
+  // vez configurado en el Apps Script (ver gbpListarUbicaciones).
   const MKT_CONT_PLATAFORMA_ICO = {
     'Instagram':              { ico: 'ti-brand-instagram', bg: 'linear-gradient(135deg,#f9ce34,#ee2a7b,#6228d7)', publicable: true, requiereImagen: true },
     'Facebook':               { ico: 'ti-brand-facebook',  bg: '#1877f2', publicable: true, requiereImagen: false },
     'WhatsApp Business':      { ico: 'ti-brand-whatsapp',  bg: '#25d366', publicable: false, requiereImagen: false },
-    'Google Business Profile':{ ico: 'ti-brand-google',    bg: '#4285f4', publicable: false, requiereImagen: false },
+    'Google Business Profile':{ ico: 'ti-brand-google',    bg: '#4285f4', publicable: true, requiereImagen: false },
   };
   // Estado (imagen + medidas) del formulario de contenido mientras el modal
   // está abierto -- se resetea cada vez que se abre uno nuevo. La imagen no

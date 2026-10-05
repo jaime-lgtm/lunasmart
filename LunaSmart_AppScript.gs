@@ -1823,6 +1823,62 @@ function _igPublicarPost(b) {
   return { ok: true, postId: data2.id };
 }
 
+// ── GOOGLE BUSINESS PROFILE (Publicaciones / "Posts") ───────────────────
+// A diferencia de Facebook/Instagram NO usa un token guardado: usa la
+// autorización de Google de quien corre el script (ScriptApp.getOAuthToken)
+// con el permiso business.manage, así que el Apps Script debe estar ligado al
+// proyecto de Google Cloud que Google aprobó (392846828398) y la cuenta que
+// lo ejecuta debe administrar la ficha de negocio.
+function _gbpFetch(url, method, body) {
+  var opts = { method: method || 'get', muteHttpExceptions: true, headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() } };
+  if (body) { opts.contentType = 'application/json'; opts.payload = JSON.stringify(body); }
+  var resp = UrlFetchApp.fetch(url, opts);
+  var data;
+  try { data = JSON.parse(resp.getContentText()); } catch (e) { data = { raw: resp.getContentText() }; }
+  return { code: resp.getResponseCode(), data: data };
+}
+
+function _gbpPublicarPost(b) {
+  var loc = PropertiesService.getScriptProperties().getProperty('GBP_LOCATION'); // "accounts/{id}/locations/{id}"
+  if (!loc) return { ok: false, msg: 'Google Business Profile no está configurado -- corre gbpListarUbicaciones en el editor de Apps Script' };
+  var body = { languageCode: 'es', summary: String(b.mensaje || '').trim().slice(0, 1500), topicType: 'STANDARD' };
+  if (!body.summary) return { ok: false, msg: 'Google necesita un texto para publicar' };
+  if (b.imagenUrl) body.media = [{ mediaFormat: 'PHOTO', sourceUrl: b.imagenUrl }];
+  var r = _gbpFetch('https://mybusiness.googleapis.com/v4/' + loc + '/localPosts', 'post', body);
+  if (r.code >= 200 && r.code < 300) return { ok: true, postId: r.data.name };
+  return { ok: false, msg: 'Google: ' + ((r.data.error && r.data.error.message) || ('HTTP ' + r.code)) };
+}
+
+// EJECUTAR A MANO en el editor de Apps Script (una sola vez): muestra en
+// "Registro de ejecución" tus cuentas y ubicaciones de Google Business. Si
+// hay UNA sola ubicación, la guarda sola como GBP_LOCATION; si hay varias,
+// copia el valor de la que quieras publicar y ponlo en gbpGuardarUbicacion.
+function gbpListarUbicaciones() {
+  var cuentas = _gbpFetch('https://mybusinessaccountmanagement.googleapis.com/v1/accounts', 'get');
+  Logger.log('CUENTAS (HTTP %s): %s', cuentas.code, JSON.stringify(cuentas.data));
+  var encontradas = [];
+  (cuentas.data.accounts || []).forEach(function (a) {
+    var locs = _gbpFetch('https://mybusinessbusinessinformation.googleapis.com/v1/' + a.name + '/locations?readMask=name,title,storefrontAddress', 'get');
+    Logger.log('UBICACIONES de %s (HTTP %s): %s', a.name, locs.code, JSON.stringify(locs.data));
+    (locs.data.locations || []).forEach(function (l) {
+      encontradas.push({ valor: a.name + '/' + l.name, titulo: l.title });
+    });
+  });
+  encontradas.forEach(function (e) { Logger.log('USAR ESTE VALOR -> %s   (%s)', e.valor, e.titulo); });
+  if (encontradas.length === 1) {
+    PropertiesService.getScriptProperties().setProperty('GBP_LOCATION', encontradas[0].valor);
+    Logger.log('Una sola ubicación: guardada automáticamente como GBP_LOCATION = %s', encontradas[0].valor);
+  } else if (encontradas.length > 1) {
+    Logger.log('Hay varias ubicaciones: pega el valor elegido en gbpGuardarUbicacion y córrela.');
+  }
+}
+
+function gbpGuardarUbicacion() {
+  var valor = 'accounts/PEGA_AQUI/locations/PEGA_AQUI';
+  if (valor.indexOf('PEGA_AQUI') >= 0) throw new Error('Edita esta función y pon el valor real de GBP_LOCATION');
+  PropertiesService.getScriptProperties().setProperty('GBP_LOCATION', valor);
+}
+
 function _publicarContenidoMkt(b) {
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); } catch (e) { return _err('Sistema ocupado, intenta de nuevo en unos segundos'); }
@@ -1833,6 +1889,7 @@ function _publicarContenidoMkt(b) {
     var resultado;
     if (b.plataforma === 'Facebook') resultado = _fbPublicarPost(b);
     else if (b.plataforma === 'Instagram') resultado = _igPublicarPost(b);
+    else if (b.plataforma === 'Google Business Profile') resultado = _gbpPublicarPost(b);
     else return _err('Publicación automática no disponible para ' + b.plataforma);
 
     if (!resultado.ok) return _err(resultado.msg);
