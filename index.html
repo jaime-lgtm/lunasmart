@@ -1536,7 +1536,8 @@
     <div class="kpi"><div class="kpi-top"><div class="kpi-label">💵 Efectivo</div><div class="kpi-ico g"><i class="ti ti-cash"></i></div></div><div class="kpi-val" id="can-efectivo">—</div><div class="kpi-sub" id="can-efectivo-sub">— del total</div></div>
     <div class="kpi"><div class="kpi-top"><div class="kpi-label">📱 Tarjeta / Terminal</div><div class="kpi-ico"><i class="ti ti-credit-card"></i></div></div><div class="kpi-val" id="can-tarjeta">—</div><div class="kpi-sub" id="can-tarjeta-sub">— del total</div></div>
     <div class="kpi"><div class="kpi-top"><div class="kpi-label">🏦 Transferencia</div><div class="kpi-ico a"><i class="ti ti-building-bank"></i></div></div><div class="kpi-val" id="can-transfer">—</div><div class="kpi-sub" id="can-transfer-sub">— del total</div></div>
-    <div class="kpi"><div class="kpi-top"><div class="kpi-label">🛵 Rappi / Uber</div><div class="kpi-ico d"><i class="ti ti-moped"></i></div></div><div class="kpi-val" id="can-rappi">—</div><div class="kpi-sub" id="can-rappi-sub">— del total</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">🛵 Rappi</div><div class="kpi-ico d"><i class="ti ti-moped"></i></div></div><div class="kpi-val" id="can-rappi">—</div><div class="kpi-sub" id="can-rappi-sub">— del total</div></div>
+    <div class="kpi"><div class="kpi-top"><div class="kpi-label">🛵 Uber Eats</div><div class="kpi-ico d"><i class="ti ti-moped"></i></div></div><div class="kpi-val" id="can-uber">—</div><div class="kpi-sub" id="can-uber-sub">— del total</div></div>
   </div>
   <div class="card">
     <div class="card-head"><div><div class="card-title"><i class="ti ti-router"></i>Ventas por sucursal y método de pago</div><div class="card-sub" id="can-sub">Origen de ventas — período actual</div></div></div>
@@ -1544,7 +1545,7 @@
       <table class="tbl" data-sortable>
         <thead><tr>
           <th>Sucursal</th>
-          <th class="num">Efectivo</th><th class="num">Tarjeta</th><th class="num">Transfer.</th><th class="num">Rappi/Uber</th>
+          <th class="num">Efectivo</th><th class="num">Tarjeta</th><th class="num">Transfer.</th><th class="num">Rappi</th><th class="num">Uber Eats</th>
           <th class="sortable num" data-type="num">Total<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
           <th class="num">Part.</th>
         </tr></thead>
@@ -1745,14 +1746,14 @@
         <thead><tr>
           <th class="sortable" data-type="num">Fecha<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
           <th>Sucursal</th><th>Turno</th>
-          <th class="num">Efectivo</th><th class="num">Tarjeta</th><th class="num">Rappi</th><th class="num">Transf.</th>
+          <th class="num">Efectivo</th><th class="num">Tarjeta</th><th class="num">Rappi</th><th class="num">Uber Eats</th><th class="num">Transf.</th>
           <th class="sortable num" data-type="num">Venta total<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
           <th class="num">Declarado</th>
           <th class="sortable num" data-type="num">Dif.<span class="s-ar"><i class="ti ti-arrows-sort"></i></span></th>
           <th>Acciones</th>
         </tr></thead>
         <tbody id="tabla-ingresos">
-          <tr><td colspan="11" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr>
+          <tr><td colspan="12" style="text-align:center;padding:28px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -3088,6 +3089,7 @@ const LS_API = (() => {
       EFECTIVO: 7, TARJETA: 8, TRANSFERENCIA: 9,
       RAPPI: 10, TOTAL_DECLARADO: 11, VENTA_TOTAL: 12,
       DIFERENCIA: 13, OBSERVACIONES: 14,
+      UBER: 24, // Uber Eats va en su propia columna (Y), aparte de Rappi (K)
     },
     ING_DETALLES: {
       // Estructura real: A=Z(auto) B=ID_FACTURA C=FECHA D=ARTICULO
@@ -3458,6 +3460,7 @@ const LS_API = (() => {
         tarjeta:        parseNum(r[COLS.INGRESOS.TARJETA]),
         transferencia:  parseNum(r[COLS.INGRESOS.TRANSFERENCIA]),
         rappi:          parseNum(r[COLS.INGRESOS.RAPPI]),
+        uber:           parseNum(r[COLS.INGRESOS.UBER]),
         totalDeclarado: parseNum(r[COLS.INGRESOS.TOTAL_DECLARADO]),
         ventaTotal:     parseNum(r[COLS.INGRESOS.VENTA_TOTAL]),
         diferencia:     parseNum(r[COLS.INGRESOS.DIFERENCIA]),
@@ -4242,10 +4245,11 @@ const LS_API = (() => {
     const tarjeta       = ingresos.reduce((s, r) => s + r.tarjeta, 0);
     const transferencia = ingresos.reduce((s, r) => s + r.transferencia, 0);
     const rappi         = ingresos.reduce((s, r) => s + r.rappi, 0);
+    const uber          = ingresos.reduce((s, r) => s + (r.uber || 0), 0);
 
     return {
       ventaTotal, gastoTotal, utilidad, margen, faltantes,
-      efectivo, tarjeta, transferencia, rappi,
+      efectivo, tarjeta, transferencia, rappi, uber,
       totalIngresos: totalTurnos, totalFacturas: facturas.length,
       exactitud, turnosCuadran, turnosFaltante, periodoLabel: label,
       crecimiento, ventaAnterior, labelAnterior: ant.label,
@@ -4975,7 +4979,8 @@ const LS_UI = (() => {
         const items = [
           { label: 'Efectivo',      total: kpis.efectivo || 0 },
           { label: 'Tarjeta / MP',  total: kpis.tarjeta || 0 },
-          { label: 'Rappi / Uber',  total: kpis.rappi || 0 },
+          { label: 'Rappi',         total: kpis.rappi || 0 },
+          { label: 'Uber Eats',     total: kpis.uber || 0 },
           { label: 'Transferencia', total: kpis.transferencia || 0 },
         ].filter(i => i.total > 0);
         pagoEl.innerHTML = _donutHTML(items);
@@ -5295,7 +5300,7 @@ const LS_UI = (() => {
 
   function _pintarIngresos(lista, esBusqueda) {
     if (!lista || lista.length === 0) {
-      setEl('tabla-ingresos', `<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--tx-3)">${esBusqueda ? 'Sin resultados para tu búsqueda' : 'Sin cortes en el período seleccionado'}</td></tr>`);
+      setEl('tabla-ingresos', `<tr><td colspan="12" style="text-align:center;padding:32px;color:var(--tx-3)">${esBusqueda ? 'Sin resultados para tu búsqueda' : 'Sin cortes en el período seleccionado'}</td></tr>`);
       return;
     }
     setEl('tabla-ingresos', lista.slice(0, 300).map((r, idx) => {
@@ -5314,6 +5319,7 @@ const LS_UI = (() => {
         <td style="font-family:var(--mono)">${fmtD(r.efectivo)}</td>
         <td style="font-family:var(--mono)">${fmtD(r.tarjeta)}</td>
         <td style="font-family:var(--mono)">${fmtD(r.rappi)}</td>
+        <td style="font-family:var(--mono)">${fmtD(r.uber || 0)}</td>
         <td style="font-family:var(--mono)">${fmtD(r.transferencia)}</td>
         <td style="font-family:var(--mono);font-weight:600">${fmtD(r.ventaTotal)}</td>
         <td style="font-family:var(--mono)">${fmtD(r.totalDeclarado)}</td>
@@ -5367,7 +5373,7 @@ const LS_UI = (() => {
       <td style="padding:7px 12px;text-align:right;font-family:var(--mono)">${LS_API.formatMXNDec(d.precioUnit)}</td>
       <td style="padding:7px 12px;text-align:right;font-family:var(--mono);font-weight:600">${LS_API.formatMXNDec(d.total)}</td></tr>`).join('')
       : '<tr><td colspan="4" style="padding:16px;text-align:center;color:var(--tx-3)">Este corte no tiene detalle de venta registrado</td></tr>';
-    const pagos = [['Efectivo',r.efectivo],['Tarjeta / MP',r.tarjeta],['Transferencia',r.transferencia],['Rappi / Uber',r.rappi]]
+    const pagos = [['Efectivo',r.efectivo],['Tarjeta / MP',r.tarjeta],['Transferencia',r.transferencia],['Rappi',r.rappi],['Uber Eats',r.uber||0]]
       .filter(p=>p[1]>0).map(p=>`<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0"><span style="color:var(--tx-2)">${p[0]}</span><span style="font-family:var(--mono);color:var(--tx);font-weight:600">${LS_API.formatMXNDec(p[1])}</span></div>`).join('');
     _modal(`
       <div class="modal" style="max-width:620px">
@@ -6518,22 +6524,23 @@ return `<tr>
       const ingresos = (await LS_API.getIngresos()).filter(r => LS_API._enRango(r.fecha, desde, hasta));
 
       // Totales por método de pago
-      let efe=0, tar=0, tra=0, rap=0;
+      let efe=0, tar=0, tra=0, rap=0, ube=0;
       const porSuc = {};
       ingresos.forEach(r => {
-        efe += r.efectivo; tar += r.tarjeta; tra += r.transferencia; rap += r.rappi;
+        efe += r.efectivo; tar += r.tarjeta; tra += r.transferencia; rap += r.rappi; ube += r.uber || 0;
         const k = LS_API.nombreSucursal(r.sucursal || 'Sin sucursal');
-        if (!porSuc[k]) porSuc[k] = { efe:0, tar:0, tra:0, rap:0, total:0 };
+        if (!porSuc[k]) porSuc[k] = { efe:0, tar:0, tra:0, rap:0, ube:0, total:0 };
         porSuc[k].efe += r.efectivo; porSuc[k].tar += r.tarjeta;
-        porSuc[k].tra += r.transferencia; porSuc[k].rap += r.rappi;
-        porSuc[k].total += r.ventaTotal || (r.efectivo+r.tarjeta+r.transferencia+r.rappi);
+        porSuc[k].tra += r.transferencia; porSuc[k].rap += r.rappi; porSuc[k].ube += r.uber || 0;
+        porSuc[k].total += r.ventaTotal || (r.efectivo+r.tarjeta+r.transferencia+r.rappi+(r.uber||0));
       });
-      const total = efe + tar + tra + rap;
+      const total = efe + tar + tra + rap + ube;
       const pct = v => total > 0 ? Math.round(v/total*100) + '% del total' : '0%';
       setTxt('can-efectivo', fmt(efe)); setTxt('can-efectivo-sub', pct(efe));
       setTxt('can-tarjeta',  fmt(tar)); setTxt('can-tarjeta-sub',  pct(tar));
       setTxt('can-transfer', fmt(tra)); setTxt('can-transfer-sub', pct(tra));
       setTxt('can-rappi',    fmt(rap)); setTxt('can-rappi-sub',    pct(rap));
+      setTxt('can-uber',     fmt(ube)); setTxt('can-uber-sub',     pct(ube));
 
       // Tabla por sucursal
       const filas = Object.entries(porSuc)
@@ -6550,10 +6557,11 @@ return `<tr>
             <td class="num" style="font-family:var(--mono)">${fmt(f.tar)}</td>
             <td class="num" style="font-family:var(--mono)">${fmt(f.tra)}</td>
             <td class="num" style="font-family:var(--mono)">${fmt(f.rap)}</td>
+            <td class="num" style="font-family:var(--mono)">${fmt(f.ube)}</td>
             <td class="num" style="font-family:var(--mono);font-weight:600">${fmt(f.total)}</td>
             <td class="num">${granTotal>0?Math.round(f.total/granTotal*100):0}%</td>
           </tr>`;
-        }).join('') : '<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--tx-3)">Sin ventas en el período seleccionado</td></tr>';
+        }).join('') : '<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--tx-3)">Sin ventas en el período seleccionado</td></tr>';
       }
     } catch(err) {
       console.error('Error canales:', err);

@@ -326,7 +326,8 @@ function _registrarIngresoCompleto(b) {
     var mercadopago   = parseFloat(b.mercadopago   || 0);
     var transferencia = parseFloat(b.transferencia || 0);
     var rappi         = parseFloat(b.rappi         || 0);
-    var total         = efectivo + tarjeta + mercadopago + transferencia + rappi;
+    var uber          = parseFloat(b.uber          || 0);
+    var total         = efectivo + tarjeta + mercadopago + transferencia + rappi + uber;
     var inicioCaja    = parseFloat(b.inicioCaja    || 0);
     var retiros       = parseFloat(b.retiros       || 0);
     var ventaTotal    = parseFloat(b.ventaTotal    || total);
@@ -343,6 +344,8 @@ function _registrarIngresoCompleto(b) {
     if (!sh.getRange(1, 21).getValue()) { sh.getRange(1, 21).setValue('Terminal Diferencia ($)'); }
     if (!sh.getRange(1, 22).getValue()) { sh.getRange(1, 22).setValue('Transferencia Declarado ($)'); }
     if (!sh.getRange(1, 23).getValue()) { sh.getRange(1, 23).setValue('Transferencia Diferencia ($)'); }
+    // Uber Eats va separado de Rappi (la columna K "Rappi" sigue siendo solo Rappi).
+    if (!sh.getRange(1, 25).getValue()) { sh.getRange(1, 25).setValue('Uber Eats ($)'); }
 
     _escribirFila(sh, [
       id, fecha, b.sucursal || '', b.cliente || '',
@@ -359,6 +362,7 @@ function _registrarIngresoCompleto(b) {
       (typeof b.transferenciaDeclarada === 'number') ? b.transferenciaDeclarada : '',
       (typeof b.transferenciaDiferencia === 'number') ? b.transferenciaDiferencia : '',
       b.corteId || '',
+      uber,
     ]);
 
     var nDet = 0;
@@ -411,7 +415,7 @@ function _obtenerCorteDia(b) {
           fecha: r[1], sucursal: r[2], turno: r[3],
           efectivo: r[7], tarjeta: r[8], transferencia: r[9], rappi: r[10],
           totalDeclarado: r[11], ventaTotal: r[12],
-          puntosCanjeados: r[15] || 0, mercadopago: r[16] || 0,
+          puntosCanjeados: r[15] || 0, mercadopago: r[16] || 0, uber: r[24] || 0,
         });
       }
     }
