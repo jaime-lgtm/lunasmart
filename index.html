@@ -1252,6 +1252,7 @@
         <div class="nav-item" data-page="checklists" onclick="go('checklists',this)"><i class="ti ti-list-check"></i><span class="nav-lbl">Checklists</span></div>
         <div class="nav-item" data-page="marketing" onclick="go('marketing',this)"><i class="ti ti-speakerphone"></i><span class="nav-lbl">Marketing Digital</span></div>
         <div class="nav-item" data-page="eventos" onclick="go('eventos',this)"><i class="ti ti-calendar-event"></i><span class="nav-lbl">Eventos</span></div>
+        <div class="nav-item" data-page="rappi" onclick="go('rappi',this)"><i class="ti ti-moped"></i><span class="nav-lbl">Integración Rappi</span></div>
       </nav>
 
       <div class="sb-foot">
@@ -2343,6 +2344,20 @@
   </div>
 </div>
 
+<!-- PÁGINA: INTEGRACIÓN RAPPI -->
+<div id="p-rappi" class="page" data-screen-label="Integración Rappi">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title"><i class="ti ti-moped"></i>Integración Rappi <span id="rappi-ambiente" class="chan" style="margin-left:8px"></span></div>
+        <div class="card-sub">Los pedidos de Rappi llegan solos al POS. Aquí controlas cada tienda: abrir o cerrar, enviar el menú y sincronizar lo agotado.</div>
+      </div>
+      <div class="card-actions"><button class="btn btn-sm btn-ghost" onclick="LS_UI.rappiProbar()"><i class="ti ti-plug-connected"></i>Probar conexión</button></div>
+    </div>
+    <div id="rappi-contenido" style="padding:4px 16px 16px"><div style="padding:24px;text-align:center;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</div></div>
+  </div>
+</div>
+
 <!-- PÁGINA: MODIFICADORES -->
 <div id="p-modificadores" class="page" data-screen-label="Modificadores">
   <div class="card">
@@ -2424,6 +2439,7 @@
           <div class="d-item" data-page="checklists" onclick="mdrawerGo('checklists')"><i class="ti ti-list-check"></i><span>Checklists</span></div>
           <div class="d-item" data-page="marketing" onclick="mdrawerGo('marketing')"><i class="ti ti-speakerphone"></i><span>Marketing</span></div>
           <div class="d-item" data-page="eventos" onclick="mdrawerGo('eventos')"><i class="ti ti-calendar-event"></i><span>Eventos</span></div>
+          <div class="d-item" data-page="rappi" onclick="mdrawerGo('rappi')"><i class="ti ti-moped"></i><span>Rappi</span></div>
           <div class="d-item" onclick="toggleDrawer();doLogout()"><i class="ti ti-logout"></i><span>Salir</span></div>
         </div>
       </div>
@@ -2506,6 +2522,7 @@ const PAGES = {
   checklists: { title: 'Checklists', sub: 'Tareas del turno por persona, en tiempo real' },
   marketing: { title: 'Marketing Digital', sub: 'Métricas, contenido, metas y fechas clave de redes sociales' },
   eventos: { title: 'Eventos', sub: 'Eventos publicados en pedidos.suenodeluna.com.mx, con cupo e inscritos' },
+  rappi: { title: 'Integración Rappi', sub: 'Abrir y cerrar tiendas, enviar menú y sincronizar disponibilidad en Rappi' },
 };
 
 const BRANCHES = {
@@ -10311,6 +10328,77 @@ async function guardarVentaDirecta() {
     } catch (e) { console.error(e); toast('Error', 'No se pudo copiar', 'err', 'ti-alert-triangle'); }
   }
 
+  // ════════════════════════════════════════════════════════
+  // INTEGRACIÓN RAPPI -- panel de control
+  // Las tareas se piden escribiendo en rappiAdmin/solicitudes (solo sesiones de
+  // correo/contraseña, por las reglas) y la función de Firebase que habla con
+  // Rappi deja el resultado en rappiAdmin/resultados/<id>.
+  // ════════════════════════════════════════════════════════
+  const RAPPI_MARCAS = { cafeteria: 'Sueño de Luna · Casa de la Cultura', helfy: 'Helfy Fü', eventos: 'Tienda de pruebas (Eventos)' };
+  function _rappiSolicitar(accion, params) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        await fbAuthReady;
+        const ref = fbDb.ref('rappiAdmin/solicitudes').push();
+        const resRef = fbDb.ref('rappiAdmin/resultados/' + ref.key);
+        const timer = setTimeout(() => { resRef.off(); reject(new Error('Rappi no respondió a tiempo. Intenta de nuevo.')); }, 60000);
+        resRef.on('value', snap => { const v = snap.val(); if (!v) return; clearTimeout(timer); resRef.off(); resolve(v); });
+        await ref.set(Object.assign({ accion }, params || {}));
+      } catch (e) { reject(e); }
+    });
+  }
+  function _rappiTexto(accion, r) {
+    if (!r.ok) return 'Error: ' + (r.error || 'sin detalle');
+    if (accion === 'enviarMenu') return r.productos + ' productos enviados a Rappi. Rappi tarda en revisarlo: usa "Estado del menú".';
+    if (accion === 'estadoMenu') return 'Estado del menú en Rappi: ' + ({ AVAILABLE: 'APROBADO (disponible)', UNAVAILABLE: 'sin menú aprobado', UNKNOWN: 'en revisión' }[r.estado] || r.estado);
+    if (accion === 'sincronizarDisponibilidad') return 'Listo: ' + r.apagados + ' productos apagados y ' + r.encendidos + ' encendidos en Rappi.';
+    if (accion === 'tiendaAbierta') { const x = ((r.respuesta || {}).results || [])[0] || {}; return (x.is_enabled ? 'Tienda ABIERTA en Rappi' : 'Tienda CERRADA en Rappi') + (x.operation_result ? '' : ' (Rappi no confirmó)'); }
+    if (accion === 'probarAuth') return r.mensaje || 'Conexión correcta';
+    return 'Listo';
+  }
+  async function rappiAccion(accion, tienda, marca, abierta) {
+    const el = document.getElementById('rappi-res-' + tienda);
+    const botones = document.querySelectorAll('[data-rappi-t="' + tienda + '"]');
+    if (accion === 'enviarMenu' && !confirm('¿Enviar el menú de ' + (RAPPI_MARCAS[marca] || marca) + ' a Rappi? Reemplaza el menú que Rappi tiene.')) return;
+    if (accion === 'tiendaAbierta' && abierta === false && !confirm('¿Cerrar la tienda en Rappi? Dejará de recibir pedidos.')) return;
+    botones.forEach(b => b.disabled = true);
+    if (el) { el.style.color = 'var(--tx-3)'; el.textContent = 'Enviando a Rappi...'; }
+    try {
+      const params = { suc: marca, tienda: tienda };
+      if (accion === 'tiendaAbierta') params.abierta = abierta !== false;
+      const r = await _rappiSolicitar(accion, params);
+      if (el) { el.style.color = r.ok ? 'var(--ok, #1a7f37)' : 'var(--danger, #c0392b)'; el.textContent = _rappiTexto(accion, r); }
+    } catch (e) { if (el) { el.style.color = 'var(--danger, #c0392b)'; el.textContent = 'Error: ' + e.message; } }
+    botones.forEach(b => b.disabled = false);
+  }
+  async function rappiProbar() {
+    try { const r = await _rappiSolicitar('probarAuth'); toast(r.ok ? 'Rappi conectado' : 'Sin conexión con Rappi', _rappiTexto('probarAuth', r), r.ok ? 'ok' : 'err', 'ti-plug-connected'); }
+    catch (e) { toast('Sin conexión con Rappi', e.message, 'err', 'ti-plug-connected-x'); }
+  }
+  async function renderRappi() {
+    const cont = document.getElementById('rappi-contenido');
+    if (!cont) return;
+    try {
+      const est = await _rappiSolicitar('estadoIntegracion');
+      if (!est.ok) throw new Error(est.error || 'sin respuesta');
+      const amb = document.getElementById('rappi-ambiente');
+      if (amb) { amb.textContent = est.ambiente === 'prod' ? 'PRODUCCIÓN' : 'PRUEBAS (DEV)'; amb.style.background = est.ambiente === 'prod' ? '#1a7f37' : '#b26a00'; amb.style.color = '#fff'; }
+      const esc2 = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      cont.innerHTML = (est.tiendas || []).map(t => {
+        const b = (acc, txt, ic, extra) => '<button class="btn btn-sm btn-ghost" data-rappi-t="' + esc2(t.tienda) + '" onclick="LS_UI.rappiAccion(\'' + acc + '\',\'' + esc2(t.tienda) + '\',\'' + esc2(t.marca) + '\'' + (extra || '') + ')"><i class="ti ' + ic + '"></i>' + txt + '</button>';
+        return '<div style="border:1px solid var(--line, #e3e3e3);border-radius:10px;padding:14px 16px;margin-top:12px">' +
+          '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"><div><div style="font-weight:700">' + esc2(RAPPI_MARCAS[t.marca] || t.marca) + '</div>' +
+          '<div style="font-size:12px;color:var(--tx-3)">Tienda de Rappi ' + esc2(t.tienda) + ' · llega a la sucursal ' + esc2(t.suc) + '</div></div></div>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">' +
+            b('tiendaAbierta', 'Abrir tienda', 'ti-door-enter', ',true') + b('tiendaAbierta', 'Cerrar tienda', 'ti-door-exit', ',false') +
+            b('enviarMenu', 'Enviar menú', 'ti-send') + b('estadoMenu', 'Estado del menú', 'ti-info-circle') + b('sincronizarDisponibilidad', 'Sincronizar disponibilidad', 'ti-refresh') +
+          '</div><div id="rappi-res-' + esc2(t.tienda) + '" style="margin-top:10px;font-size:13px;min-height:18px"></div></div>';
+      }).join('') || '<div style="padding:24px;text-align:center;color:var(--tx-4)">No hay tiendas configuradas para este ambiente.</div>';
+    } catch (e) {
+      cont.innerHTML = '<div style="padding:24px;text-align:center;color:var(--tx-3)">No se pudo consultar a Rappi: ' + String(e.message).replace(/[<>&]/g, '') + '<br><small>Si dice que no hay permiso, cierra sesión y entra de nuevo con tu correo y contraseña.</small></div>';
+    }
+  }
+
   async function renderEventos() {
     try {
       await fbAuthReady;
@@ -12985,6 +13073,7 @@ async function guardarVentaDirecta() {
       case 'checklists': await renderChecklists(); break;
       case 'marketing': await renderMarketing(); break;
       case 'eventos': await renderEventos(); break;
+      case 'rappi': await renderRappi(); break;
       case 'catalogo-inventario': await abrirCatalogoInventarioPagina(); break;
     }
   }
@@ -13723,7 +13812,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderUsuariosPOS, abrirNuevoUsuarioPOS, editarUsuarioPOS, guardarUsuarioPOS, confirmarBorrarUsuarioPOS, ejecutarBorrarUsuarioPOS,
     renderChecklists, ckCambiarSuc, ckCambiarFecha, ckSwitchVista, ckAsignar, ckReabrir, ckQuitarTarea, ckRegenerar, ckAbrirTareaExtra, ckGuardarTareaExtra,
     ckToggleActiva, ckBorrarPlantilla, ckEditarPlantilla, ckAgregarTarea, ckGuardarPlantilla, ckClonarPlantilla, ckEjecutarClonar,
-    renderEventos, abrirNuevoEvento, editarEvento, guardarEvento, confirmarBorrarEvento, ejecutarBorrarEvento, verInscritosEvento, evMarcarPago, evQuitarInscrito, _evToggleProximamente, recordatorioWhatsAppEvento, evWaEnviar, _evSubirImagen, _evAgregarCampoExtra, _evToggleOpcionesCampo,
+    renderRappi, rappiAccion, rappiProbar, renderEventos, abrirNuevoEvento, editarEvento, guardarEvento, confirmarBorrarEvento, ejecutarBorrarEvento, verInscritosEvento, evMarcarPago, evQuitarInscrito, _evToggleProximamente, recordatorioWhatsAppEvento, evWaEnviar, _evSubirImagen, _evAgregarCampoExtra, _evToggleOpcionesCampo,
     renderAsistencia, filtrarAsistencia, abrirEditarAsistencia, guardarEditarAsistencia, eliminarFilaAsistencia,
     renderMarketing, mktSwitchVista, abrirNuevaFechaMkt, guardarNuevaFechaMkt, abrirEditarFechaMkt, guardarEditarFechaMkt, eliminarFilaFechaMkt,
     renderMktMetricas, abrirEditarMetricaMkt, guardarEditarMetricaMkt, eliminarFilaMetricaMkt, actualizarMetricasMktAhora, conectarTikTok, conectarFacebook,
