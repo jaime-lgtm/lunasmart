@@ -10666,6 +10666,11 @@ async function guardarVentaDirecta() {
       const precio = parseFloat(e.precio) || 0;
       const conPago = precio > 0 && e.proximamente !== true;
       const pagados = lista.filter(r => r.estadoPago === 'pagado').length;
+      // Regla: el lugar se confirma al pagar; una reserva sin pago se libera a las 24 horas.
+      const VENCE_MS = 24 * 3600 * 1000;
+      const horasDesde = r => Math.floor((Date.now() - (r.ts || 0)) / 3600000);
+      const esVencida = r => conPago && r.estadoPago !== 'pagado' && (Date.now() - (r.ts || 0)) > VENCE_MS;
+      const vencidas = lista.filter(esVencida);
       const celda = (r, c) => { const v = r[c.id]; return _h(Array.isArray(v) ? v.join(', ') : (v || '')); };
       const resumen = conPago
         ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
@@ -10681,7 +10686,9 @@ async function guardarVentaDirecta() {
             const pagoTd = conPago
               ? `<td style="white-space:nowrap">${pagado
                   ? '<span class="badge" style="background:var(--verde-bg);color:var(--verde)">Pagado</span>'
-                  : '<span class="badge" style="background:var(--amarillo-bg,#fff3cd);color:var(--amarillo,#8a6100)">Pendiente</span>'}
+                  : (esVencida(i)
+                      ? '<span class="badge" style="background:#fde2e2;color:#a61b1b" title="Pasaron más de 24 horas sin pago">Vencida · ' + horasDesde(i) + ' h</span>'
+                      : '<span class="badge" style="background:var(--amarillo-bg,#fff3cd);color:var(--amarillo,#8a6100)">Pendiente · ' + horasDesde(i) + ' h</span>')}
                   <button class="btn btn-sm" style="margin-left:6px" onclick="LS_UI.evMarcarPago('${id}','${i._key}','${pagado ? 'pendiente' : 'pagado'}')">${pagado ? 'Revertir' : 'Marcar pagado'}</button></td>`
               : '';
             return `<tr><td>${_h(i.nombre || '')}</td><td style="font-family:monospace">${_h(i.telefono || '')}</td>${extra.map(c => `<td>${celda(i, c)}</td>`).join('')}${pagoTd}<td><button class="icon-btn" title="Quitar (libera el lugar)" onclick="LS_UI.evQuitarInscrito('${id}','${i._key}')"><i class="ti ti-trash"></i></button></td></tr>`;
@@ -10696,6 +10703,7 @@ async function guardarVentaDirecta() {
           </div>
           <div class="modal-body" style="max-height:60vh;overflow:auto">
             ${resumen}
+            ${vencidas.length ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fde2e2;color:#a61b1b;border-radius:var(--r);padding:10px 12px;margin-bottom:12px;font-size:13px"><span><b>${vencidas.length}</b> reserva${vencidas.length > 1 ? 's' : ''} sin pago por más de 24 horas. Liberar el lugar permite que otra persona se inscriba.</span><button class="btn btn-sm" onclick="LS_UI.evLiberarVencidas('${id}')">Liberar ${vencidas.length}</button></div>` : (conPago ? '<div style="font-size:12px;color:var(--tx-3);margin-bottom:10px">Regla: el lugar se confirma al pagar; sin pago, la reserva se libera a las 24 horas.</div>' : '')}
             <table class="tbl"><thead><tr>${encabezados}</tr></thead><tbody>${filas}</tbody></table>
           </div>
           <div class="modal-footer"><button class="btn-cancel" onclick="_cerrarModal()">Cerrar</button></div>
@@ -10719,6 +10727,26 @@ async function guardarVentaDirecta() {
     } catch (e) {
       console.error(e);
       toast('Error', 'No se pudo actualizar el pago', 'err', 'ti-alert-triangle');
+    }
+  }
+
+  // Libera las reservas sin pago con mas de 24 horas: el cupo se recalcula con el conteo real.
+  async function evLiberarVencidas(eventoId) {
+    try {
+      await fbAuthReady;
+      const snap = await fbDb.ref('eventosInscripciones/' + eventoId).once('value');
+      const val = snap.val() || {};
+      const vencidas = Object.keys(val).filter(k => val[k].estadoPago !== 'pagado' && (Date.now() - (val[k].ts || 0)) > 24 * 3600 * 1000);
+      if (!vencidas.length) { toast('Nada que liberar', 'No hay reservas vencidas', 'ok', 'ti-check'); return; }
+      const nombres = vencidas.map(k => '• ' + (val[k].nombre || 'Sin nombre')).join('\n');
+      if (!confirm('Se liberarán ' + vencidas.length + ' lugar(es) sin pago de más de 24 horas:\n\n' + nombres + '\n\n¿Continuar?')) return;
+      await Promise.all(vencidas.map(k => fbDb.ref('eventosInscripciones/' + eventoId + '/' + k).remove()));
+      toast('Lugares liberados', vencidas.length + ' reserva(s) vencida(s)', 'ok', 'ti-check');
+      await renderEventos();
+      await verInscritosEvento(eventoId);
+    } catch (e) {
+      console.error(e);
+      toast('Error', 'No se pudieron liberar las reservas', 'err', 'ti-alert-triangle');
     }
   }
 
@@ -13812,7 +13840,7 @@ var catMaestro = await LS_API.getCatalogo(); var nombres = []; for (var i = 0; i
     renderUsuariosPOS, abrirNuevoUsuarioPOS, editarUsuarioPOS, guardarUsuarioPOS, confirmarBorrarUsuarioPOS, ejecutarBorrarUsuarioPOS,
     renderChecklists, ckCambiarSuc, ckCambiarFecha, ckSwitchVista, ckAsignar, ckReabrir, ckQuitarTarea, ckRegenerar, ckAbrirTareaExtra, ckGuardarTareaExtra,
     ckToggleActiva, ckBorrarPlantilla, ckEditarPlantilla, ckAgregarTarea, ckGuardarPlantilla, ckClonarPlantilla, ckEjecutarClonar,
-    renderRappi, rappiAccion, rappiProbar, renderEventos, abrirNuevoEvento, editarEvento, guardarEvento, confirmarBorrarEvento, ejecutarBorrarEvento, verInscritosEvento, evMarcarPago, evQuitarInscrito, _evToggleProximamente, recordatorioWhatsAppEvento, evWaEnviar, _evSubirImagen, _evAgregarCampoExtra, _evToggleOpcionesCampo,
+    renderRappi, rappiAccion, rappiProbar, renderEventos, abrirNuevoEvento, editarEvento, guardarEvento, confirmarBorrarEvento, ejecutarBorrarEvento, verInscritosEvento, evMarcarPago, evQuitarInscrito, evLiberarVencidas, _evToggleProximamente, recordatorioWhatsAppEvento, evWaEnviar, _evSubirImagen, _evAgregarCampoExtra, _evToggleOpcionesCampo,
     renderAsistencia, filtrarAsistencia, abrirEditarAsistencia, guardarEditarAsistencia, eliminarFilaAsistencia,
     renderMarketing, mktSwitchVista, abrirNuevaFechaMkt, guardarNuevaFechaMkt, abrirEditarFechaMkt, guardarEditarFechaMkt, eliminarFilaFechaMkt,
     renderMktMetricas, abrirEditarMetricaMkt, guardarEditarMetricaMkt, eliminarFilaMetricaMkt, actualizarMetricasMktAhora, conectarTikTok, conectarFacebook,
