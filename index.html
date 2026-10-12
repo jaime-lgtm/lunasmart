@@ -682,6 +682,18 @@
     .traf-lista .pista b { display: block; height: 100%; background: var(--terra); border-radius: 5px; }
     .traf-lista .n { width: 66px; text-align: right; font-family: 'DM Mono', monospace; font-size: 11.5px; color: var(--tx-2); }
     .traf-vacio { padding: 26px; text-align: center; color: var(--tx-3); font-size: 12.5px; }
+    /* Clientes */
+    .cli-tag { font-size: 10.5px; padding: 2px 9px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
+    .cli-tag.f { background: rgba(201,168,76,0.16); color: #d9bd66; }
+    .cli-tag.r { background: rgba(108,132,176,0.16); color: #9bb2dd; }
+    .cli-tag.n { background: rgba(91,169,114,0.14); color: var(--verde); }
+    #cli-th th { cursor: pointer; user-select: none; white-space: nowrap; }
+    #cli-th th:hover { color: var(--terra-claro); }
+    #cli-filas tr { cursor: pointer; }
+    #cli-filas tr:hover td { background: rgba(255,255,255,0.03); }
+    .cli-sub { font-size: 11.5px; color: var(--tx-3); font-family: 'DM Mono', monospace; }
+    .cli-det { display: grid; grid-template-columns: 120px 1fr; gap: 8px 12px; font-size: 13px; }
+    .cli-det dt { color: var(--tx-3); } .cli-det dd { margin: 0; word-break: break-word; }
     /* Barra de meta */
     .meta-bar-track { height: 14px; background: var(--track, rgba(255,255,255,0.06)); border-radius: 8px; overflow: hidden; margin: 10px 0 6px; }
     .meta-bar-fill { height: 100%; border-radius: 8px; transition: width 0.8s var(--ease); }
@@ -1278,6 +1290,7 @@
         <div class="nav-item" data-page="asistencia" onclick="go('asistencia',this)"><i class="ti ti-clock-hour-4"></i><span class="nav-lbl">Asistencia</span></div>
         <div class="nav-item" data-page="checklists" onclick="go('checklists',this)"><i class="ti ti-list-check"></i><span class="nav-lbl">Checklists</span></div>
         <div class="nav-item" data-page="marketing" onclick="go('marketing',this)"><i class="ti ti-speakerphone"></i><span class="nav-lbl">Marketing Digital</span></div>
+        <div class="nav-item" data-page="clientes" onclick="go('clientes',this)"><i class="ti ti-users-group"></i><span class="nav-lbl">Clientes</span></div>
         <div class="nav-item" data-page="eventos" onclick="go('eventos',this)"><i class="ti ti-calendar-event"></i><span class="nav-lbl">Eventos</span></div>
         <div class="nav-item" data-page="rappi" onclick="go('rappi',this)"><i class="ti ti-moped"></i><span class="nav-lbl">Integración Rappi</span></div>
       </nav>
@@ -2376,6 +2389,33 @@
   </div>
 </div>
 
+<!-- PÁGINA: CLIENTES -->
+<div id="p-clientes" class="page" data-screen-label="Clientes">
+  <div id="cli-kpis" class="traf-kpis" style="margin-bottom:14px"></div>
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-title"><i class="ti ti-users-group"></i>Clientes <span id="cli-total" class="pill pill-t" style="margin-left:6px"></span></div>
+        <div class="card-sub">Se registran desde la caja, en "Cliente frecuente" del sitio o al pedir en línea. Toca un cliente para ver su detalle.</div>
+      </div>
+      <div class="card-actions">
+        <button class="btn btn-sm btn-ghost" onclick="LS_CLIENTES.exportar()"><i class="ti ti-download"></i>Exportar CSV</button>
+        <button class="btn btn-sm btn-ghost" onclick="LS_CLIENTES.render(true)"><i class="ti ti-refresh"></i>Actualizar</button>
+      </div>
+    </div>
+    <div style="padding:0 18px 12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+      <input type="search" id="cli-buscar" placeholder="Buscar por nombre o teléfono…" oninput="LS_CLIENTES.buscar(this.value)" style="flex:1;min-width:220px;max-width:360px;padding:9px 12px;border-radius:var(--r);border:1px solid var(--line-2);background:var(--cafe-800);color:inherit;font-family:inherit;font-size:13px">
+      <div class="seg" id="cli-filtros" style="flex-wrap:wrap"></div>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr id="cli-th"></tr></thead>
+        <tbody id="cli-filas"><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <!-- PÁGINA: INTEGRACIÓN RAPPI -->
 <div id="p-rappi" class="page" data-screen-label="Integración Rappi">
   <div class="card">
@@ -2470,6 +2510,7 @@
           <div class="d-item" data-page="asistencia" onclick="mdrawerGo('asistencia')"><i class="ti ti-clock-hour-4"></i><span>Asistencia</span></div>
           <div class="d-item" data-page="checklists" onclick="mdrawerGo('checklists')"><i class="ti ti-list-check"></i><span>Checklists</span></div>
           <div class="d-item" data-page="marketing" onclick="mdrawerGo('marketing')"><i class="ti ti-speakerphone"></i><span>Marketing</span></div>
+          <div class="d-item" data-page="clientes" onclick="mdrawerGo('clientes')"><i class="ti ti-users-group"></i><span>Clientes</span></div>
           <div class="d-item" data-page="eventos" onclick="mdrawerGo('eventos')"><i class="ti ti-calendar-event"></i><span>Eventos</span></div>
           <div class="d-item" data-page="rappi" onclick="mdrawerGo('rappi')"><i class="ti ti-moped"></i><span>Rappi</span></div>
           <div class="d-item" onclick="toggleDrawer();doLogout()"><i class="ti ti-logout"></i><span>Salir</span></div>
@@ -2553,6 +2594,7 @@ const PAGES = {
   asistencia: { title: 'Asistencia', sub: 'Entradas, salidas y horas trabajadas por empleado' },
   checklists: { title: 'Checklists', sub: 'Tareas del turno por persona, en tiempo real' },
   marketing: { title: 'Marketing Digital', sub: 'Métricas, contenido, metas y fechas clave de redes sociales' },
+  clientes: { title: 'Clientes', sub: 'Todos los clientes registrados: visitas, puntos, cumpleaños y contacto' },
   eventos: { title: 'Eventos', sub: 'Eventos publicados en pedidos.suenodeluna.com.mx, con cupo e inscritos' },
   rappi: { title: 'Integración Rappi', sub: 'Abrir y cerrar tiendas, enviar menú y sincronizar disponibilidad en Rappi' },
 };
@@ -9763,6 +9805,7 @@ async function guardarVentaDirecta() {
     { id: 'asistencia', label: 'Asistencia' },
     { id: 'checklists', label: 'Checklists' },
     { id: 'marketing', label: 'Marketing Digital' },
+    { id: 'clientes', label: 'Clientes' },
     { id: 'eventos', label: 'Eventos' },
   ];
   let _uposLista = [];
@@ -13133,6 +13176,7 @@ async function guardarVentaDirecta() {
       case 'asistencia': await renderAsistencia(); break;
       case 'checklists': await renderChecklists(); break;
       case 'marketing': await renderMarketing(); break;
+      case 'clientes': if (window.LS_CLIENTES) await window.LS_CLIENTES.render(); break;
       case 'eventos': await renderEventos(); break;
       case 'rappi': await renderRappi(); break;
       case 'catalogo-inventario': await abrirCatalogoInventarioPagina(); break;
@@ -14306,6 +14350,165 @@ if ('serviceWorker' in navigator) {
       return r;
     };
   }
+})();
+</script>
+
+<script>
+/* ============ CLIENTES (revisar a todos los clientes) ============
+   Lee clientesLealtad (el unico registro de cliente: lo usan la caja, el sitio y el POS). Solo el personal con
+   sesion lo puede leer (reglas de la base). Esta pagina es de SOLO LECTURA: no edita puntos ni datos. */
+(function () {
+  const ZONA = 'America/Matamoros';
+  const MES_C = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const fmtN = n => Number(n || 0).toLocaleString('es-MX');
+  const dinero = n => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const DIA = 86400000;
+
+  let datos = [], cargado = false, filtro = 'todos', texto = '', orden = { k: 'ultima', d: -1 };
+
+  function hoy() {
+    const o = {}; new Intl.DateTimeFormat('en-CA', { timeZone: ZONA, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).forEach(x => { o[x.type] = x.value; });
+    return { y: +o.year, m: +o.month, d: +o.day };
+  }
+  function diasParaCumple(iso) {                           // dias que faltan para el proximo cumpleaños (0 = hoy); null si no hay
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); if (!m) return null;
+    const h = hoy(), t0 = Date.UTC(h.y, h.m - 1, h.d);
+    let prox = Date.UTC(h.y, +m[2] - 1, +m[3]);
+    if (prox < t0) prox = Date.UTC(h.y + 1, +m[2] - 1, +m[3]);
+    return Math.round((prox - t0) / DIA);
+  }
+  function fmtFecha(ms) { if (!ms) return '—'; const d = new Date(ms); return d.getDate() + ' ' + MES_C[d.getMonth()] + ' ' + d.getFullYear(); }
+  function haceDias(ms) { if (!ms) return null; return Math.floor((Date.now() - ms) / DIA); }
+  function fmtCumple(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? (+m[3]) + ' ' + MES_C[+m[2] - 1] : '—'; }
+  function etiqueta(v) { return v >= 5 ? { t: 'Frecuente', c: 'f', o: 3 } : v >= 2 ? { t: 'Regular', c: 'r', o: 2 } : { t: 'Nuevo', c: 'n', o: 1 }; }   // misma regla que la caja
+
+  function normaliza(tel, v) {
+    v = v || {};
+    const visitas = Number(v.visitas) || 0;
+    return { tel: String(v.telefono || tel), nombre: String(v.nombre || '').trim(), visitas, puntos: Number(v.puntos) || 0,
+      ultima: Number(v.ultimaVisita) || 0, creado: Number(v.creado) || 0, cumple: v.cumpleanos || '', cumpleEn: diasParaCumple(v.cumpleanos),
+      direccion: v.direccion || '', referencia: v.referencia || '', et: etiqueta(visitas) };
+  }
+
+  const FILTROS = [
+    ['todos', 'Todos', c => true],
+    ['frecuentes', 'Frecuentes', c => c.visitas >= 5],
+    ['regulares', 'Regulares', c => c.visitas >= 2 && c.visitas < 5],
+    ['nuevos', 'Nuevos', c => c.visitas < 2],
+    ['puntos', 'Con puntos', c => c.puntos > 0],
+    ['cumple', 'Cumpleaños (30 días)', c => c.cumpleEn !== null && c.cumpleEn <= 30],
+    ['inactivos', 'Inactivos (+60 días)', c => c.ultima > 0 && haceDias(c.ultima) > 60],
+    ['incompletos', 'Sin nombre o cumpleaños', c => !c.nombre || !c.cumple],
+  ];
+  const COLS = [['nombre', 'Cliente'], ['et', 'Etiqueta'], ['visitas', 'Visitas'], ['puntos', 'Puntos'], ['ultima', 'Última visita'], ['creado', 'Cliente desde'], ['cumple', 'Cumpleaños']];
+
+  function valorOrden(c, k) {
+    if (k === 'nombre') return (c.nombre || '￿').toLowerCase();
+    if (k === 'et') return c.et.o;
+    if (k === 'cumple') return c.cumpleEn === null ? 9999 : c.cumpleEn;
+    return c[k] || 0;
+  }
+  function visibles() {
+    const f = FILTROS.find(x => x[0] === filtro)[2], q = texto.trim().toLowerCase(), qd = q.replace(/\D/g, '');
+    let l = datos.filter(c => f(c) && (!q || c.nombre.toLowerCase().includes(q) || (qd && c.tel.includes(qd))));
+    l.sort((a, b) => {
+      let x = valorOrden(a, orden.k), y = valorOrden(b, orden.k);
+      return (x < y ? -1 : x > y ? 1 : 0) * orden.d;
+    });
+    return l;
+  }
+
+  function pintarKpis() {
+    const el = document.getElementById('cli-kpis'); if (!el) return;
+    const act30 = datos.filter(c => c.ultima && haceDias(c.ultima) <= 30).length;
+    const nuevos30 = datos.filter(c => c.creado && haceDias(c.creado) <= 30).length;
+    const cumple = datos.filter(c => c.cumpleEn !== null && c.cumpleEn <= 30).length;
+    const k = (l, v, d) => '<div class="traf-kpi"><div class="l">' + l + '</div><div class="v">' + v + '</div><div class="d">' + (d || '&nbsp;') + '</div></div>';
+    el.innerHTML = k('Clientes', fmtN(datos.length), fmtN(datos.filter(c => c.visitas >= 5).length) + ' frecuentes') +
+      k('Activos · 30 días', fmtN(act30), 'con compra en el último mes') +
+      k('Nuevos · 30 días', fmtN(nuevos30), 'registrados en el último mes') +
+      k('Puntos en circulación', dinero(datos.reduce((a, c) => a + c.puntos, 0)), fmtN(datos.filter(c => c.puntos > 0).length) + ' clientes con saldo') +
+      k('Cumpleaños próximos', fmtN(cumple), 'en los siguientes 30 días');
+  }
+  function pintarFiltros() {
+    const el = document.getElementById('cli-filtros'); if (!el) return;
+    el.innerHTML = FILTROS.map(([id, t, fn]) => '<button class="' + (filtro === id ? 'on' : '') + '" onclick="LS_CLIENTES.filtrar(\'' + id + '\')">' + t + ' <span style="opacity:.6">' + datos.filter(fn).length + '</span></button>').join('');
+    const th = document.getElementById('cli-th');
+    if (th) th.innerHTML = COLS.map(([k, t]) => '<th onclick="LS_CLIENTES.ordenar(\'' + k + '\')">' + t + (orden.k === k ? (orden.d > 0 ? ' ▲' : ' ▼') : '') + '</th>').join('');
+  }
+  function pintarTabla() {
+    const tb = document.getElementById('cli-filas'); if (!tb) return;
+    const l = visibles();
+    const tot = document.getElementById('cli-total'); if (tot) tot.textContent = l.length === datos.length ? datos.length : l.length + ' de ' + datos.length;
+    if (!l.length) { tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:26px;color:var(--tx-3)">' + (datos.length ? 'Ningún cliente coincide con la búsqueda o el filtro.' : 'Aún no hay clientes registrados.') + '</td></tr>'; return; }
+    tb.innerHTML = l.map(c => {
+      const hd = haceDias(c.ultima);
+      const cumple = c.cumpleEn === null ? '—' : fmtCumple(c.cumple) + (c.cumpleEn === 0 ? ' · <b style="color:var(--terra-claro)">¡hoy!</b>' : c.cumpleEn <= 30 ? ' <span class="cli-sub">en ' + c.cumpleEn + ' d</span>' : '');
+      return '<tr onclick="LS_CLIENTES.detalle(\'' + esc(c.tel) + '\')">' +
+        '<td><div style="font-weight:600">' + (c.nombre ? esc(c.nombre) : '<span style="color:var(--tx-3);font-weight:400">Sin nombre</span>') + '</div><div class="cli-sub">' + esc(c.tel) + '</div></td>' +
+        '<td><span class="cli-tag ' + c.et.c + '">' + c.et.t + '</span></td>' +
+        '<td class="num" style="font-family:var(--mono)">' + fmtN(c.visitas) + '</td>' +
+        '<td class="num" style="font-family:var(--mono);font-weight:600">' + dinero(c.puntos) + '</td>' +
+        '<td>' + (c.ultima ? fmtFecha(c.ultima) + '<div class="cli-sub">' + (hd === 0 ? 'hoy' : 'hace ' + hd + ' d') + '</div>' : '—') + '</td>' +
+        '<td>' + fmtFecha(c.creado) + '</td><td>' + cumple + '</td></tr>';
+    }).join('');
+  }
+
+  async function render(forzar) {
+    const tb = document.getElementById('cli-filas');
+    if (cargado && !forzar) { pintarKpis(); pintarFiltros(); pintarTabla(); return; }
+    try {
+      await fbAuthReady;
+      const val = (await fbDb.ref('clientesLealtad').once('value')).val() || {};
+      datos = Object.keys(val).map(t => normaliza(t, val[t]));
+      cargado = true;
+      pintarKpis(); pintarFiltros(); pintarTabla();
+    } catch (e) {
+      console.error('Clientes:', e);
+      if (tb) tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:26px;color:var(--tx-3)">No se pudieron cargar los clientes (¿sesión caducada?). Recarga e inicia sesión de nuevo.</td></tr>';
+    }
+  }
+
+  function detalle(tel) {
+    const c = datos.find(x => x.tel === tel); if (!c || !window._modal) return;
+    const wa = c.tel.length === 10 ? '<a class="btn btn-sm btn-primary" target="_blank" rel="noopener" href="https://wa.me/52' + esc(c.tel) + '"><i class="ti ti-brand-whatsapp"></i>WhatsApp</a>' : '';
+    const fila = (l, v) => '<dt>' + l + '</dt><dd>' + (v || '<span style="color:var(--tx-3)">—</span>') + '</dd>';
+    window._modal('<div class="modal-overlay" onclick="if(event.target===this)_cerrarModal()"><div class="modal" style="max-width:460px">' +
+      '<div class="modal-header"><div class="modal-title">' + (c.nombre ? esc(c.nombre) : 'Cliente sin nombre') + '</div><button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button></div>' +
+      '<div class="modal-body"><dl class="cli-det">' +
+        fila('Etiqueta', '<span class="cli-tag ' + c.et.c + '">' + c.et.t + '</span>') +
+        fila('Teléfono', esc(c.tel)) +
+        fila('Puntos', '<b>' + dinero(c.puntos) + '</b>') +
+        fila('Visitas', fmtN(c.visitas)) +
+        fila('Última visita', c.ultima ? fmtFecha(c.ultima) + ' (hace ' + haceDias(c.ultima) + ' d)' : '') +
+        fila('Cliente desde', c.creado ? fmtFecha(c.creado) : '') +
+        fila('Cumpleaños', c.cumple ? fmtCumple(c.cumple) + (c.cumpleEn !== null && c.cumpleEn <= 30 ? ' · ' + (c.cumpleEn === 0 ? '¡hoy!' : 'en ' + c.cumpleEn + ' días') : '') : '') +
+        fila('Dirección', esc(c.direccion)) + fila('Referencia', esc(c.referencia)) +
+      '</dl></div>' +
+      '<div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 18px">' + wa +
+        '<button class="btn btn-sm btn-ghost" onclick="navigator.clipboard&&navigator.clipboard.writeText(\'' + esc(c.tel) + '\');toast(\'Copiado\',\'Teléfono copiado\',\'ok\',\'ti-copy\')"><i class="ti ti-copy"></i>Copiar teléfono</button>' +
+        '<button class="btn btn-sm btn-ghost" onclick="_cerrarModal()">Cerrar</button></div></div></div>');
+  }
+
+  function exportar() {
+    const l = visibles(), q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const cab = ['Nombre', 'Teléfono', 'Etiqueta', 'Visitas', 'Puntos', 'Última visita', 'Cliente desde', 'Cumpleaños', 'Dirección', 'Referencia'];
+    const iso = ms => ms ? new Date(ms).toISOString().slice(0, 10) : '';
+    const filas = l.map(c => [c.nombre, c.tel, c.et.t, c.visitas, c.puntos.toFixed(2), iso(c.ultima), iso(c.creado), c.cumple, c.direccion, c.referencia].map(q).join(','));
+    const blob = new Blob(['﻿' + [cab.map(q).join(',')].concat(filas).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'clientes_' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    if (window.toast) toast('Exportado', l.length + ' clientes en el archivo CSV', 'ok', 'ti-download');
+  }
+
+  window.LS_CLIENTES = {
+    render,
+    filtrar: id => { filtro = id; pintarFiltros(); pintarTabla(); },
+    buscar: t => { texto = t || ''; pintarTabla(); },
+    ordenar: k => { orden = orden.k === k ? { k, d: -orden.d } : { k, d: (k === 'nombre' || k === 'cumple') ? 1 : -1 }; pintarFiltros(); pintarTabla(); },
+    detalle, exportar,
+  };
 })();
 </script>
 </body>
