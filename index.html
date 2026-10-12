@@ -655,6 +655,33 @@
     .trend-bar.cur { background: linear-gradient(180deg, #c9a84c, #d9bd66); }
     .trend-val { font-family: 'DM Mono', monospace; font-size: 9.5px; color: var(--tx-2); white-space: nowrap; }
     .trend-lbl { font-size: 10px; color: var(--tx-3); text-transform: uppercase; letter-spacing: 0.04em; }
+    /* Tráfico del sitio web (Dashboard y Marketing) */
+    .traf-ctrl { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .traf-nav { display: inline-flex; align-items: center; gap: 6px; }
+    .traf-nav .lbl { min-width: 170px; text-align: center; font-size: 12.5px; font-weight: 600; color: var(--tx-1, inherit); }
+    .traf-nav button { background: transparent; border: 1px solid var(--line-2); color: var(--tx-2); width: 28px; height: 28px; border-radius: 8px; cursor: pointer; font-family: inherit; }
+    .traf-nav button:disabled { opacity: .35; cursor: default; }
+    .traf-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
+    .traf-kpi { background: var(--cafe-800); border: 1px solid var(--line-2); border-radius: var(--r); padding: 12px 14px; }
+    .traf-kpi .l { font-size: 11px; color: var(--tx-3); text-transform: uppercase; letter-spacing: .05em; }
+    .traf-kpi .v { font-family: 'DM Mono', monospace; font-size: 24px; font-weight: 600; margin-top: 4px; }
+    .traf-kpi .d { font-size: 11px; margin-top: 2px; color: var(--tx-3); }
+    .traf-kpi .d.up { color: var(--verde); } .traf-kpi .d.dn { color: var(--rojo); }
+    .traf-chart { display: flex; align-items: flex-end; gap: 3px; height: 150px; padding: 8px 2px 0; }
+    .traf-chart .col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+    .traf-chart .bar { width: 100%; max-width: 34px; background: linear-gradient(180deg, var(--terra), var(--terra-claro, #c9683f)); border-radius: 5px 5px 2px 2px; min-height: 2px; }
+    .traf-chart .bar.u { background: linear-gradient(180deg, #c9a84c, #d9bd66); }
+    .traf-chart .v { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--tx-2); height: 11px; }
+    .traf-chart .x { font-size: 9.5px; color: var(--tx-3); height: 12px; white-space: nowrap; }
+    .traf-leyenda { display: flex; gap: 14px; font-size: 11px; color: var(--tx-3); margin-top: 6px; }
+    .traf-leyenda i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+    .traf-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 16px; }
+    .traf-lista .fila { display: flex; align-items: center; gap: 10px; font-size: 12.5px; padding: 5px 0; }
+    .traf-lista .nom { width: 118px; flex: none; color: var(--tx-2); }
+    .traf-lista .pista { flex: 1; height: 8px; background: var(--track, rgba(255,255,255,0.06)); border-radius: 5px; overflow: hidden; }
+    .traf-lista .pista b { display: block; height: 100%; background: var(--terra); border-radius: 5px; }
+    .traf-lista .n { width: 66px; text-align: right; font-family: 'DM Mono', monospace; font-size: 11.5px; color: var(--tx-2); }
+    .traf-vacio { padding: 26px; text-align: center; color: var(--tx-3); font-size: 12.5px; }
     /* Barra de meta */
     .meta-bar-track { height: 14px; background: var(--track, rgba(255,255,255,0.06)); border-radius: 8px; overflow: hidden; margin: 10px 0 6px; }
     .meta-bar-fill { height: 100%; border-radius: 8px; transition: width 0.8s var(--ease); }
@@ -1338,6 +1365,7 @@
       <div class="kpi-sub" id="kpi-exactitud-sub">&nbsp;</div>
     </div>
   </div>
+  <div id="dash-traf"></div>
   <div class="grid-21">
     <div class="card">
       <div class="card-head">
@@ -2138,7 +2166,11 @@
     <button data-mkt-vista="fechas" onclick="LS_UI.mktSwitchVista('fechas')">Fechas importantes</button>
     <button data-mkt-vista="contenido" onclick="LS_UI.mktSwitchVista('contenido')">Contenido programado</button>
     <button data-mkt-vista="tareas" onclick="LS_UI.mktSwitchVista('tareas')">Metas y tareas</button>
+    <button data-mkt-vista="trafico" onclick="LS_UI.mktSwitchVista('trafico')">Tráfico del sitio</button>
   </div>
+
+  <!-- TRÁFICO DEL SITIO WEB -->
+  <div id="mkt-view-trafico" style="display:none"><div id="mkt-traf"></div></div>
 
   <!-- FECHAS IMPORTANTES -->
   <div id="mkt-view-fechas" style="display:none">
@@ -10990,7 +11022,7 @@ async function guardarVentaDirecta() {
   function mktSwitchVista(vista, forzarRecarga) {
     _mktVista = vista;
     document.querySelectorAll('#p-marketing .seg button').forEach(b => b.classList.toggle('on', b.dataset.mktVista === vista));
-    ['fechas', 'metricas', 'contenido', 'tareas'].forEach(v => {
+    ['fechas', 'metricas', 'contenido', 'tareas', 'trafico'].forEach(v => {
       const el = document.getElementById('mkt-view-' + v);
       if (el) el.style.display = (v === vista) ? '' : 'none';
     });
@@ -10998,6 +11030,7 @@ async function guardarVentaDirecta() {
     if (vista === 'metricas' && (forzarRecarga || !_mktCargado.has('metricas'))) { _mktCargado.add('metricas'); renderMktMetricas(); }
     if (vista === 'contenido' && (forzarRecarga || !_mktCargado.has('contenido'))) { _mktCargado.add('contenido'); renderMktContenido(); }
     if (vista === 'tareas' && (forzarRecarga || !_mktCargado.has('tareas'))) { _mktCargado.add('tareas'); renderMktTareas(); }
+    if (vista === 'trafico' && window.LS_TRAFICO) { window.LS_TRAFICO.montar('mkt-traf'); }
   }
 
   // forzarRecarga=true porque "Métricas semanales" depende del filtro global
@@ -14114,6 +14147,166 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+</script>
+
+<script>
+/* ============ TRÁFICO DEL SITIO WEB (pedidos.suenodeluna.com.mx) ============
+   Lee analitica/{dias|semanas|meses|anios}/{clave} (lo escribe la función analiticaVisita; solo el
+   personal puede leerlo). Se monta en dos lugares con el mismo código: Dashboard (#dash-traf) y
+   Marketing > "Tráfico del sitio" (#mkt-traf). Filtros: día, semana (ISO, lunes a domingo), mes y año. */
+(function () {
+  const ZONA = 'America/Matamoros';
+  const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const MES_C = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+  const ORIGEN = { instagram:'Instagram', facebook:'Facebook', google:'Google', whatsapp:'WhatsApp', tiktok:'TikTok', qr_mesa:'QR de mesa', apps_reparto:'Apps de reparto', directo:'Directo / enlace', otro:'Otros sitios' };
+  const DISP = { movil:'Celular', escritorio:'Computadora', tablet:'Tablet', otro:'Otro' };
+  const p2 = n => String(n).padStart(2, '0');
+  const fmtN = n => Number(n || 0).toLocaleString('es-MX');
+  const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+  function hoy() {
+    const o = {}; new Intl.DateTimeFormat('en-CA', { timeZone: ZONA, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).forEach(x => { o[x.type] = x.value; });
+    return { y: +o.year, m: +o.month, d: +o.day };
+  }
+  const utc = f => Date.UTC(f.y, f.m - 1, f.d);
+  const deUtc = ms => { const d = new Date(ms); return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate() }; };
+  const suma = (f, n) => deUtc(utc(f) + n * 86400000);
+  const kDia = f => f.y + '-' + p2(f.m) + '-' + p2(f.d);
+  const kMes = f => f.y + '-' + p2(f.m);
+  const diasDelMes = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+  function semanaISO(f) {                                 // misma regla que la función del servidor
+    const dow = (new Date(utc(f)).getUTCDay() + 6) % 7;
+    const jueves = utc(f) + (3 - dow) * 86400000;
+    const anio = new Date(jueves).getUTCFullYear();
+    const e4 = Date.UTC(anio, 0, 4);
+    const sem = 1 + Math.floor((jueves - e4 + ((new Date(e4).getUTCDay() + 6) % 7) * 86400000) / (7 * 86400000));
+    return { anio, sem, clave: anio + '-W' + p2(sem) };
+  }
+  const lunesDe = f => suma(f, -((new Date(utc(f)).getUTCDay() + 6) % 7));
+  const corto = f => f.d + ' ' + MES_C[f.m - 1];
+
+  // Describe el periodo seleccionado: clave, etiqueta, hijos para la grafica y periodos vecinos
+  function periodo(modo, f) {
+    if (modo === 'dia') {
+      const dow = DIAS[new Date(utc(f)).getUTCDay()];
+      return { modo, tipo: 'dias', clave: kDia(f), etiqueta: dow + ' ' + f.d + ' de ' + MESES[f.m - 1] + ' ' + f.y,
+        hijosTitulo: 'Visitas por hora', hijos: Array.from({ length: 24 }, (_, h) => ({ clave: p2(h), x: h % 3 === 0 ? String(h) : '' })),
+        prev: suma(f, -1), next: suma(f, 1) };
+    }
+    if (modo === 'semana') {
+      const lu = lunesDe(f), w = semanaISO(lu);
+      return { modo, tipo: 'semanas', clave: w.clave, etiqueta: 'semana ' + w.sem + ' · ' + corto(lu) + ' – ' + corto(suma(lu, 6)) + ' ' + suma(lu, 6).y,
+        hijosTitulo: 'Visitas por día', hijos: Array.from({ length: 7 }, (_, i) => { const d = suma(lu, i); return { clave: kDia(d), x: DIAS[d.m ? new Date(utc(d)).getUTCDay() : 0].slice(0, 3) + ' ' + d.d }; }),
+        prev: suma(lu, -7), next: suma(lu, 7) };
+    }
+    if (modo === 'mes') {
+      const n = diasDelMes(f.y, f.m);
+      return { modo, tipo: 'meses', clave: kMes(f), etiqueta: MESES[f.m - 1] + ' ' + f.y,
+        hijosTitulo: 'Visitas por día', hijos: Array.from({ length: n }, (_, i) => ({ clave: kMes(f) + '-' + p2(i + 1), x: (i + 1) % 5 === 0 || i === 0 ? String(i + 1) : '' })),
+        prev: f.m === 1 ? { y: f.y - 1, m: 12, d: 1 } : { y: f.y, m: f.m - 1, d: 1 }, next: f.m === 12 ? { y: f.y + 1, m: 1, d: 1 } : { y: f.y, m: f.m + 1, d: 1 } };
+    }
+    return { modo, tipo: 'anios', clave: String(f.y), etiqueta: String(f.y),
+      hijosTitulo: 'Visitas por mes', hijos: Array.from({ length: 12 }, (_, i) => ({ clave: f.y + '-' + p2(i + 1), x: MES_C[i] })),
+      prev: { y: f.y - 1, m: 1, d: 1 }, next: { y: f.y + 1, m: 1, d: 1 } };
+  }
+  function claveActual(modo) {
+    const h = hoy();
+    return modo === 'dia' ? kDia(h) : modo === 'semana' ? semanaISO(h).clave : modo === 'mes' ? kMes(h) : String(h.y);
+  }
+  const TIPO_DE = { dia: 'dias', semana: 'semanas', mes: 'meses', anio: 'anios' };
+
+  async function leer(path) { await fbAuthReady; return (await fbDb.ref(path).once('value')).val(); }
+  async function leerRango(nodo, a, b) { await fbAuthReady; return (await fbDb.ref('analitica/' + nodo).orderByKey().startAt(a).endAt(b).once('value')).val() || {}; }
+
+  const estados = {};                                       // por contenedor
+  function estado(id) { return estados[id] || (estados[id] = { modo: 'dia', f: hoy(), cargando: 0 }); }
+
+  function pintarLista(obj, nombres, total) {
+    const filas = Object.keys(obj || {}).map(k => ({ k, n: obj[k] || 0 })).filter(x => x.n > 0).sort((a, b) => b.n - a.n);
+    if (!filas.length) return '<div class="traf-vacio" style="padding:10px">Sin datos</div>';
+    const max = filas[0].n;
+    return '<div class="traf-lista">' + filas.map(x => '<div class="fila"><span class="nom">' + esc(nombres[x.k] || x.k) + '</span><span class="pista"><b style="width:' + Math.max(3, Math.round(x.n / max * 100)) + '%"></b></span><span class="n">' + fmtN(x.n) + ' · ' + Math.round(x.n / (total || 1) * 100) + '%</span></div>').join('') + '</div>';
+  }
+
+  function delta(a, b) {
+    if (!b) return '<div class="d">sin periodo anterior</div>';
+    const p = Math.round((a - b) / b * 100);
+    return '<div class="d ' + (p >= 0 ? 'up' : 'dn') + '">' + (p >= 0 ? '▲ +' : '▼ ') + p + '% vs periodo anterior</div>';
+  }
+
+  async function dibujar(id) {
+    const root = document.getElementById(id); if (!root) return;
+    const st = estado(id), per = periodo(st.modo, st.f), ant = periodo(st.modo, per.prev);
+    const token = ++st.cargando;
+    const esActual = per.clave === claveActual(st.modo);
+    const botones = [['dia', 'Día'], ['semana', 'Semana'], ['mes', 'Mes'], ['anio', 'Año']].map(([m, t]) => '<button class="' + (st.modo === m ? 'on' : '') + '" data-modo="' + m + '">' + t + '</button>').join('');
+    root.innerHTML = '<div class="card" style="margin-bottom:18px"><div class="card-head">' +
+      '<div><div class="card-title"><i class="ti ti-world-www"></i>Tráfico del sitio web</div><div class="card-sub" data-sub>pedidos.suenodeluna.com.mx</div></div>' +
+      '<div class="traf-ctrl"><div class="seg">' + botones + '</div>' +
+      '<div class="traf-nav"><button data-nav="prev" aria-label="Periodo anterior">‹</button><span class="lbl">' + esc(per.etiqueta.charAt(0).toUpperCase() + per.etiqueta.slice(1)) + '</span><button data-nav="next" aria-label="Periodo siguiente"' + (esActual ? ' disabled' : '') + '>›</button></div>' +
+      (esActual ? '' : '<button class="btn btn-sm btn-ghost" data-nav="hoy">Hoy</button>') + '</div></div>' +
+      '<div class="card-pad" data-cuerpo><div class="traf-vacio"><i class="ti ti-loader-2"></i> Cargando...</div></div></div>';
+    root.querySelectorAll('[data-modo]').forEach(b => b.addEventListener('click', () => { st.modo = b.dataset.modo; st.f = hoy(); dibujar(id); }));
+    root.querySelectorAll('[data-nav]').forEach(b => b.addEventListener('click', () => {
+      const a = b.dataset.nav; if (b.disabled) return;
+      st.f = a === 'hoy' ? hoy() : (a === 'prev' ? per.prev : per.next); dibujar(id);
+    }));
+
+    try {
+      const [doc, docAnt, inicio] = await Promise.all([leer('analitica/' + per.tipo + '/' + per.clave), leer('analitica/' + ant.tipo + '/' + ant.clave), leer('analitica/inicio')]);
+      let hijos;
+      if (st.modo === 'dia') hijos = (doc && doc.horas) || {};
+      else if (st.modo === 'anio') hijos = await leerRango('meses', per.clave + '-01', per.clave + '-12');
+      else hijos = await leerRango('dias', per.hijos[0].clave, per.hijos[per.hijos.length - 1].clave);
+      if (token !== st.cargando) return;                    // el usuario cambio de periodo mientras cargaba
+
+      const d = doc || {}, v = d.visitas || 0, u = d.unicos || 0, pe = d.pedidos || 0;
+      const sub = root.querySelector('[data-sub]');
+      if (sub) sub.textContent = 'pedidos.suenodeluna.com.mx' + (inicio ? ' · conteo desde ' + inicio.split('-').reverse().join('/') : ' · aún sin visitas registradas');
+      const cuerpo = root.querySelector('[data-cuerpo]');
+      if (!v && !pe) {
+        cuerpo.innerHTML = '<div class="traf-vacio">Sin visitas registradas en este periodo' + (inicio ? '. El conteo empezó el ' + inicio.split('-').reverse().join('/') + '.' : '. El conteo empieza cuando se publique el sitio con el monitor.') + '</div>';
+        return;
+      }
+      const vals = per.hijos.map(h => { const x = hijos[h.clave]; return st.modo === 'dia' ? (x || 0) : ((x && x.visitas) || 0); });
+      const max = Math.max(...vals, 1), conTxt = per.hijos.length <= 12;
+      const idxActual = esActual ? (st.modo === 'dia' ? Number(new Intl.DateTimeFormat('en-GB', { timeZone: ZONA, hour: '2-digit', hourCycle: 'h23' }).format(new Date())) : -1) : -1;
+      const barras = per.hijos.map((h, i) => '<div class="col" title="' + esc(h.clave) + ': ' + vals[i] + ' visitas"><span class="v">' + (conTxt && vals[i] ? vals[i] : '') + '</span><div class="bar' + (i === idxActual ? ' u' : '') + '" style="height:' + Math.max(2, Math.round(vals[i] / max * 112)) + 'px"></div><span class="x">' + esc(h.x) + '</span></div>').join('');
+      const conv = v ? (pe / v * 100) : 0;
+      cuerpo.innerHTML =
+        '<div class="traf-kpis">' +
+          '<div class="traf-kpi"><div class="l">Visitas</div><div class="v">' + fmtN(v) + '</div>' + delta(v, (docAnt && docAnt.visitas) || 0) + '</div>' +
+          '<div class="traf-kpi"><div class="l">Personas distintas</div><div class="v">' + fmtN(u) + '</div>' + delta(u, (docAnt && docAnt.unicos) || 0) + '</div>' +
+          '<div class="traf-kpi"><div class="l">Pedidos por el sitio</div><div class="v">' + fmtN(pe) + '</div>' + (d.pedidosMonto ? '<div class="d">$' + fmtN(Math.round(d.pedidosMonto)) + ' vendidos</div>' : '<div class="d">&nbsp;</div>') + '</div>' +
+          '<div class="traf-kpi"><div class="l">Visitas que piden</div><div class="v">' + conv.toFixed(1) + '%</div><div class="d">pedidos ÷ visitas</div></div>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">' + per.hijosTitulo + '</div>' +
+        '<div class="traf-chart">' + barras + '</div>' +
+        '<div class="traf-grid">' +
+          '<div><div style="font-size:11px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">De dónde llegan</div>' + pintarLista(d.origenes, ORIGEN, v) + '</div>' +
+          '<div><div style="font-size:11px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Desde qué dispositivo</div>' + pintarLista(d.dispositivos, DISP, v) + '</div>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--tx-4,var(--tx-3));margin-top:14px">Visita = una sesión de navegación (recargar no cuenta otra). "Personas distintas" cuenta cada navegador una vez por periodo. No se cuentan bots ni los navegadores del personal marcados con ?no_contar=1.</div>';
+    } catch (e) {
+      console.error('Tráfico del sitio:', e);
+      const c = root.querySelector('[data-cuerpo]');
+      if (c && token === st.cargando) c.innerHTML = '<div class="traf-vacio">No se pudo cargar el tráfico (¿sesión caducada?). Recarga e inicia sesión de nuevo.</div>';
+    }
+  }
+
+  window.LS_TRAFICO = { montar: dibujar, periodo, semanaISO };
+
+  // Dashboard: se pinta al entrar a esa página; Marketing lo pinta al abrir su pestaña "Tráfico del sitio".
+  const goOriginal = window.go;
+  if (typeof goOriginal === 'function') {
+    window.go = function (id, el) {
+      const r = goOriginal.apply(this, arguments);
+      if (id === 'dashboard') dibujar('dash-traf');
+      return r;
+    };
+  }
+})();
 </script>
 </body>
 </html>
