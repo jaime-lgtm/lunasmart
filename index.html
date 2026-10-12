@@ -1290,7 +1290,7 @@
         <div class="nav-item" data-page="asistencia" onclick="go('asistencia',this)"><i class="ti ti-clock-hour-4"></i><span class="nav-lbl">Asistencia</span></div>
         <div class="nav-item" data-page="checklists" onclick="go('checklists',this)"><i class="ti ti-list-check"></i><span class="nav-lbl">Checklists</span></div>
         <div class="nav-item" data-page="marketing" onclick="go('marketing',this)"><i class="ti ti-speakerphone"></i><span class="nav-lbl">Marketing Digital</span></div>
-        <div class="nav-item" data-page="clientes" onclick="go('clientes',this)"><i class="ti ti-users-group"></i><span class="nav-lbl">Clientes</span></div>
+        <div class="nav-item" data-page="clientes" onclick="go('clientes',this)"><i class="ti ti-users-group"></i><span class="nav-lbl">Clientes</span><span class="nav-badge" id="cli-badge" style="display:none" title="Cumpleaños de hoy"></span></div>
         <div class="nav-item" data-page="eventos" onclick="go('eventos',this)"><i class="ti ti-calendar-event"></i><span class="nav-lbl">Eventos</span></div>
         <div class="nav-item" data-page="rappi" onclick="go('rappi',this)"><i class="ti ti-moped"></i><span class="nav-lbl">Integración Rappi</span></div>
       </nav>
@@ -1351,6 +1351,7 @@
 <!-- ════════ DASHBOARD ════════ -->
 <div id="p-dashboard" class="page active" data-screen-label="Dashboard">
   <div id="dash-alertas"></div>
+  <div id="dash-cumple"></div>
   <div class="kpis k5">
     <div class="kpi">
       <div class="kpi-top"><div><div class="kpi-label" id="kpi-venta-label">Venta total · mes</div></div><div class="kpi-ico"><i class="ti ti-coin"></i></div></div>
@@ -2391,29 +2392,36 @@
 
 <!-- PÁGINA: CLIENTES -->
 <div id="p-clientes" class="page" data-screen-label="Clientes">
-  <div id="cli-kpis" class="traf-kpis" style="margin-bottom:14px"></div>
-  <div class="card">
-    <div class="card-head">
-      <div>
-        <div class="card-title"><i class="ti ti-users-group"></i>Clientes <span id="cli-total" class="pill pill-t" style="margin-left:6px"></span></div>
-        <div class="card-sub">Se registran desde la caja, en "Cliente frecuente" del sitio o al pedir en línea. Toca un cliente para ver su detalle.</div>
+  <div class="seg" id="cli-tabs" style="margin-bottom:16px">
+    <button class="on" data-v="lista" onclick="LS_CLIENTES.vista('lista')"><i class="ti ti-users-group"></i> Todos los clientes</button>
+    <button data-v="cumples" onclick="LS_CLIENTES.vista('cumples')"><i class="ti ti-cake"></i> Cumpleaños</button>
+  </div>
+  <div id="cli-vista-lista">
+    <div id="cli-kpis" class="traf-kpis" style="margin-bottom:14px"></div>
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <div class="card-title"><i class="ti ti-users-group"></i>Clientes <span id="cli-total" class="pill pill-t" style="margin-left:6px"></span></div>
+          <div class="card-sub">Se registran desde la caja, en "Cliente frecuente" del sitio o al pedir en línea. Toca un cliente para ver su detalle y corregirlo.</div>
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-sm btn-ghost" onclick="LS_CLIENTES.exportar()"><i class="ti ti-download"></i>Exportar CSV</button>
+          <button class="btn btn-sm btn-ghost" onclick="LS_CLIENTES.render(true)"><i class="ti ti-refresh"></i>Actualizar</button>
+        </div>
       </div>
-      <div class="card-actions">
-        <button class="btn btn-sm btn-ghost" onclick="LS_CLIENTES.exportar()"><i class="ti ti-download"></i>Exportar CSV</button>
-        <button class="btn btn-sm btn-ghost" onclick="LS_CLIENTES.render(true)"><i class="ti ti-refresh"></i>Actualizar</button>
+      <div style="padding:0 18px 12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+        <input type="search" id="cli-buscar" placeholder="Buscar por nombre o teléfono…" oninput="LS_CLIENTES.buscar(this.value)" style="flex:1;min-width:220px;max-width:360px;padding:9px 12px;border-radius:var(--r);border:1px solid var(--line-2);background:var(--cafe-800);color:inherit;font-family:inherit;font-size:13px">
+        <div class="seg" id="cli-filtros" style="flex-wrap:wrap"></div>
       </div>
-    </div>
-    <div style="padding:0 18px 12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
-      <input type="search" id="cli-buscar" placeholder="Buscar por nombre o teléfono…" oninput="LS_CLIENTES.buscar(this.value)" style="flex:1;min-width:220px;max-width:360px;padding:9px 12px;border-radius:var(--r);border:1px solid var(--line-2);background:var(--cafe-800);color:inherit;font-family:inherit;font-size:13px">
-      <div class="seg" id="cli-filtros" style="flex-wrap:wrap"></div>
-    </div>
-    <div class="tbl-wrap">
-      <table class="tbl">
-        <thead><tr id="cli-th"></tr></thead>
-        <tbody id="cli-filas"><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
-      </table>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr id="cli-th"></tr></thead>
+          <tbody id="cli-filas"><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--tx-4)"><i class="ti ti-loader-2"></i> Cargando...</td></tr></tbody>
+        </table>
+      </div>
     </div>
   </div>
+  <div id="cli-vista-cumples" style="display:none"><div id="cli-cumples"></div></div>
 </div>
 
 <!-- PÁGINA: INTEGRACIÓN RAPPI -->
@@ -2510,7 +2518,7 @@
           <div class="d-item" data-page="asistencia" onclick="mdrawerGo('asistencia')"><i class="ti ti-clock-hour-4"></i><span>Asistencia</span></div>
           <div class="d-item" data-page="checklists" onclick="mdrawerGo('checklists')"><i class="ti ti-list-check"></i><span>Checklists</span></div>
           <div class="d-item" data-page="marketing" onclick="mdrawerGo('marketing')"><i class="ti ti-speakerphone"></i><span>Marketing</span></div>
-          <div class="d-item" data-page="clientes" onclick="mdrawerGo('clientes')"><i class="ti ti-users-group"></i><span>Clientes</span></div>
+          <div class="d-item" data-page="clientes" onclick="mdrawerGo('clientes')"><i class="ti ti-users-group"></i><span>Clientes</span><span class="nav-badge" id="cli-badge-m" style="display:none"></span></div>
           <div class="d-item" data-page="eventos" onclick="mdrawerGo('eventos')"><i class="ti ti-calendar-event"></i><span>Eventos</span></div>
           <div class="d-item" data-page="rappi" onclick="mdrawerGo('rappi')"><i class="ti ti-moped"></i><span>Rappi</span></div>
           <div class="d-item" onclick="toggleDrawer();doLogout()"><i class="ti ti-logout"></i><span>Salir</span></div>
@@ -14354,161 +14362,331 @@ if ('serviceWorker' in navigator) {
 </script>
 
 <script>
-/* ============ CLIENTES (revisar a todos los clientes) ============
-   Lee clientesLealtad (el unico registro de cliente: lo usan la caja, el sitio y el POS). Solo el personal con
-   sesion lo puede leer (reglas de la base). Esta pagina es de SOLO LECTURA: no edita puntos ni datos. */
+/* ============ CLIENTES: revisar, corregir y felicitar ============
+   Lee y corrige clientesLealtad (el unico registro de cliente: lo usan la caja, el sitio y el POS).
+   - Edicion: solo cambia los campos modificados; cada cambio queda en clientesAuditoria (quien, cuando, antes/despues).
+   - Cumpleaños: vista con filtros + mensaje de WhatsApp listo para enviar con un toque; lo ya felicitado
+     se guarda en cumpleFelicitados/{año}/{telefono}. Aviso en el Dashboard y en el menu cuando hay cumpleaños cerca. */
 (function () {
   const ZONA = 'America/Matamoros';
   const MES_C = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const MES_L = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
   const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   const fmtN = n => Number(n || 0).toLocaleString('es-MX');
   const dinero = n => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const DIA = 86400000;
+  const MENSAJE_BASE = '¡Feliz cumpleaños, {nombre}! 🎂 De parte de todo el equipo de Sueño de Luna te deseamos un día increíble. Tenemos una sorpresa para ti: pasa a la barra y díselo a tu barista. ¡Te esperamos!';
 
   let datos = [], cargado = false, filtro = 'todos', texto = '', orden = { k: 'ultima', d: -1 };
+  let vista = 'lista', cumFiltro = '30', cumMes = 0, ocultarFelicitados = false;
+  let felicitados = {}, mensaje = MENSAJE_BASE;
 
   function hoy() {
     const o = {}; new Intl.DateTimeFormat('en-CA', { timeZone: ZONA, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).forEach(x => { o[x.type] = x.value; });
     return { y: +o.year, m: +o.month, d: +o.day };
   }
-  function diasParaCumple(iso) {                           // dias que faltan para el proximo cumpleaños (0 = hoy); null si no hay
+  // proximo cumpleaños: dias que faltan (0 = hoy), año en que cae y edad que cumple (si se conoce el año de nacimiento)
+  function proxCumple(iso) {
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); if (!m) return null;
     const h = hoy(), t0 = Date.UTC(h.y, h.m - 1, h.d);
-    let prox = Date.UTC(h.y, +m[2] - 1, +m[3]);
-    if (prox < t0) prox = Date.UTC(h.y + 1, +m[2] - 1, +m[3]);
-    return Math.round((prox - t0) / DIA);
+    let anio = h.y, prox = Date.UTC(anio, +m[2] - 1, +m[3]);
+    if (prox < t0) { anio++; prox = Date.UTC(anio, +m[2] - 1, +m[3]); }
+    const nac = +m[1], edad = (nac >= 1920 && anio - nac <= 110) ? anio - nac : null;
+    return { dias: Math.round((prox - t0) / DIA), anio, edad, mes: +m[2], dia: +m[3] };
   }
-  function fmtFecha(ms) { if (!ms) return '—'; const d = new Date(ms); return d.getDate() + ' ' + MES_C[d.getMonth()] + ' ' + d.getFullYear(); }
-  function haceDias(ms) { if (!ms) return null; return Math.floor((Date.now() - ms) / DIA); }
-  function fmtCumple(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? (+m[3]) + ' ' + MES_C[+m[2] - 1] : '—'; }
-  function etiqueta(v) { return v >= 5 ? { t: 'Frecuente', c: 'f', o: 3 } : v >= 2 ? { t: 'Regular', c: 'r', o: 2 } : { t: 'Nuevo', c: 'n', o: 1 }; }   // misma regla que la caja
+  const fmtFecha = ms => { if (!ms) return '—'; const d = new Date(ms); return d.getDate() + ' ' + MES_C[d.getMonth()] + ' ' + d.getFullYear(); };
+  const haceDias = ms => ms ? Math.floor((Date.now() - ms) / DIA) : null;
+  const fmtCumple = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? (+m[3]) + ' ' + MES_C[+m[2] - 1] : '—'; };
+  const etiqueta = v => v >= 5 ? { t: 'Frecuente', c: 'f', o: 3 } : v >= 2 ? { t: 'Regular', c: 'r', o: 2 } : { t: 'Nuevo', c: 'n', o: 1 };
+  const primerNombre = n => { const p = String(n || '').trim().split(/\s+/)[0] || ''; return p ? p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : ''; };
 
   function normaliza(tel, v) {
-    v = v || {};
-    const visitas = Number(v.visitas) || 0;
-    return { tel: String(v.telefono || tel), nombre: String(v.nombre || '').trim(), visitas, puntos: Number(v.puntos) || 0,
-      ultima: Number(v.ultimaVisita) || 0, creado: Number(v.creado) || 0, cumple: v.cumpleanos || '', cumpleEn: diasParaCumple(v.cumpleanos),
+    v = v || {}; const visitas = Number(v.visitas) || 0, pc = proxCumple(v.cumpleanos);
+    return { tel: String(v.telefono || tel), key: tel, nombre: String(v.nombre || '').trim(), visitas, puntos: Number(v.puntos) || 0,
+      ultima: Number(v.ultimaVisita) || 0, creado: Number(v.creado) || 0, cumple: v.cumpleanos || '', pc, cumpleEn: pc ? pc.dias : null,
       direccion: v.direccion || '', referencia: v.referencia || '', et: etiqueta(visitas) };
   }
 
   const FILTROS = [
-    ['todos', 'Todos', c => true],
-    ['frecuentes', 'Frecuentes', c => c.visitas >= 5],
-    ['regulares', 'Regulares', c => c.visitas >= 2 && c.visitas < 5],
-    ['nuevos', 'Nuevos', c => c.visitas < 2],
-    ['puntos', 'Con puntos', c => c.puntos > 0],
-    ['cumple', 'Cumpleaños (30 días)', c => c.cumpleEn !== null && c.cumpleEn <= 30],
+    ['todos', 'Todos', c => true], ['frecuentes', 'Frecuentes', c => c.visitas >= 5],
+    ['regulares', 'Regulares', c => c.visitas >= 2 && c.visitas < 5], ['nuevos', 'Nuevos', c => c.visitas < 2],
+    ['puntos', 'Con puntos', c => c.puntos > 0], ['cumple', 'Cumpleaños (30 días)', c => c.cumpleEn !== null && c.cumpleEn <= 30],
     ['inactivos', 'Inactivos (+60 días)', c => c.ultima > 0 && haceDias(c.ultima) > 60],
     ['incompletos', 'Sin nombre o cumpleaños', c => !c.nombre || !c.cumple],
   ];
   const COLS = [['nombre', 'Cliente'], ['et', 'Etiqueta'], ['visitas', 'Visitas'], ['puntos', 'Puntos'], ['ultima', 'Última visita'], ['creado', 'Cliente desde'], ['cumple', 'Cumpleaños']];
-
-  function valorOrden(c, k) {
-    if (k === 'nombre') return (c.nombre || '￿').toLowerCase();
-    if (k === 'et') return c.et.o;
-    if (k === 'cumple') return c.cumpleEn === null ? 9999 : c.cumpleEn;
-    return c[k] || 0;
-  }
+  const valorOrden = (c, k) => k === 'nombre' ? (c.nombre || '￿').toLowerCase() : k === 'et' ? c.et.o : k === 'cumple' ? (c.cumpleEn === null ? 9999 : c.cumpleEn) : (c[k] || 0);
   function visibles() {
     const f = FILTROS.find(x => x[0] === filtro)[2], q = texto.trim().toLowerCase(), qd = q.replace(/\D/g, '');
-    let l = datos.filter(c => f(c) && (!q || c.nombre.toLowerCase().includes(q) || (qd && c.tel.includes(qd))));
-    l.sort((a, b) => {
-      let x = valorOrden(a, orden.k), y = valorOrden(b, orden.k);
-      return (x < y ? -1 : x > y ? 1 : 0) * orden.d;
-    });
-    return l;
+    return datos.filter(c => f(c) && (!q || c.nombre.toLowerCase().includes(q) || (qd && c.tel.includes(qd))))
+      .sort((a, b) => { const x = valorOrden(a, orden.k), y = valorOrden(b, orden.k); return (x < y ? -1 : x > y ? 1 : 0) * orden.d; });
   }
 
+  // ---------- pintado: lista ----------
   function pintarKpis() {
     const el = document.getElementById('cli-kpis'); if (!el) return;
-    const act30 = datos.filter(c => c.ultima && haceDias(c.ultima) <= 30).length;
-    const nuevos30 = datos.filter(c => c.creado && haceDias(c.creado) <= 30).length;
-    const cumple = datos.filter(c => c.cumpleEn !== null && c.cumpleEn <= 30).length;
     const k = (l, v, d) => '<div class="traf-kpi"><div class="l">' + l + '</div><div class="v">' + v + '</div><div class="d">' + (d || '&nbsp;') + '</div></div>';
     el.innerHTML = k('Clientes', fmtN(datos.length), fmtN(datos.filter(c => c.visitas >= 5).length) + ' frecuentes') +
-      k('Activos · 30 días', fmtN(act30), 'con compra en el último mes') +
-      k('Nuevos · 30 días', fmtN(nuevos30), 'registrados en el último mes') +
+      k('Activos · 30 días', fmtN(datos.filter(c => c.ultima && haceDias(c.ultima) <= 30).length), 'con compra en el último mes') +
+      k('Nuevos · 30 días', fmtN(datos.filter(c => c.creado && haceDias(c.creado) <= 30).length), 'registrados en el último mes') +
       k('Puntos en circulación', dinero(datos.reduce((a, c) => a + c.puntos, 0)), fmtN(datos.filter(c => c.puntos > 0).length) + ' clientes con saldo') +
-      k('Cumpleaños próximos', fmtN(cumple), 'en los siguientes 30 días');
+      k('Cumpleaños próximos', fmtN(datos.filter(c => c.cumpleEn !== null && c.cumpleEn <= 30).length), 'en los siguientes 30 días');
   }
   function pintarFiltros() {
-    const el = document.getElementById('cli-filtros'); if (!el) return;
-    el.innerHTML = FILTROS.map(([id, t, fn]) => '<button class="' + (filtro === id ? 'on' : '') + '" onclick="LS_CLIENTES.filtrar(\'' + id + '\')">' + t + ' <span style="opacity:.6">' + datos.filter(fn).length + '</span></button>').join('');
+    const el = document.getElementById('cli-filtros'); if (el) el.innerHTML = FILTROS.map(([id, t, fn]) => '<button class="' + (filtro === id ? 'on' : '') + '" onclick="LS_CLIENTES.filtrar(\'' + id + '\')">' + t + ' <span style="opacity:.6">' + datos.filter(fn).length + '</span></button>').join('');
     const th = document.getElementById('cli-th');
     if (th) th.innerHTML = COLS.map(([k, t]) => '<th onclick="LS_CLIENTES.ordenar(\'' + k + '\')">' + t + (orden.k === k ? (orden.d > 0 ? ' ▲' : ' ▼') : '') + '</th>').join('');
   }
+  function textoCumple(c) {
+    if (c.cumpleEn === null) return '—';
+    return fmtCumple(c.cumple) + (c.cumpleEn === 0 ? ' · <b style="color:var(--terra-claro)">¡hoy!</b>' : c.cumpleEn <= 30 ? ' <span class="cli-sub">en ' + c.cumpleEn + ' d</span>' : '');
+  }
   function pintarTabla() {
     const tb = document.getElementById('cli-filas'); if (!tb) return;
-    const l = visibles();
-    const tot = document.getElementById('cli-total'); if (tot) tot.textContent = l.length === datos.length ? datos.length : l.length + ' de ' + datos.length;
+    const l = visibles(), tot = document.getElementById('cli-total');
+    if (tot) tot.textContent = l.length === datos.length ? datos.length : l.length + ' de ' + datos.length;
     if (!l.length) { tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:26px;color:var(--tx-3)">' + (datos.length ? 'Ningún cliente coincide con la búsqueda o el filtro.' : 'Aún no hay clientes registrados.') + '</td></tr>'; return; }
     tb.innerHTML = l.map(c => {
       const hd = haceDias(c.ultima);
-      const cumple = c.cumpleEn === null ? '—' : fmtCumple(c.cumple) + (c.cumpleEn === 0 ? ' · <b style="color:var(--terra-claro)">¡hoy!</b>' : c.cumpleEn <= 30 ? ' <span class="cli-sub">en ' + c.cumpleEn + ' d</span>' : '');
-      return '<tr onclick="LS_CLIENTES.detalle(\'' + esc(c.tel) + '\')">' +
-        '<td><div style="font-weight:600">' + (c.nombre ? esc(c.nombre) : '<span style="color:var(--tx-3);font-weight:400">Sin nombre</span>') + '</div><div class="cli-sub">' + esc(c.tel) + '</div></td>' +
-        '<td><span class="cli-tag ' + c.et.c + '">' + c.et.t + '</span></td>' +
-        '<td class="num" style="font-family:var(--mono)">' + fmtN(c.visitas) + '</td>' +
+      return '<tr onclick="LS_CLIENTES.detalle(\'' + esc(c.key) + '\')"><td><div style="font-weight:600">' + (c.nombre ? esc(c.nombre) : '<span style="color:var(--tx-3);font-weight:400">Sin nombre</span>') + '</div><div class="cli-sub">' + esc(c.tel) + '</div></td>' +
+        '<td><span class="cli-tag ' + c.et.c + '">' + c.et.t + '</span></td><td class="num" style="font-family:var(--mono)">' + fmtN(c.visitas) + '</td>' +
         '<td class="num" style="font-family:var(--mono);font-weight:600">' + dinero(c.puntos) + '</td>' +
-        '<td>' + (c.ultima ? fmtFecha(c.ultima) + '<div class="cli-sub">' + (hd === 0 ? 'hoy' : 'hace ' + hd + ' d') + '</div>' : '—') + '</td>' +
-        '<td>' + fmtFecha(c.creado) + '</td><td>' + cumple + '</td></tr>';
+        '<td>' + (c.ultima ? fmtFecha(c.ultima) + '<div class="cli-sub">' + (hd === 0 ? 'hoy' : 'hace ' + hd + ' d') + '</div>' : '—') + '</td><td>' + fmtFecha(c.creado) + '</td><td>' + textoCumple(c) + '</td></tr>';
     }).join('');
   }
 
-  async function render(forzar) {
-    const tb = document.getElementById('cli-filas');
-    if (cargado && !forzar) { pintarKpis(); pintarFiltros(); pintarTabla(); return; }
-    try {
-      await fbAuthReady;
-      const val = (await fbDb.ref('clientesLealtad').once('value')).val() || {};
-      datos = Object.keys(val).map(t => normaliza(t, val[t]));
-      cargado = true;
-      pintarKpis(); pintarFiltros(); pintarTabla();
-    } catch (e) {
-      console.error('Clientes:', e);
-      if (tb) tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:26px;color:var(--tx-3)">No se pudieron cargar los clientes (¿sesión caducada?). Recarga e inicia sesión de nuevo.</td></tr>';
-    }
+  // ---------- cumpleaños ----------
+  const claveFel = c => (c.pc ? c.pc.anio : 0) + '/' + c.key;
+  const yaFelicitado = c => !!(c.pc && felicitados[c.pc.anio] && felicitados[c.pc.anio][c.key]);
+  function cumplesVisibles() {
+    let l = datos.filter(c => c.pc);
+    if (cumFiltro === '0') l = l.filter(c => c.pc.dias === 0);
+    else if (cumFiltro === '7') l = l.filter(c => c.pc.dias <= 7);
+    else if (cumFiltro === '30') l = l.filter(c => c.pc.dias <= 30);
+    else if (cumFiltro === 'mes') l = l.filter(c => c.pc.mes === cumMes);
+    if (ocultarFelicitados) l = l.filter(c => !yaFelicitado(c));
+    return l.sort((a, b) => cumFiltro === 'mes' ? (a.pc.dia - b.pc.dia) : (a.pc.dias - b.pc.dias) || a.nombre.localeCompare(b.nombre));
+  }
+  function mensajePara(c) { return mensaje.replace(/\{nombre\}/gi, primerNombre(c.nombre) || 'amigo'); }
+  function pintarCumples() {
+    const cont = document.getElementById('cli-cumples'); if (!cont) return;
+    const h = hoy();
+    const cuenta = f => datos.filter(c => c.pc && f(c.pc)).length;
+    const opcMes = MES_L.map((m, i) => '<option value="' + (i + 1) + '"' + (cumFiltro === 'mes' && cumMes === i + 1 ? ' selected' : '') + '>' + m.charAt(0).toUpperCase() + m.slice(1) + '</option>').join('');
+    const bot = (id, t, n) => '<button class="' + (cumFiltro === id ? 'on' : '') + '" onclick="LS_CLIENTES.cumFiltrar(\'' + id + '\')">' + t + ' <span style="opacity:.6">' + n + '</span></button>';
+    const l = cumplesVisibles();
+    const filas = l.length ? l.map(c => {
+      const cuando = c.pc.dias === 0 ? '<b style="color:var(--terra-claro)">¡Hoy!</b>' : c.pc.dias === 1 ? 'Mañana' : 'en ' + c.pc.dias + ' días';
+      const fel = yaFelicitado(c), info = fel ? felicitados[c.pc.anio][c.key] : null;
+      const wa = c.tel.length === 10 ? '<button class="btn btn-sm ' + (fel ? 'btn-ghost' : 'btn-primary') + '" onclick="event.stopPropagation();LS_CLIENTES.felicitar(\'' + esc(c.key) + '\')"><i class="ti ti-brand-whatsapp"></i>' + (fel ? 'Reenviar' : 'Felicitar') + '</button>' : '<span class="cli-sub">sin teléfono válido</span>';
+      return '<tr onclick="LS_CLIENTES.detalle(\'' + esc(c.key) + '\')"><td><div style="font-weight:600">' + (c.nombre ? esc(c.nombre) : '<span style="color:var(--tx-3);font-weight:400">Sin nombre</span>') + '</div><div class="cli-sub">' + esc(c.tel) + '</div></td>' +
+        '<td>' + c.pc.dia + ' ' + MES_C[c.pc.mes - 1] + (c.pc.anio !== h.y ? ' ' + c.pc.anio : '') + '<div class="cli-sub">' + cuando + '</div></td>' +
+        '<td>' + (c.pc.edad ? 'cumple ' + c.pc.edad : '—') + '</td><td><span class="cli-tag ' + c.et.c + '">' + c.et.t + '</span></td>' +
+        '<td>' + (fel ? '<span class="cli-tag n">✓ Felicitado</span><div class="cli-sub">' + fmtFecha(info.ts) + '</div>' : '<span class="cli-sub">pendiente</span>') + '</td>' +
+        '<td style="white-space:nowrap">' + wa + (fel ? ' <button class="btn btn-sm btn-ghost" title="Quitar la marca de felicitado" onclick="event.stopPropagation();LS_CLIENTES.marcar(\'' + esc(c.key) + '\',false)"><i class="ti ti-x"></i></button>' : (c.tel.length === 10 ? ' <button class="btn btn-sm btn-ghost" title="Marcar como felicitado (ya lo envié por otro medio)" onclick="event.stopPropagation();LS_CLIENTES.marcar(\'' + esc(c.key) + '\',true)"><i class="ti ti-check"></i></button>' : '')) + '</td></tr>';
+    }).join('') : '<tr><td colspan="6" style="text-align:center;padding:26px;color:var(--tx-3)">' + (datos.some(c => c.pc) ? 'No hay cumpleaños en este filtro.' : 'Todavía no hay clientes con fecha de cumpleaños registrada.') + '</td></tr>';
+    cont.innerHTML =
+      '<div class="card"><div class="card-head"><div><div class="card-title"><i class="ti ti-cake"></i>Cumpleaños de clientes</div><div class="card-sub">Toca "Felicitar" y se abre WhatsApp con el mensaje listo; solo falta darle Enviar. Queda marcado como felicitado en ese año.</div></div></div>' +
+      '<div style="padding:0 18px 12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center"><div class="seg" style="flex-wrap:wrap">' +
+        bot('0', 'Hoy', cuenta(p => p.dias === 0)) + bot('7', 'Próximos 7 días', cuenta(p => p.dias <= 7)) + bot('30', 'Próximos 30 días', cuenta(p => p.dias <= 30)) + bot('todos', 'Todos', cuenta(p => true)) +
+      '</div><select onchange="LS_CLIENTES.cumMes(this.value)" style="padding:8px 10px;border-radius:var(--r);border:1px solid var(--line-2);background:var(--cafe-800);color:inherit;font-family:inherit;font-size:12.5px"><option value="">Ver un mes…</option>' + opcMes + '</select>' +
+      '<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer"><input type="checkbox" ' + (ocultarFelicitados ? 'checked' : '') + ' onchange="LS_CLIENTES.cumOcultar(this.checked)">Ocultar ya felicitados</label>' +
+      '<button class="btn btn-sm btn-ghost" onclick="LS_CLIENTES.editarMensaje()"><i class="ti ti-message-circle"></i>Mensaje</button></div>' +
+      '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Cliente</th><th>Cumpleaños</th><th>Edad</th><th>Etiqueta</th><th>Felicitación</th><th></th></tr></thead><tbody>' + filas + '</tbody></table></div></div>';
+  }
+  function pintarVista() {
+    const l = document.getElementById('cli-vista-lista'), c = document.getElementById('cli-vista-cumples');
+    if (l) l.style.display = vista === 'lista' ? '' : 'none'; if (c) c.style.display = vista === 'cumples' ? '' : 'none';
+    document.querySelectorAll('#cli-tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === vista));
+    if (vista === 'cumples') pintarCumples();
   }
 
-  function detalle(tel) {
-    const c = datos.find(x => x.tel === tel); if (!c || !window._modal) return;
-    const wa = c.tel.length === 10 ? '<a class="btn btn-sm btn-primary" target="_blank" rel="noopener" href="https://wa.me/52' + esc(c.tel) + '"><i class="ti ti-brand-whatsapp"></i>WhatsApp</a>' : '';
+  // ---------- avisos (Dashboard y menu) ----------
+  function pintarAvisos() {
+    const hoyN = datos.filter(c => c.pc && c.pc.dias === 0 && !yaFelicitado(c));
+    const prox = datos.filter(c => c.pc && c.pc.dias >= 1 && c.pc.dias <= 7 && !yaFelicitado(c));
+    const b = document.getElementById('cli-badge');
+    if (b) { b.textContent = hoyN.length; b.style.display = hoyN.length ? '' : 'none'; }
+    const bm = document.getElementById('cli-badge-m');
+    if (bm) { bm.textContent = hoyN.length; bm.style.display = hoyN.length ? '' : 'none'; }
+    const el = document.getElementById('dash-cumple'); if (!el) return;
+    if (!hoyN.length && !prox.length) { el.innerHTML = ''; return; }
+    const nombres = l => l.slice(0, 3).map(c => esc(primerNombre(c.nombre) || c.tel)).join(', ') + (l.length > 3 ? ' y ' + (l.length - 3) + ' más' : '');
+    el.innerHTML = '<div class="card" style="margin-bottom:14px"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 16px"><div style="font-size:22px">🎂</div><div style="flex:1;min-width:220px;font-size:13px">' +
+      (hoyN.length ? '<b>Hoy cumplen:</b> ' + nombres(hoyN) + '. ' : '') + (prox.length ? '<span style="color:var(--tx-3)">Próximos 7 días: ' + nombres(prox) + '.</span>' : '') +
+      '</div><button class="btn btn-sm btn-primary" onclick="LS_CLIENTES.verCumples(' + (hoyN.length ? "'0'" : "'7'") + ')">Ver y felicitar</button></div></div>';
+  }
+  function puedeVer() { const p = window._permActual; return !p || p.pages === 'ALL' || (p.pages || []).indexOf('clientes') !== -1; }
+
+  async function cargar(forzar) {
+    if (cargado && !forzar) return;
+    await fbAuthReady;
+    const h = hoy();
+    const [snap, f1, f2, cfg] = await Promise.all([fbDb.ref('clientesLealtad').once('value'), fbDb.ref('cumpleFelicitados/' + h.y).once('value'), fbDb.ref('cumpleFelicitados/' + (h.y + 1)).once('value'), fbDb.ref('clientesConfig/mensajeCumple').once('value')]);
+    const val = snap.val() || {};
+    datos = Object.keys(val).map(t => normaliza(t, val[t]));
+    felicitados = {}; felicitados[h.y] = f1.val() || {}; felicitados[h.y + 1] = f2.val() || {};
+    mensaje = cfg.val() || MENSAJE_BASE;
+    cargado = true;
+  }
+  async function render(forzar) {
+    const tb = document.getElementById('cli-filas');
+    try { await cargar(forzar); pintarKpis(); pintarFiltros(); pintarTabla(); pintarVista(); pintarAvisos(); }
+    catch (e) { console.error('Clientes:', e); if (tb) tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:26px;color:var(--tx-3)">No se pudieron cargar los clientes (¿sesión caducada?). Recarga e inicia sesión de nuevo.</td></tr>'; }
+  }
+  async function avisos() { if (!puedeVer()) return; try { await cargar(false); pintarAvisos(); } catch (e) { /* sin permiso o sin red: sin aviso */ } }
+
+  // ---------- felicitar ----------
+  async function marcar(key, si) {
+    const c = datos.find(x => x.key === key); if (!c || !c.pc) return;
+    const a = c.pc.anio, ref = fbDb.ref('cumpleFelicitados/' + a + '/' + key);
+    try {
+      if (si) { const reg = { ts: Date.now(), por: (firebase.auth().currentUser && firebase.auth().currentUser.email) || '' }; await ref.set(reg); (felicitados[a] = felicitados[a] || {})[key] = reg; }
+      else { await ref.remove(); if (felicitados[a]) delete felicitados[a][key]; }
+      pintarCumples(); pintarAvisos();
+    } catch (e) { console.error(e); toast('Error', 'No se pudo guardar la marca de felicitado', 'err', 'ti-alert-triangle'); }
+  }
+  function felicitar(key) {
+    const c = datos.find(x => x.key === key); if (!c || c.tel.length !== 10) return;
+    window.open('https://wa.me/52' + c.tel + '?text=' + encodeURIComponent(mensajePara(c)), '_blank', 'noopener');
+    if (!yaFelicitado(c)) marcar(key, true);
+  }
+  function editarMensaje() {
+    window._modal('<div class="modal-overlay" onclick="if(event.target===this)_cerrarModal()"><div class="modal" style="max-width:480px"><div class="modal-header"><div class="modal-title">Mensaje de cumpleaños</div><button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button></div>' +
+      '<div class="modal-body"><div class="ff"><label>Texto (usa {nombre} para el primer nombre)</label><textarea id="cli-msg" rows="6">' + esc(mensaje) + '</textarea></div>' +
+      '<div class="cli-sub" id="cli-msg-prev" style="font-family:inherit;white-space:pre-wrap"></div></div>' +
+      '<div class="modal-footer" style="display:flex;gap:8px;justify-content:space-between;padding:12px 18px"><button class="btn btn-sm btn-ghost" onclick="LS_CLIENTES.restablecerMensaje()">Restablecer</button>'+
+      '<span><button class="btn btn-sm btn-ghost" onclick="_cerrarModal()">Cancelar</button> <button class="btn btn-sm btn-primary" onclick="LS_CLIENTES.guardarMensaje()">Guardar</button></span></div></div></div>');
+    const t = document.getElementById('cli-msg'); if (t) { t.addEventListener('input', _prev); _prev(); }
+  }
+  function _prev() { const t = document.getElementById('cli-msg'), p = document.getElementById('cli-msg-prev'); if (t && p) p.textContent = 'Vista previa: ' + t.value.replace(/\{nombre\}/gi, 'Ana'); }
+  async function guardarMensaje() {
+    const t = (document.getElementById('cli-msg').value || '').trim();
+    if (t.length < 10) { toast('Mensaje muy corto', 'Escribe al menos una frase', 'err', 'ti-alert-triangle'); return; }
+    try { await fbDb.ref('clientesConfig/mensajeCumple').set(t); mensaje = t; _cerrarModal(); toast('Guardado', 'Mensaje de cumpleaños actualizado', 'ok', 'ti-check'); }
+    catch (e) { console.error(e); toast('Error', 'No se pudo guardar el mensaje', 'err', 'ti-alert-triangle'); }
+  }
+
+  // ---------- detalle y edicion ----------
+  async function historial(tel) {
+    try {
+      const s = await fbDb.ref('clientesAuditoria').orderByChild('tel').equalTo(tel).limitToLast(6).once('value'); const v = s.val() || {};
+      const l = Object.keys(v).map(k => v[k]).sort((a, b) => b.ts - a.ts);
+      const el = document.getElementById('cli-hist'); if (!el) return;
+      el.innerHTML = l.length ? l.map(a => '<div style="font-size:12px;padding:4px 0;border-top:1px solid var(--line-2)"><span class="cli-sub">' + new Date(a.ts).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }) + ' · ' + esc((a.por || '').split('@')[0]) + '</span><br>' +
+        Object.keys(a.cambios || {}).map(f => esc(f) + ': <s style="color:var(--tx-3)">' + esc((a.cambios[f] || {}).antes == null || (a.cambios[f] || {}).antes === '' ? '—' : (a.cambios[f] || {}).antes) + '</s> → ' + esc((a.cambios[f] || {}).despues == null || (a.cambios[f] || {}).despues === '' ? '—' : (a.cambios[f] || {}).despues)).join(' · ') + (a.nota ? '<br><i>' + esc(a.nota) + '</i>' : '') + '</div>').join('')
+        : '<div class="cli-sub">Sin cambios registrados desde esta pestaña.</div>';
+    } catch (e) { /* sin historial */ }
+  }
+  function detalle(key) {
+    const c = datos.find(x => x.key === key); if (!c || !window._modal) return;
+    const wa = c.tel.length === 10 ? '<a class="btn btn-sm btn-ghost" target="_blank" rel="noopener" href="https://wa.me/52' + esc(c.tel) + '"><i class="ti ti-brand-whatsapp"></i>WhatsApp</a>' : '';
     const fila = (l, v) => '<dt>' + l + '</dt><dd>' + (v || '<span style="color:var(--tx-3)">—</span>') + '</dd>';
-    window._modal('<div class="modal-overlay" onclick="if(event.target===this)_cerrarModal()"><div class="modal" style="max-width:460px">' +
-      '<div class="modal-header"><div class="modal-title">' + (c.nombre ? esc(c.nombre) : 'Cliente sin nombre') + '</div><button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button></div>' +
-      '<div class="modal-body"><dl class="cli-det">' +
-        fila('Etiqueta', '<span class="cli-tag ' + c.et.c + '">' + c.et.t + '</span>') +
-        fila('Teléfono', esc(c.tel)) +
-        fila('Puntos', '<b>' + dinero(c.puntos) + '</b>') +
-        fila('Visitas', fmtN(c.visitas)) +
-        fila('Última visita', c.ultima ? fmtFecha(c.ultima) + ' (hace ' + haceDias(c.ultima) + ' d)' : '') +
-        fila('Cliente desde', c.creado ? fmtFecha(c.creado) : '') +
-        fila('Cumpleaños', c.cumple ? fmtCumple(c.cumple) + (c.cumpleEn !== null && c.cumpleEn <= 30 ? ' · ' + (c.cumpleEn === 0 ? '¡hoy!' : 'en ' + c.cumpleEn + ' días') : '') : '') +
-        fila('Dirección', esc(c.direccion)) + fila('Referencia', esc(c.referencia)) +
-      '</dl></div>' +
-      '<div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 18px">' + wa +
-        '<button class="btn btn-sm btn-ghost" onclick="navigator.clipboard&&navigator.clipboard.writeText(\'' + esc(c.tel) + '\');toast(\'Copiado\',\'Teléfono copiado\',\'ok\',\'ti-copy\')"><i class="ti ti-copy"></i>Copiar teléfono</button>' +
-        '<button class="btn btn-sm btn-ghost" onclick="_cerrarModal()">Cerrar</button></div></div></div>');
+    window._modal('<div class="modal-overlay" onclick="if(event.target===this)_cerrarModal()"><div class="modal" style="max-width:480px"><div class="modal-header"><div class="modal-title">' + (c.nombre ? esc(c.nombre) : 'Cliente sin nombre') + '</div><button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button></div>' +
+      '<div class="modal-body"><dl class="cli-det">' + fila('Etiqueta', '<span class="cli-tag ' + c.et.c + '">' + c.et.t + '</span>') + fila('Teléfono', esc(c.tel)) + fila('Puntos', '<b>' + dinero(c.puntos) + '</b>') + fila('Visitas', fmtN(c.visitas)) +
+        fila('Última visita', c.ultima ? fmtFecha(c.ultima) + ' (hace ' + haceDias(c.ultima) + ' d)' : '') + fila('Cliente desde', c.creado ? fmtFecha(c.creado) : '') +
+        fila('Cumpleaños', c.pc ? fmtCumple(c.cumple) + (c.pc.dias <= 30 ? ' · ' + (c.pc.dias === 0 ? '¡hoy!' : 'en ' + c.pc.dias + ' días') : '') : '') + fila('Dirección', esc(c.direccion)) + fila('Referencia', esc(c.referencia)) + '</dl>' +
+        '<div style="margin-top:14px;font-size:11px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.05em">Cambios recientes</div><div id="cli-hist"><div class="cli-sub">Cargando…</div></div></div>' +
+      '<div class="modal-footer" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;padding:12px 18px"><button class="btn btn-sm btn-primary" onclick="LS_CLIENTES.editar(\'' + esc(c.key) + '\')"><i class="ti ti-pencil"></i>Editar</button>' + wa +
+        '<button class="btn btn-sm btn-ghost" onclick="navigator.clipboard&&navigator.clipboard.writeText(\'' + esc(c.tel) + '\');toast(\'Copiado\',\'Teléfono copiado\',\'ok\',\'ti-copy\')"><i class="ti ti-copy"></i>Copiar</button><button class="btn btn-sm btn-ghost" onclick="_cerrarModal()">Cerrar</button></div></div></div>');
+    historial(c.key);
+  }
+  function editar(key) {
+    const c = datos.find(x => x.key === key); if (!c) return;
+    window._modal('<div class="modal-overlay" onclick="if(event.target===this)_cerrarModal()"><div class="modal" style="max-width:480px"><div class="modal-header"><div class="modal-title">Editar cliente</div><button class="modal-close" onclick="_cerrarModal()"><i class="ti ti-x"></i></button></div><div class="modal-body">' +
+      '<div class="ff"><label>Nombre</label><input id="cli-e-nombre" type="text" maxlength="80" value="' + esc(c.nombre) + '"></div>' +
+      '<div class="ff"><label>Teléfono (10 dígitos)</label><input id="cli-e-tel" type="tel" inputmode="numeric" maxlength="10" value="' + esc(c.tel) + '"><div class="cli-sub" style="margin-top:4px;font-family:inherit">Si lo corriges, la cuenta completa (puntos y visitas) pasa al número nuevo.</div></div>' +
+      '<div class="ff"><label>Cumpleaños</label><input id="cli-e-cumple" type="date" min="1920-01-01" value="' + esc(/^\d{4}-\d{2}-\d{2}/.test(c.cumple) ? c.cumple.slice(0, 10) : '') + '"></div>' +
+      '<div class="ff"><label>Dirección</label><input id="cli-e-dir" type="text" maxlength="300" value="' + esc(c.direccion) + '"></div>' +
+      '<div class="ff"><label>Referencia</label><input id="cli-e-ref" type="text" maxlength="300" value="' + esc(c.referencia) + '"></div>' +
+      '<div class="ff"><label>Puntos (saldo en pesos)</label><input id="cli-e-pts" type="number" min="0" step="0.01" value="' + c.puntos + '"></div>' +
+      '<div class="ff" id="cli-e-nota-w" style="display:none"><label>Motivo del ajuste de puntos (obligatorio)</label><input id="cli-e-nota" type="text" maxlength="200" placeholder="Ej. Error de captura en la venta del 10 de octubre"></div>' +
+      '<div id="cli-e-err" style="color:var(--rojo);font-size:12.5px;min-height:16px"></div></div>' +
+      '<div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 18px"><button class="btn btn-sm btn-ghost" onclick="LS_CLIENTES.detalle(\'' + esc(c.key) + '\')">Cancelar</button><button class="btn btn-sm btn-primary" id="cli-e-ok" onclick="LS_CLIENTES.guardar(\'' + esc(c.key) + '\')">Guardar cambios</button></div></div></div>');
+    const p = document.getElementById('cli-e-pts'); p.addEventListener('input', () => { document.getElementById('cli-e-nota-w').style.display = Math.abs((+p.value || 0) - c.puntos) > 0.004 ? '' : 'none'; });
+  }
+  const normTel = t => { let d = String(t || '').replace(/\D/g, ''); if (d.length === 12 && d.slice(0, 2) === '52') d = d.slice(2); else if (d.length === 13 && d.slice(0, 3) === '521') d = d.slice(3); return d; };
+  async function guardar(key) {
+    const err = m => { const e = document.getElementById('cli-e-err'); if (e) e.textContent = m || ''; };
+    const btn = document.getElementById('cli-e-ok'); err('');
+    const v = id => (document.getElementById(id).value || '').trim();
+    const nombre = v('cli-e-nombre').replace(/\s+/g, ' '), tel = normTel(v('cli-e-tel')), cumple = v('cli-e-cumple'), dir = v('cli-e-dir'), ref = v('cli-e-ref'), nota = v('cli-e-nota');
+    const pts = Math.round((parseFloat(v('cli-e-pts')) || 0) * 100) / 100;
+    if (tel.length !== 10) return err('El teléfono debe tener 10 dígitos.');
+    if (cumple && (cumple < '1920-01-01' || cumple > new Date().toISOString().slice(0, 10))) return err('La fecha de cumpleaños no es válida.');
+    if (pts < 0) return err('Los puntos no pueden ser negativos.');
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    try {
+      await fbAuthReady;
+      const refC = fbDb.ref('clientesLealtad/' + key), cur = (await refC.once('value')).val();
+      if (!cur) throw new Error('El cliente ya no existe');
+      // el saldo de referencia es el que se vio al abrir la ficha: si la caja vendio mientras tanto, el ajuste se rechaza (no se pisan puntos nuevos)
+      const c0 = datos.find(x => x.key === key) || {};
+      const antes = { nombre: cur.nombre || '', telefono: String(cur.telefono || key), cumpleanos: cur.cumpleanos || '', direccion: cur.direccion || '', referencia: cur.referencia || '', puntos: c0.puntos != null ? c0.puntos : (Number(cur.puntos) || 0) };
+      const despues = { nombre, telefono: tel, cumpleanos: cumple, direccion: dir, referencia: ref, puntos: pts };
+      const cambios = {}; Object.keys(despues).forEach(f => { if (String(antes[f]) !== String(despues[f])) cambios[f] = { antes: antes[f], despues: despues[f] }; });
+      if (!Object.keys(cambios).length) { btn.disabled = false; btn.textContent = 'Guardar cambios'; return err('No hay cambios que guardar.'); }
+      if (cambios.puntos && nota.length < 5) { btn.disabled = false; btn.textContent = 'Guardar cambios'; return err('Escribe el motivo del ajuste de puntos.'); }
+      let keyFinal = key;
+      if (tel !== key) {                                          // telefono corregido: la cuenta se mueve al numero nuevo (sin pisar a otro cliente)
+        const nuevo = Object.assign({}, cur, { telefono: tel });          // todo lo demas se queda como esta AHORA en la base (puntos y visitas frescos)
+        if (cambios.nombre) nuevo.nombre = nombre; if (cambios.direccion) nuevo.direccion = dir; if (cambios.referencia) nuevo.referencia = ref;
+        if (cambios.cumpleanos) { if (cumple) nuevo.cumpleanos = cumple; else delete nuevo.cumpleanos; }
+        if (cambios.puntos && Math.abs((Number(cur.puntos) || 0) - antes.puntos) > 0.004) { btn.disabled = false; btn.textContent = 'Guardar cambios'; return err('Los puntos cambiaron mientras editabas (hubo una venta). Cierra y vuelve a abrir para ver el saldo actual.'); }
+        if (cambios.puntos) nuevo.puntos = pts;
+        ['nombre', 'direccion', 'referencia'].forEach(f => { if (!nuevo[f]) delete nuevo[f]; });
+        const tx = await fbDb.ref('clientesLealtad/' + tel).transaction(x => x ? undefined : nuevo);
+        if (!tx.committed) { btn.disabled = false; btn.textContent = 'Guardar cambios'; return err('Ya existe un cliente con ese teléfono. Revisa si es un duplicado.'); }
+        await refC.remove(); keyFinal = tel;
+      } else {
+        const ups = {};
+        ['nombre', 'direccion', 'referencia'].forEach(f => { if (cambios[f]) ups[f] = despues[f] || null; });
+        if (cambios.cumpleanos) ups.cumpleanos = cumple || null;
+        if (Object.keys(ups).length) await refC.update(ups);
+        if (cambios.puntos) {                                      // solo si el saldo no cambio mientras se editaba (la caja puede estar vendiendo)
+          const tx = await refC.child('puntos').transaction(x => (Math.round((Number(x) || 0) * 100) / 100) === antes.puntos ? pts : undefined);
+          if (!tx.committed) { btn.disabled = false; btn.textContent = 'Guardar cambios'; return err('Los puntos cambiaron mientras editabas (hubo una venta). Cierra y vuelve a abrir para ver el saldo actual.'); }
+        }
+      }
+      const aud = { ts: firebase.database.ServerValue.TIMESTAMP, por: (firebase.auth().currentUser && firebase.auth().currentUser.email) || '', tel: keyFinal, cambios };
+      if (keyFinal !== key) aud.telAnterior = key; if (nota) aud.nota = nota;
+      await fbDb.ref('clientesAuditoria').push(aud);
+      const fresco = (await fbDb.ref('clientesLealtad/' + keyFinal).once('value')).val();
+      const i = datos.findIndex(x => x.key === key); const nuevoC = normaliza(keyFinal, fresco);
+      if (i >= 0) datos[i] = nuevoC; else datos.push(nuevoC);
+      pintarKpis(); pintarFiltros(); pintarTabla(); if (vista === 'cumples') pintarCumples(); pintarAvisos();
+      toast('Cliente actualizado', 'Cambios guardados y registrados', 'ok', 'ti-check');
+      detalle(keyFinal);
+    } catch (e) { console.error('Editar cliente:', e); btn.disabled = false; btn.textContent = 'Guardar cambios'; err('No se pudo guardar. Revisa tu conexión e intenta de nuevo.'); }
   }
 
   function exportar() {
-    const l = visibles(), q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const l = vista === 'cumples' ? cumplesVisibles() : visibles(), q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
     const cab = ['Nombre', 'Teléfono', 'Etiqueta', 'Visitas', 'Puntos', 'Última visita', 'Cliente desde', 'Cumpleaños', 'Dirección', 'Referencia'];
     const iso = ms => ms ? new Date(ms).toISOString().slice(0, 10) : '';
     const filas = l.map(c => [c.nombre, c.tel, c.et.t, c.visitas, c.puntos.toFixed(2), iso(c.ultima), iso(c.creado), c.cumple, c.direccion, c.referencia].map(q).join(','));
     const blob = new Blob(['﻿' + [cab.map(q).join(',')].concat(filas).join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'clientes_' + new Date().toISOString().slice(0, 10) + '.csv';
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (vista === 'cumples' ? 'cumpleanos_' : 'clientes_') + new Date().toISOString().slice(0, 10) + '.csv';
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
-    if (window.toast) toast('Exportado', l.length + ' clientes en el archivo CSV', 'ok', 'ti-download');
+    if (window.toast) toast('Exportado', l.length + ' registros en el archivo CSV', 'ok', 'ti-download');
   }
 
   window.LS_CLIENTES = {
-    render,
+    render, avisos, detalle, editar, guardar, exportar, felicitar, marcar, editarMensaje, guardarMensaje, _prev,
+    restablecerMensaje: () => { const t = document.getElementById('cli-msg'); if (t) { t.value = MENSAJE_BASE; _prev(); } },
     filtrar: id => { filtro = id; pintarFiltros(); pintarTabla(); },
     buscar: t => { texto = t || ''; pintarTabla(); },
     ordenar: k => { orden = orden.k === k ? { k, d: -orden.d } : { k, d: (k === 'nombre' || k === 'cumple') ? 1 : -1 }; pintarFiltros(); pintarTabla(); },
-    detalle, exportar,
+    vista: v => { vista = v; pintarVista(); },
+    cumFiltrar: id => { cumFiltro = id; pintarCumples(); },
+    cumMes: m => { if (m) { cumFiltro = 'mes'; cumMes = +m; } else { cumFiltro = '30'; } pintarCumples(); },
+    cumOcultar: b => { ocultarFelicitados = !!b; pintarCumples(); },
+    verCumples: f => { go('clientes', null); setTimeout(async () => { await render(false); vista = 'cumples'; cumFiltro = f || '30'; pintarVista(); }, 50); },
   };
+
+  // Aviso de cumpleaños: al entrar al Dashboard (y al iniciar sesion, que lo abre)
+  const goPrev = window.go;
+  if (typeof goPrev === 'function') window.go = function (id) { const r = goPrev.apply(this, arguments); if (id === 'dashboard') setTimeout(avisos, 600); return r; };
 })();
 </script>
 </body>
