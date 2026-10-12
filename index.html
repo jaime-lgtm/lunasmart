@@ -681,6 +681,13 @@
     .traf-lista .pista { flex: 1; height: 8px; background: var(--track, rgba(255,255,255,0.06)); border-radius: 5px; overflow: hidden; }
     .traf-lista .pista b { display: block; height: 100%; background: var(--terra); border-radius: 5px; }
     .traf-lista .n { width: 66px; text-align: right; font-family: 'DM Mono', monospace; font-size: 11.5px; color: var(--tx-2); }
+    .traf-embudo { background: var(--cafe-800); border: 1px solid var(--line-2); border-radius: var(--r); padding: 12px 14px; margin-bottom: 14px; }
+    .traf-embudo .fila { display: flex; align-items: center; gap: 10px; font-size: 12.5px; padding: 5px 0; }
+    .traf-embudo .nom { width: 150px; flex: none; color: var(--tx-2); }
+    .traf-embudo .pista { flex: 1; height: 10px; background: var(--track, rgba(255,255,255,0.06)); border-radius: 5px; overflow: hidden; }
+    .traf-embudo .pista b { display: block; height: 100%; background: linear-gradient(90deg, var(--terra), var(--terra-claro, #c9683f)); border-radius: 5px; }
+    .traf-embudo .n { min-width: 210px; text-align: right; font-family: 'DM Mono', monospace; font-size: 11.5px; }
+    @media (max-width: 640px) { .traf-embudo .nom { width: 96px; } .traf-embudo .n { min-width: 0; } }
     .traf-vacio { padding: 26px; text-align: center; color: var(--tx-3); font-size: 12.5px; }
     /* Clientes */
     .cli-tag { font-size: 10.5px; padding: 2px 9px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
@@ -14313,11 +14320,11 @@ if ('serviceWorker' in navigator) {
       else hijos = await leerRango('dias', per.hijos[0].clave, per.hijos[per.hijos.length - 1].clave);
       if (token !== st.cargando) return;                    // el usuario cambio de periodo mientras cargaba
 
-      const d = doc || {}, v = d.visitas || 0, u = d.unicos || 0, pe = d.pedidos || 0;
+      const d = doc || {}, v = d.visitas || 0, u = d.unicos || 0, pe = d.pedidos || 0, ve = Math.max(0, d.ventas || 0);
       const sub = root.querySelector('[data-sub]');
       if (sub) sub.textContent = 'pedidos.suenodeluna.com.mx' + (inicio ? ' · conteo desde ' + inicio.split('-').reverse().join('/') : ' · aún sin visitas registradas');
       const cuerpo = root.querySelector('[data-cuerpo]');
-      if (!v && !pe) {
+      if (!v && !pe && !ve) {
         cuerpo.innerHTML = '<div class="traf-vacio">Sin visitas registradas en este periodo' + (inicio ? '. El conteo empezó el ' + inicio.split('-').reverse().join('/') + '.' : '. El conteo empieza cuando se publique el sitio con el monitor.') + '</div>';
         return;
       }
@@ -14325,13 +14332,19 @@ if ('serviceWorker' in navigator) {
       const max = Math.max(...vals, 1), conTxt = per.hijos.length <= 12;
       const idxActual = esActual ? (st.modo === 'dia' ? Number(new Intl.DateTimeFormat('en-GB', { timeZone: ZONA, hour: '2-digit', hourCycle: 'h23' }).format(new Date())) : -1) : -1;
       const barras = per.hijos.map((h, i) => '<div class="col" title="' + esc(h.clave) + ': ' + vals[i] + ' visitas"><span class="v">' + (conTxt && vals[i] ? vals[i] : '') + '</span><div class="bar' + (i === idxActual ? ' u' : '') + '" style="height:' + Math.max(2, Math.round(vals[i] / max * 112)) + 'px"></div><span class="x">' + esc(h.x) + '</span></div>').join('');
-      const conv = v ? (pe / v * 100) : 0;
+      const convP = v ? (pe / v * 100) : 0, convV = v ? (ve / v * 100) : 0, pedAVenta = pe ? Math.min(100, ve / pe * 100) : null;
       cuerpo.innerHTML =
         '<div class="traf-kpis">' +
           '<div class="traf-kpi"><div class="l">Visitas</div><div class="v">' + fmtN(v) + '</div>' + delta(v, (docAnt && docAnt.visitas) || 0) + '</div>' +
           '<div class="traf-kpi"><div class="l">Personas distintas</div><div class="v">' + fmtN(u) + '</div>' + delta(u, (docAnt && docAnt.unicos) || 0) + '</div>' +
-          '<div class="traf-kpi"><div class="l">Pedidos por el sitio</div><div class="v">' + fmtN(pe) + '</div>' + (d.pedidosMonto ? '<div class="d">$' + fmtN(Math.round(d.pedidosMonto)) + ' vendidos</div>' : '<div class="d">&nbsp;</div>') + '</div>' +
-          '<div class="traf-kpi"><div class="l">Visitas que piden</div><div class="v">' + conv.toFixed(1) + '%</div><div class="d">pedidos ÷ visitas</div></div>' +
+          '<div class="traf-kpi"><div class="l">Pedidos enviados</div><div class="v">' + fmtN(pe) + '</div><div class="d">desde el sitio</div></div>' +
+          '<div class="traf-kpi"><div class="l">Ventas confirmadas</div><div class="v">' + fmtN(ve) + '</div><div class="d">' + (d.ventasMonto > 0 ? '$' + fmtN(Math.round(d.ventasMonto)) + ' cobrados' : 'cobradas en caja') + '</div></div>' +
+          '<div class="traf-kpi" style="border-color:var(--terra)"><div class="l">Conversión a venta</div><div class="v">' + convV.toFixed(1) + '%</div><div class="d">ventas ÷ visitas</div></div>' +
+        '</div>' +
+        '<div class="traf-embudo">' +
+          [['Visitas al sitio', v, 100, ''], ['Enviaron pedido', pe, convP, convP.toFixed(1) + '% de las visitas'], ['Venta cobrada en caja', ve, convV, convV.toFixed(1) + '% de las visitas' + (pedAVenta !== null ? ' · ' + pedAVenta.toFixed(0) + '% de los pedidos' : '')]]
+            .map(f => '<div class="fila"><span class="nom">' + f[0] + '</span><span class="pista"><b style="width:' + Math.max(f[1] ? 2 : 0, Math.min(100, f[2])) + '%"></b></span><span class="n"><b>' + fmtN(f[1]) + '</b>' + (f[3] ? ' <span style="color:var(--tx-3)">· ' + f[3] + '</span>' : '') + '</span></div>').join('') +
+          '<div style="font-size:12px;color:var(--tx-3);margin-top:6px">' + (v ? 'De cada 100 visitas, ' + Math.round(convP) + ' envían un pedido y ' + (convV < 1 && ve ? convV.toFixed(1) : Math.round(convV)) + ' terminan en una venta cobrada.' : '') + '</div>' +
         '</div>' +
         '<div style="font-size:11px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">' + per.hijosTitulo + '</div>' +
         '<div class="traf-chart">' + barras + '</div>' +
@@ -14339,7 +14352,7 @@ if ('serviceWorker' in navigator) {
           '<div><div style="font-size:11px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">De dónde llegan</div>' + pintarLista(d.origenes, ORIGEN, v) + '</div>' +
           '<div><div style="font-size:11px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Desde qué dispositivo</div>' + pintarLista(d.dispositivos, DISP, v) + '</div>' +
         '</div>' +
-        '<div style="font-size:11px;color:var(--tx-4,var(--tx-3));margin-top:14px">Visita = una sesión de navegación (recargar no cuenta otra). "Personas distintas" cuenta cada navegador una vez por periodo. No se cuentan bots ni los navegadores del personal marcados con ?no_contar=1.</div>';
+        '<div style="font-size:11px;color:var(--tx-4,var(--tx-3));margin-top:14px">Visita = una sesión de navegación (recargar no cuenta otra). "Personas distintas" cuenta cada navegador una vez por periodo. "Venta confirmada" = pedido del sitio que la caja cobró (si luego se cancela, deja de contar); se atribuye al día en que se hizo el pedido. No se cuentan bots ni los navegadores del personal marcados con ?no_contar=1.</div>';
     } catch (e) {
       console.error('Tráfico del sitio:', e);
       const c = root.querySelector('[data-cuerpo]');
