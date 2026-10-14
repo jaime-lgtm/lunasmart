@@ -9011,20 +9011,22 @@ async function guardarVentaDirecta() {
       const cfg = canalesGuardados[canal.id] || {};
       const p1 = cfg.precios && cfg.precios[sizeKeys[0]] != null ? cfg.precios[sizeKeys[0]] : '';
       const p2 = cfg.precios && cfg.precios[sizeKeys[1]] != null ? cfg.precios[sizeKeys[1]] : '';
-      const estiloInput = 'width:100%;padding:6px 8px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:12px;font-family:inherit';
-      // una sola columna: plataforma arriba y debajo T1 y T2, cada uno "precio + sugerido" en su renglon (no brinca de linea)
-      return `<div style="padding:10px 0;border-bottom:1px solid var(--line-2)">
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer">
-          <input type="checkbox" id="pp-canal-${canal.id}-activo-sz" ${cfg.activo ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--terra-claro)">
+      const estiloInput = 'width:58px;padding:6px 6px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--cafe-800);color:var(--tx);font-size:12px;font-family:inherit';
+      // UNA sola fila por plataforma: nombre | T1 [precio] sugerido | T2 [precio] sugerido (sin brincos de linea)
+      return `<div style="display:grid;grid-template-columns:98px minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line-2);overflow-x:auto">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;line-height:1.15;cursor:pointer">
+          <input type="checkbox" id="pp-canal-${canal.id}-activo-sz" ${cfg.activo ? 'checked' : ''} style="width:16px;height:16px;flex:none;accent-color:var(--terra-claro)">
           ${canal.label}
         </label>
-        <div style="display:grid;grid-template-columns:28px 110px auto;gap:6px 10px;align-items:center;margin:8px 0 0 24px">
-          <span style="font-size:11px;font-weight:700;color:var(--tx-3)">T1</span>
-          <input type="number" id="pp-canal-${canal.id}-p1" placeholder="Precio T1" value="${p1}" inputmode="decimal" oninput="LS_UI._actualizarPreciosSugeridosCanales()" style="${estiloInput}">
-          <span id="pp-canal-${canal.id}-sug-t1" style="font-size:11px;color:var(--tx-4);white-space:nowrap"></span>
-          <span style="font-size:11px;font-weight:700;color:var(--tx-3)">T2</span>
-          <input type="number" id="pp-canal-${canal.id}-p2" placeholder="Precio T2" value="${p2}" inputmode="decimal" oninput="LS_UI._actualizarPreciosSugeridosCanales()" style="${estiloInput}">
-          <span id="pp-canal-${canal.id}-sug-t2" style="font-size:11px;color:var(--tx-4);white-space:nowrap"></span>
+        <div style="display:flex;align-items:center;gap:5px;white-space:nowrap;min-width:0">
+          <span style="font-size:10px;font-weight:700;color:var(--tx-3)">T1</span>
+          <input type="number" id="pp-canal-${canal.id}-p1" placeholder="0.00" value="${p1}" inputmode="decimal" oninput="LS_UI._actualizarPreciosSugeridosCanales()" style="${estiloInput}">
+          <span id="pp-canal-${canal.id}-sug-t1" style="font-size:10.5px;color:var(--tx-4)"></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;white-space:nowrap;min-width:0">
+          <span style="font-size:10px;font-weight:700;color:var(--tx-3)">T2</span>
+          <input type="number" id="pp-canal-${canal.id}-p2" placeholder="0.00" value="${p2}" inputmode="decimal" oninput="LS_UI._actualizarPreciosSugeridosCanales()" style="${estiloInput}">
+          <span id="pp-canal-${canal.id}-sug-t2" style="font-size:10.5px;color:var(--tx-4)"></span>
         </div>
       </div>`;
     }
@@ -9204,7 +9206,8 @@ async function guardarVentaDirecta() {
       return;
     }
     const txt = LS_API.formatMXNDec(sug.valor);
-    span.innerHTML = `Sugerido: <b style="color:var(--tx-2)">${txt}</b> <a onclick="LS_UI._usarPrecioSugerido('${spanId}', ${sug.valor})" style="color:var(--terra-claro);text-decoration:underline;cursor:pointer">usar</a>`;
+    const etiqueta = /-sug-t[12]$/.test(spanId) ? 'Sug.' : 'Sugerido:';   // en la fila de tamaños va corto para que quepa en una sola linea
+    span.innerHTML = `${etiqueta} <b style="color:var(--tx-2)">${txt}</b> <a onclick="LS_UI._usarPrecioSugerido('${spanId}', ${sug.valor})" style="color:var(--terra-claro);text-decoration:underline;cursor:pointer">usar</a>`;
   }
   function _actualizarPreciosSugeridosCanales() {
     const sized = document.getElementById('pp-sized') ? document.getElementById('pp-sized').value === 'si' : false;
